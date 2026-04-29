@@ -125,11 +125,7 @@ func runHookMode(config *Config) error {
 }
 
 func generateAndShow(config *Config) error {
-	if config.APIKey == "" {
-		return fmt.Errorf("API key is required. Set GEMINI_API_KEY env or use --api-key flag")
-	}
-
-	// Get staged diff
+	// Get staged diff first (needed for both dry-run and normal mode)
 	diff, err := git.GetStagedDiff(context.Background(), ".")
 	if err != nil {
 		return fmt.Errorf("failed to get staged diff: %w", err)
@@ -139,12 +135,17 @@ func generateAndShow(config *Config) error {
 		return fmt.Errorf("no staged changes found. Use 'git add' to stage changes")
 	}
 
-	// Dry run - just show the diff
+	// Dry run - just show the diff (no API key needed)
 	if config.DryRun {
 		fmt.Println("=== Staged Diff ===")
 		fmt.Println(diff)
 		fmt.Println("=== End Diff ===")
 		return nil
+	}
+
+	// Normal mode - API key required
+	if config.APIKey == "" {
+		return fmt.Errorf("API key is required. Set GEMINI_API_KEY env or use --api-key flag")
 	}
 
 	// Generate message
