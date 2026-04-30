@@ -48,7 +48,7 @@ func GetPersona(name string) PersonaConfig {
 	return personas["embedded"]
 }
 
-func (p PersonaConfig) BuildPrompt(detailLevel, hint, context, diff string) string {
+func (p PersonaConfig) BuildPrompt(detailLevel, hint, additionalContext, diff string) string {
 	var sb strings.Builder
 
 	sb.WriteString(p.System)
@@ -83,9 +83,9 @@ func (p PersonaConfig) BuildPrompt(detailLevel, hint, context, diff string) stri
 		sb.WriteString("\n")
 	}
 
-	if context != "" {
+	if additionalContext != "" {
 		sb.WriteString("Context: ")
-		sb.WriteString(context)
+		sb.WriteString(additionalContext)
 		sb.WriteString("\n")
 	}
 

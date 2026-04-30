@@ -65,13 +65,13 @@ func NewClientWithGenerator(generator ModelGenerator, model string) *Client {
 	}
 }
 
-// GenerateCommitMessage generates a commit message based on the provided diff, context, detail level, hint, and persona.
-func (c *Client) GenerateCommitMessage(ctx context.Context, diff, context, detailLevel, hint, persona string) (string, error) {
+// GenerateCommitMessage generates a commit message based on the provided diff, additional context, detail level, hint, and persona.
+func (c *Client) GenerateCommitMessage(ctx context.Context, diff, additionalContext, detailLevel, hint, persona string) (string, error) {
 	if diff == "" {
 		return "", fmt.Errorf("diff is required")
 	}
 
-	prompt := BuildCommitMessagePrompt(diff, context, detailLevel, hint, persona)
+	prompt := BuildCommitMessagePrompt(diff, additionalContext, detailLevel, hint, persona)
 
 	result, err := c.generator.GenerateContent(
 		ctx,

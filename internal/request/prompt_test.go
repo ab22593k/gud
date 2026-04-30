@@ -7,19 +7,19 @@ import (
 
 func TestBuildCommitMessagePrompt(t *testing.T) {
 	tests := []struct {
-		name        string
-		diff        string
-		context     string
-		detailLevel string
-		hint        string
-		validate    func(t *testing.T, prompt string)
+		name              string
+		diff              string
+		additionalContext string
+		detailLevel       string
+		hint              string
+		validate          func(t *testing.T, prompt string)
 	}{
 		{
-			name:        "basic diff creates prompt with diff",
-			diff:        "diff --git a/main.go b/main.go\n+fmt.Println(\"hello\")",
-			context:     "",
-			detailLevel: "standard",
-			hint:        "",
+			name:              "basic diff creates prompt with diff",
+			diff:              "diff --git a/main.go b/main.go\n+fmt.Println(\"hello\")",
+			additionalContext: "",
+			detailLevel:       "standard",
+			hint:              "",
 			validate: func(t *testing.T, prompt string) {
 				if !strings.Contains(prompt, "fmt.Println") {
 					t.Errorf("prompt should contain diff content")
@@ -30,11 +30,11 @@ func TestBuildCommitMessagePrompt(t *testing.T) {
 			},
 		},
 		{
-			name:        "with context adds context to prompt",
-			diff:        "diff --git a/main.go b/main.go",
-			context:     "Adding hello world feature",
-			detailLevel: "standard",
-			hint:        "",
+			name:              "with context adds context to prompt",
+			diff:              "diff --git a/main.go b/main.go",
+			additionalContext: "Adding hello world feature",
+			detailLevel:       "standard",
+			hint:              "",
 			validate: func(t *testing.T, prompt string) {
 				if !strings.Contains(prompt, "Adding hello world feature") {
 					t.Errorf("prompt should contain context")
@@ -42,11 +42,11 @@ func TestBuildCommitMessagePrompt(t *testing.T) {
 			},
 		},
 		{
-			name:        "minimal detail level produces short prompt",
-			diff:        "diff --git a/main.go b/main.go",
-			context:     "",
-			detailLevel: "minimal",
-			hint:        "",
+			name:              "minimal detail level produces short prompt",
+			diff:              "diff --git a/main.go b/main.go",
+			additionalContext: "",
+			detailLevel:       "minimal",
+			hint:              "",
 			validate: func(t *testing.T, prompt string) {
 				if !strings.Contains(prompt, "72") && !strings.Contains(prompt, "Subject") {
 					t.Errorf("minimal prompt should mention subject line limit")
@@ -54,11 +54,11 @@ func TestBuildCommitMessagePrompt(t *testing.T) {
 			},
 		},
 		{
-			name:        "detailed detail level produces comprehensive prompt",
-			diff:        "diff --git a/main.go b/main.go",
-			context:     "",
-			detailLevel: "detailed",
-			hint:        "",
+			name:              "detailed detail level produces comprehensive prompt",
+			diff:              "diff --git a/main.go b/main.go",
+			additionalContext: "",
+			detailLevel:       "detailed",
+			hint:              "",
 			validate: func(t *testing.T, prompt string) {
 				if !strings.Contains(prompt, "72") && !strings.Contains(prompt, "82") {
 					t.Errorf("detailed prompt should mention character limits")
@@ -66,11 +66,11 @@ func TestBuildCommitMessagePrompt(t *testing.T) {
 			},
 		},
 		{
-			name:        "hint adds focus boundaries to prompt",
-			diff:        "diff --git a/main.go b/main.go",
-			context:     "",
-			detailLevel: "standard",
-			hint:        "focus on security changes",
+			name:              "hint adds focus boundaries to prompt",
+			diff:              "diff --git a/main.go b/main.go",
+			additionalContext: "",
+			detailLevel:       "standard",
+			hint:              "focus on security changes",
 			validate: func(t *testing.T, prompt string) {
 				if !strings.Contains(prompt, "focus on security changes") {
 					t.Errorf("prompt should contain hint")
@@ -78,11 +78,11 @@ func TestBuildCommitMessagePrompt(t *testing.T) {
 			},
 		},
 		{
-			name:        "empty diff still creates valid prompt",
-			diff:        "",
-			context:     "",
-			detailLevel: "standard",
-			hint:        "",
+			name:              "empty diff still creates valid prompt",
+			diff:              "",
+			additionalContext: "",
+			detailLevel:       "standard",
+			hint:              "",
 			validate: func(t *testing.T, prompt string) {
 				if prompt == "" {
 					t.Errorf("prompt should not be empty")
@@ -93,7 +93,7 @@ func TestBuildCommitMessagePrompt(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			prompt := BuildCommitMessagePrompt(tt.diff, tt.context, tt.detailLevel, tt.hint, "embedded")
+			prompt := BuildCommitMessagePrompt(tt.diff, tt.additionalContext, tt.detailLevel, tt.hint, "embedded")
 			tt.validate(t, prompt)
 		})
 	}
@@ -101,21 +101,21 @@ func TestBuildCommitMessagePrompt(t *testing.T) {
 
 func TestBuildCommitMessagePromptWithPersona(t *testing.T) {
 	tests := []struct {
-		name        string
-		diff        string
-		context     string
-		detailLevel string
-		hint        string
-		persona     string
-		validate    func(t *testing.T, prompt string)
+		name              string
+		diff              string
+		additionalContext string
+		detailLevel       string
+		hint              string
+		persona           string
+		validate          func(t *testing.T, prompt string)
 	}{
 		{
-			name:        "embedded persona uses linux mailing list style",
-			diff:        "diff --git a/main.go b/main.go\n+func add(a, b int) int { return a + b }",
-			context:     "",
-			detailLevel: "standard",
-			hint:        "",
-			persona:     "embedded",
+			name:              "embedded persona uses linux mailing list style",
+			diff:              "diff --git a/main.go b/main.go\n+func add(a, b int) int { return a + b }",
+			additionalContext: "",
+			detailLevel:       "standard",
+			hint:              "",
+			persona:           "embedded",
 			validate: func(t *testing.T, prompt string) {
 				if !strings.Contains(prompt, "Principal") && !strings.Contains(prompt, "Embedded") {
 					t.Errorf("embedded prompt should mention Principal Embedded style")
@@ -123,12 +123,12 @@ func TestBuildCommitMessagePromptWithPersona(t *testing.T) {
 			},
 		},
 		{
-			name:        "google persona leaves rules empty",
-			diff:        "diff --git a/main.go b/main.go\n+func add(a, b int) int { return a + b }",
-			context:     "",
-			detailLevel: "standard",
-			hint:        "",
-			persona:     "google",
+			name:              "google persona leaves rules empty",
+			diff:              "diff --git a/main.go b/main.go\n+func add(a, b int) int { return a + b }",
+			additionalContext: "",
+			detailLevel:       "standard",
+			hint:              "",
+			persona:           "google",
 			validate: func(t *testing.T, prompt string) {
 				// Google persona should not add extra rules - keep it empty for future use
 				if prompt == "" {
@@ -137,12 +137,12 @@ func TestBuildCommitMessagePromptWithPersona(t *testing.T) {
 			},
 		},
 		{
-			name:        "default persona falls back to embedded",
-			diff:        "diff --git a/main.go b/main.go",
-			context:     "",
-			detailLevel: "standard",
-			hint:        "",
-			persona:     "",
+			name:              "default persona falls back to embedded",
+			diff:              "diff --git a/main.go b/main.go",
+			additionalContext: "",
+			detailLevel:       "standard",
+			hint:              "",
+			persona:           "",
 			validate: func(t *testing.T, prompt string) {
 				if !strings.Contains(prompt, "Principal") {
 					t.Errorf("default prompt should use embedded style")
@@ -150,12 +150,12 @@ func TestBuildCommitMessagePromptWithPersona(t *testing.T) {
 			},
 		},
 		{
-			name:        "embedded with detailed level includes body",
-			diff:        "diff --git a/main.go b/main.go",
-			context:     "",
-			detailLevel: "detailed",
-			hint:        "",
-			persona:     "embedded",
+			name:              "embedded with detailed level includes body",
+			diff:              "diff --git a/main.go b/main.go",
+			additionalContext: "",
+			detailLevel:       "detailed",
+			hint:              "",
+			persona:           "embedded",
 			validate: func(t *testing.T, prompt string) {
 				if !strings.Contains(prompt, "82") && !strings.Contains(prompt, "72") {
 					t.Errorf("detailed embedded should mention character limits")
@@ -166,7 +166,7 @@ func TestBuildCommitMessagePromptWithPersona(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			prompt := BuildCommitMessagePrompt(tt.diff, tt.context, tt.detailLevel, tt.hint, tt.persona)
+			prompt := BuildCommitMessagePrompt(tt.diff, tt.additionalContext, tt.detailLevel, tt.hint, tt.persona)
 			tt.validate(t, prompt)
 		})
 	}
