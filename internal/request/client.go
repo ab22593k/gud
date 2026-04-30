@@ -35,12 +35,29 @@ type Client struct {
 // NewClient creates a new request client using the provided API key.
 // It uses the Gemini API backend with the flash model for fast responses.
 func NewClient(apiKey string) (*Client, error) {
+	return NewClientWithOptions(apiKey)
+}
+
+// ClientOption configures a Client.
+type ClientOption func(*Client)
+
+// WithModel sets the model name for the client.
+func WithModel(model string) ClientOption {
+	return func(c *Client) {
+		if model != "" {
+			c.model = model
+		}
+	}
+}
+
+// NewClientWithOptions creates a client with the given API key and options.
+func NewClientWithOptions(apiKey string, opts ...ClientOption) (*Client, error) {
 	if apiKey == "" {
 		return nil, fmt.Errorf("API key is required")
 	}
 
 	ctx := context.Background()
-	client, err := genai.NewClient(ctx, &genai.ClientConfig{
+	genaiClient, err := genai.NewClient(ctx, &genai.ClientConfig{
 		APIKey:  apiKey,
 		Backend: genai.BackendGeminiAPI,
 	})
@@ -48,10 +65,14 @@ func NewClient(apiKey string) (*Client, error) {
 		return nil, fmt.Errorf("failed to create genai client: %w", err)
 	}
 
-	return &Client{
-		generator: &genaiAdapter{client: client},
+	c := &Client{
+		generator: &genaiAdapter{client: genaiClient},
 		model:     "gemini-3-flash-preview",
-	}, nil
+	}
+	for _, opt := range opts {
+		opt(c)
+	}
+	return c, nil
 }
 
 // NewClientWithGenerator creates a new client with a custom generator for testing.
