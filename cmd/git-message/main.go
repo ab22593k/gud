@@ -4,7 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,8 +17,8 @@ const version = "0.1.0"
 
 // Config holds CLI configuration.
 type Config struct {
-	DetailLevel   string
-	Persona       string
+	DetailLevel   request.DetailLevel
+	Persona       request.PersonaName
 	Hint          string
 	Context       string
 	APIKey        string
@@ -38,14 +38,17 @@ func main() {
 	}
 
 	if err := run(config); err != nil {
-		log.Fatalf("Error: %v", err)
+		slog.Error("fatal error", "error", err)
+		os.Exit(1)
 	}
 }
 
 func parseFlags() *Config {
 	config := &Config{}
-	flag.StringVar(&config.DetailLevel, "detail-level", "standard", "Set the detail level (minimal, standard, detailed)")
-	flag.StringVar(&config.Persona, "persona", "embedded", "Set output style (embedded, google)")
+
+	var detailLevelStr, personaStr string
+	flag.StringVar(&detailLevelStr, "detail-level", "standard", "Set the detail level (minimal, standard, detailed)")
+	flag.StringVar(&personaStr, "persona", "embedded", "Set output style (embedded, google)")
 	flag.StringVar(&config.Hint, "hint", "", "Focus boundaries for the AI")
 	flag.StringVar(&config.Context, "context", "", "Additional context for the commit message")
 	flag.StringVar(&config.APIKey, "api-key", "", "Gemini API key (or use GEMINI_API_KEY env)")
@@ -57,14 +60,18 @@ func parseFlags() *Config {
 	flag.BoolVar(&config.Global, "global", false, "Use global hooks directory")
 	flag.Parse()
 
-	// Validate detail-level
-	if config.DetailLevel != "minimal" && config.DetailLevel != "standard" && config.DetailLevel != "detailed" {
-		config.DetailLevel = "standard"
+	// Convert and validate detail-level
+	config.DetailLevel = request.DetailLevel(detailLevelStr)
+	if config.DetailLevel != request.DetailMinimal &&
+		config.DetailLevel != request.DetailStandard &&
+		config.DetailLevel != request.DetailDetailed {
+		config.DetailLevel = request.DetailStandard
 	}
 
-	// Validate persona (default to embedded)
-	if config.Persona != "embedded" && config.Persona != "google" {
-		config.Persona = "embedded"
+	// Convert and validate persona
+	config.Persona = request.PersonaName(personaStr)
+	if config.Persona != request.PersonaEmbedded {
+		config.Persona = request.PersonaEmbedded
 	}
 
 	// Get API key from env if not provided
@@ -76,22 +83,18 @@ func parseFlags() *Config {
 }
 
 func run(config *Config) error {
-	// Handle hook installation
 	if config.InstallHook {
 		return installHook(config.Global)
 	}
 
-	// Handle hook uninstallation
 	if config.UninstallHook {
 		return uninstallHook(config.Global)
 	}
 
-	// Handle hook mode (called from git hook)
 	if config.HookMode != "" {
 		return runHookMode(config)
 	}
 
-	// Normal mode or dry-run
 	return generateAndShow(config)
 }
 
@@ -105,11 +108,11 @@ func installHook(global bool) error {
 		return fmt.Errorf("failed to create hook directory: %w", err)
 	}
 
-	if err := git.InstallHook(hookDir, "prepare-commit-msg"); err != nil {
+	if err := git.InstallHook(hookDir, git.PrepareCommitMsg); err != nil {
 		return fmt.Errorf("failed to install hook: %w", err)
 	}
 
-	fmt.Printf("Hook installed to %s\n", filepath.Join(hookDir, "prepare-commit-msg"))
+	fmt.Printf("Hook installed to %s\n", filepath.Join(hookDir, string(git.PrepareCommitMsg)))
 	return nil
 }
 
@@ -119,7 +122,7 @@ func uninstallHook(global bool) error {
 		return fmt.Errorf("failed to get hook directory: %w", err)
 	}
 
-	if err := git.UninstallHook(hookDir, "prepare-commit-msg"); err != nil {
+	if err := git.UninstallHook(hookDir, git.PrepareCommitMsg); err != nil {
 		return fmt.Errorf("failed to uninstall hook: %w", err)
 	}
 
@@ -128,11 +131,10 @@ func uninstallHook(global bool) error {
 }
 
 func runHookMode(config *Config) error {
-	return git.RunHookMode(context.Background(), config.HookMode, config.APIKey, config.DetailLevel, config.Hint)
+	return git.RunHookMode(context.Background(), config.HookMode, config.APIKey, config.DetailLevel, config.Hint, config.Persona)
 }
 
 func generateAndShow(config *Config) error {
-	// Get staged diff first (needed for both dry-run and normal mode)
 	diff, err := git.GetStagedDiff(context.Background())
 	if err != nil {
 		return fmt.Errorf("failed to get staged diff: %w", err)
@@ -142,7 +144,6 @@ func generateAndShow(config *Config) error {
 		return fmt.Errorf("no staged changes found. Use 'git add' to stage changes")
 	}
 
-	// Dry run - just show the diff (no API key needed)
 	if config.DryRun {
 		fmt.Println("=== Staged Diff ===")
 		fmt.Println(diff)
@@ -150,12 +151,10 @@ func generateAndShow(config *Config) error {
 		return nil
 	}
 
-	// Normal mode - API key required
 	if config.APIKey == "" {
 		return fmt.Errorf("API key is required. Set GEMINI_API_KEY env or use --api-key flag")
 	}
 
-	// Generate message
 	client, err := request.NewClient(config.APIKey)
 	if err != nil {
 		return fmt.Errorf("failed to create request client: %w", err)

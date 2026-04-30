@@ -3,6 +3,7 @@ package request
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"google.golang.org/genai"
 )
@@ -35,29 +36,12 @@ type Client struct {
 // NewClient creates a new request client using the provided API key.
 // It uses the Gemini API backend with the flash model for fast responses.
 func NewClient(apiKey string) (*Client, error) {
-	return NewClientWithOptions(apiKey)
-}
-
-// ClientOption configures a Client.
-type ClientOption func(*Client)
-
-// WithModel sets the model name for the client.
-func WithModel(model string) ClientOption {
-	return func(c *Client) {
-		if model != "" {
-			c.model = model
-		}
-	}
-}
-
-// NewClientWithOptions creates a client with the given API key and options.
-func NewClientWithOptions(apiKey string, opts ...ClientOption) (*Client, error) {
 	if apiKey == "" {
 		return nil, fmt.Errorf("API key is required")
 	}
 
 	ctx := context.Background()
-	genaiClient, err := genai.NewClient(ctx, &genai.ClientConfig{
+	client, err := genai.NewClient(ctx, &genai.ClientConfig{
 		APIKey:  apiKey,
 		Backend: genai.BackendGeminiAPI,
 	})
@@ -65,14 +49,12 @@ func NewClientWithOptions(apiKey string, opts ...ClientOption) (*Client, error) 
 		return nil, fmt.Errorf("failed to create genai client: %w", err)
 	}
 
-	c := &Client{
-		generator: &genaiAdapter{client: genaiClient},
+	slog.Debug("created genai client", "model", "gemini-3-flash-preview")
+
+	return &Client{
+		generator: &genaiAdapter{client: client},
 		model:     "gemini-3-flash-preview",
-	}
-	for _, opt := range opts {
-		opt(c)
-	}
-	return c, nil
+	}, nil
 }
 
 // NewClientWithGenerator creates a new client with a custom generator for testing.
@@ -86,14 +68,29 @@ func NewClientWithGenerator(generator ModelGenerator, model string) *Client {
 	}
 }
 
-// GenerateCommitMessage generates a commit message based on the provided diff, additional context, detail level, hint, and persona.
-func (c *Client) GenerateCommitMessage(ctx context.Context, diff, additionalContext, detailLevel, hint, persona string) (string, error) {
+// GenerateCommitMessage generates a commit message based on the provided diff, context, detail level, hint, and persona.
+func (c *Client) GenerateCommitMessage(ctx context.Context, diff, context string, detailLevel DetailLevel, hint string, persona PersonaName) (string, error) {
 	if diff == "" {
 		return "", fmt.Errorf("diff is required")
 	}
 
-	prompt := BuildCommitMessagePrompt(diff, additionalContext, detailLevel, hint, persona)
+	slog.Debug("generating commit message", "model", c.model, "detailLevel", detailLevel)
 
+	prompt := BuildCommitMessagePrompt(diff, context, detailLevel, hint, persona)
+
+	msg, err := generateContent(c, ctx, prompt)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate content: %w", err)
+	}
+
+	if msg == "" {
+		return "", fmt.Errorf("generated message is empty")
+	}
+
+	return msg, nil
+}
+
+func generateContent(c *Client, ctx context.Context, prompt string) (string, error) {
 	result, err := c.generator.GenerateContent(
 		ctx,
 		c.model,
@@ -101,13 +98,7 @@ func (c *Client) GenerateCommitMessage(ctx context.Context, diff, additionalCont
 		nil,
 	)
 	if err != nil {
-		return "", fmt.Errorf("failed to generate content: %w", err)
+		return "", err
 	}
-
-	msg := result.Text()
-	if msg == "" {
-		return "", fmt.Errorf("generated message is empty")
-	}
-
-	return msg, nil
+	return result.Text(), nil
 }

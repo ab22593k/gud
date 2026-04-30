@@ -79,32 +79,35 @@ func TestNewClientWithGenerator(t *testing.T) {
 
 func TestClient_GenerateCommitMessage(t *testing.T) {
 	tests := []struct {
-		name               string
-		diff               string
-		additionalContext   string
-		detailLevel        string
-		hint               string
-		mockResponse       string
-		mockError          error
-		wantErr            bool
-		validateMsg        func(t *testing.T, msg string)
+		name         string
+		diff         string
+		context      string
+		detailLevel  DetailLevel
+		hint         string
+		persona      PersonaName
+		mockResponse string
+		mockError    error
+		wantErr      bool
+		validateMsg  func(t *testing.T, msg string)
 	}{
 		{
-			name:             "empty diff returns error",
-			diff:             "",
-			additionalContext: "",
-			detailLevel:      "standard",
-			hint:             "",
-			wantErr:          true,
+			name:        "empty diff returns error",
+			diff:        "",
+			context:     "",
+			detailLevel: DetailStandard,
+			hint:        "",
+			persona:     PersonaEmbedded,
+			wantErr:     true,
 		},
 		{
-			name:             "successful generation returns message",
-			diff:             "diff --git a/main.go b/main.go",
-			additionalContext: "",
-			detailLevel:      "standard",
-			hint:             "",
-			mockResponse:     "feat: add hello world output",
-			wantErr:          false,
+			name:         "successful generation returns message",
+			diff:         "diff --git a/main.go b/main.go",
+			context:      "",
+			detailLevel:  DetailStandard,
+			hint:         "",
+			persona:      PersonaEmbedded,
+			mockResponse: "feat: add hello world output",
+			wantErr:      false,
 			validateMsg: func(t *testing.T, msg string) {
 				if msg != "feat: add hello world output" {
 					t.Errorf("got %q, want %q", msg, "feat: add hello world output")
@@ -112,40 +115,44 @@ func TestClient_GenerateCommitMessage(t *testing.T) {
 			},
 		},
 		{
-			name:             "with minimal detail level",
-			diff:             "diff --git a/main.go b/main.go",
-			additionalContext: "",
-			detailLevel:      "minimal",
-			hint:             "",
-			mockResponse:     "feat: add hello",
-			wantErr:          false,
+			name:         "with minimal detail level",
+			diff:         "diff --git a/main.go b/main.go",
+			context:      "",
+			detailLevel:  DetailMinimal,
+			hint:         "",
+			persona:      PersonaEmbedded,
+			mockResponse: "feat: add hello",
+			wantErr:      false,
 		},
 		{
-			name:             "with hint provided",
-			diff:             "diff --git a/main.go b/main.go",
-			additionalContext: "",
-			detailLevel:      "standard",
-			hint:             "focus on security",
-			mockResponse:     "fix: patch security vulnerability",
-			wantErr:          false,
+			name:         "with hint provided",
+			diff:         "diff --git a/main.go b/main.go",
+			context:      "",
+			detailLevel:  DetailStandard,
+			hint:         "focus on security",
+			persona:      PersonaEmbedded,
+			mockResponse: "fix: patch security vulnerability",
+			wantErr:      false,
 		},
 		{
-			name:             "API error returns error",
-			diff:             "diff --git a/main.go b/main.go",
-			additionalContext: "",
-			detailLevel:      "standard",
-			hint:             "",
-			mockError:        errors.New("API error"),
-			wantErr:          true,
+			name:        "API error returns error",
+			diff:        "diff --git a/main.go b/main.go",
+			context:     "",
+			detailLevel: DetailStandard,
+			hint:        "",
+			persona:     PersonaEmbedded,
+			mockError:   errors.New("API error"),
+			wantErr:     true,
 		},
 		{
-			name:             "empty response returns error",
-			diff:             "diff --git a/main.go b/main.go",
-			additionalContext: "",
-			detailLevel:      "standard",
-			hint:             "",
-			mockResponse:     "",
-			wantErr:          true,
+			name:         "empty response returns error",
+			diff:         "diff --git a/main.go b/main.go",
+			context:      "",
+			detailLevel:  DetailStandard,
+			hint:         "",
+			persona:      PersonaEmbedded,
+			mockResponse: "",
+			wantErr:      true,
 		},
 	}
 
@@ -162,7 +169,7 @@ func TestClient_GenerateCommitMessage(t *testing.T) {
 
 			client := NewClientWithGenerator(mock, "gemini-3-flash-preview")
 
-			msg, err := client.GenerateCommitMessage(context.Background(), tt.diff, tt.additionalContext, tt.detailLevel, tt.hint, "embedded")
+			msg, err := client.GenerateCommitMessage(context.Background(), tt.diff, tt.context, tt.detailLevel, tt.hint, tt.persona)
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GenerateCommitMessage() error = %v, wantErr %v", err, tt.wantErr)
