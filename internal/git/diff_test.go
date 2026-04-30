@@ -7,7 +7,7 @@ import (
 
 func TestGetStagedDiff(t *testing.T) {
 	ctx := context.Background()
-	_, err := GetStagedDiff(ctx, ".")
+	_, err := GetStagedDiff(ctx)
 
 	if err != nil {
 		t.Errorf("GetStagedDiff() error = %v, want nil", err)
@@ -20,7 +20,7 @@ func TestGetStagedDiff_Integration(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	diff, err := GetStagedDiff(ctx, ".")
+	diff, err := GetStagedDiff(ctx)
 
 	if err != nil {
 		t.Fatalf("GetStagedDiff() unexpected error: %v", err)
@@ -31,7 +31,7 @@ func TestGetStagedDiff_Integration(t *testing.T) {
 
 func TestGetUnstagedDiff(t *testing.T) {
 	ctx := context.Background()
-	_, err := GetUnstagedDiff(ctx, ".")
+	_, err := GetUnstagedDiff(ctx)
 
 	if err != nil {
 		t.Errorf("GetUnstagedDiff() error = %v, want nil", err)
@@ -44,7 +44,7 @@ func TestGetUnstagedDiff_Integration(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	diff, err := GetUnstagedDiff(ctx, ".")
+	diff, err := GetUnstagedDiff(ctx)
 
 	if err != nil {
 		t.Fatalf("GetUnstagedDiff() unexpected error: %v", err)

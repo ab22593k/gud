@@ -4,18 +4,29 @@ import (
 	"context"
 	"errors"
 	"testing"
+
+	"google.golang.org/genai"
 )
 
-// mockModelGenerator mocks the GenAI model generation
+// mockModelGenerator implements ModelGenerator for testing.
 type mockModelGenerator struct {
-	generateContentFunc func(ctx context.Context, model string, parts any, config any) (string, error)
+	generateContentFunc func(ctx context.Context, model string, parts []*genai.Content, config *genai.GenerateContentConfig) (ContentResponse, error)
 }
 
-func (m *mockModelGenerator) GenerateContent(ctx context.Context, model string, parts any, config any) (string, error) {
+func (m *mockModelGenerator) GenerateContent(ctx context.Context, model string, parts []*genai.Content, config *genai.GenerateContentConfig) (ContentResponse, error) {
 	if m.generateContentFunc != nil {
 		return m.generateContentFunc(ctx, model, parts, config)
 	}
-	return "", errors.New("not implemented")
+	return nil, errors.New("not implemented")
+}
+
+// mockContentResponse implements ContentResponse for testing.
+type mockContentResponse struct {
+	text string
+}
+
+func (m *mockContentResponse) Text() string {
+	return m.text
 }
 
 func TestNewClient(t *testing.T) {
@@ -48,6 +59,21 @@ func TestNewClient(t *testing.T) {
 				t.Errorf("NewClient() should return non-nil client")
 			}
 		})
+	}
+}
+
+func TestNewClientWithGenerator(t *testing.T) {
+	mock := &mockModelGenerator{}
+	client := NewClientWithGenerator(mock, "test-model")
+
+	if client == nil {
+		t.Fatal("NewClientWithGenerator() returned nil")
+	}
+	if client.model != "test-model" {
+		t.Errorf("model = %q, want %q", client.model, "test-model")
+	}
+	if client.generator != mock {
+		t.Errorf("generator should be the mock")
 	}
 }
 
@@ -103,28 +129,48 @@ func TestClient_GenerateCommitMessage(t *testing.T) {
 			mockResponse: "fix: patch security vulnerability",
 			wantErr:      false,
 		},
+		{
+			name:        "API error returns error",
+			diff:        "diff --git a/main.go b/main.go",
+			context:     "",
+			detailLevel: "standard",
+			hint:        "",
+			mockError:   errors.New("API error"),
+			wantErr:     true,
+		},
+		{
+			name:         "empty response returns error",
+			diff:         "diff --git a/main.go b/main.go",
+			context:      "",
+			detailLevel:  "standard",
+			hint:         "",
+			mockResponse: "",
+			wantErr:      true,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create client with mock
-			client := &Client{
-				model: "gemini-2.5-flash",
+			mock := &mockModelGenerator{
+				generateContentFunc: func(ctx context.Context, model string, parts []*genai.Content, config *genai.GenerateContentConfig) (ContentResponse, error) {
+					if tt.mockError != nil {
+						return nil, tt.mockError
+					}
+					return &mockContentResponse{text: tt.mockResponse}, nil
+				},
 			}
 
-			// Note: We can't easily mock the genai.Client without refactoring.
-			// For now, test error cases and skip success cases that need API.
-			if tt.wantErr && tt.diff == "" {
-				msg, err := client.GenerateCommitMessage(context.Background(), tt.diff, tt.context, tt.detailLevel, tt.hint)
-				if err == nil {
-					t.Errorf("expected error for empty diff")
-				}
-				if msg != "" {
-					t.Errorf("expected empty message for error case")
-				}
-			} else if !tt.wantErr {
-				// Skip API calls in unit tests - would need integration test with mock server
-				t.Skip("skipping API call test - needs integration test with mock server")
+			client := NewClientWithGenerator(mock, "gemini-3-flash-preview")
+
+			msg, err := client.GenerateCommitMessage(context.Background(), tt.diff, tt.context, tt.detailLevel, tt.hint, "embedded")
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GenerateCommitMessage() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			if !tt.wantErr && tt.validateMsg != nil {
+				tt.validateMsg(t, msg)
 			}
 		})
 	}

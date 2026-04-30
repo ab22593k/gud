@@ -7,10 +7,29 @@ import (
 	"google.golang.org/genai"
 )
 
+// ContentResponse represents a response from content generation.
+type ContentResponse interface {
+	Text() string
+}
+
+// ModelGenerator defines the interface for AI models that can generate content.
+type ModelGenerator interface {
+	GenerateContent(ctx context.Context, model string, parts []*genai.Content, config *genai.GenerateContentConfig) (ContentResponse, error)
+}
+
+// genaiAdapter adapts genai.Client to the ModelGenerator interface.
+type genaiAdapter struct {
+	client *genai.Client
+}
+
+func (a *genaiAdapter) GenerateContent(ctx context.Context, model string, parts []*genai.Content, config *genai.GenerateContentConfig) (ContentResponse, error) {
+	return a.client.Models.GenerateContent(ctx, model, parts, config)
+}
+
 // Client wraps the GenAI client for generating commit messages.
 type Client struct {
-	genaiClient *genai.Client
-	model       string
+	generator ModelGenerator
+	model     string
 }
 
 // NewClient creates a new request client using the provided API key.
@@ -30,20 +49,31 @@ func NewClient(apiKey string) (*Client, error) {
 	}
 
 	return &Client{
-		genaiClient: client,
-		model:       "gemini-2.5-flash",
+		generator: &genaiAdapter{client: client},
+		model:     "gemini-3-flash-preview",
 	}, nil
 }
 
-// GenerateCommitMessage generates a commit message based on the provided diff, context, detail level, and hint.
-func (c *Client) GenerateCommitMessage(ctx context.Context, diff, context, detailLevel, hint string) (string, error) {
+// NewClientWithGenerator creates a new client with a custom generator for testing.
+func NewClientWithGenerator(generator ModelGenerator, model string) *Client {
+	if model == "" {
+		model = "gemini-3-flash-preview"
+	}
+	return &Client{
+		generator: generator,
+		model:     model,
+	}
+}
+
+// GenerateCommitMessage generates a commit message based on the provided diff, context, detail level, hint, and persona.
+func (c *Client) GenerateCommitMessage(ctx context.Context, diff, context, detailLevel, hint, persona string) (string, error) {
 	if diff == "" {
 		return "", fmt.Errorf("diff is required")
 	}
 
-	prompt := BuildCommitMessagePrompt(diff, context, detailLevel, hint)
+	prompt := BuildCommitMessagePrompt(diff, context, detailLevel, hint, persona)
 
-	result, err := c.genaiClient.Models.GenerateContent(
+	result, err := c.generator.GenerateContent(
 		ctx,
 		c.model,
 		genai.Text(prompt),

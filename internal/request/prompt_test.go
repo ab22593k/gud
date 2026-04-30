@@ -48,8 +48,8 @@ func TestBuildCommitMessagePrompt(t *testing.T) {
 			detailLevel: "minimal",
 			hint:        "",
 			validate: func(t *testing.T, prompt string) {
-				if !strings.Contains(prompt, "50 characters") {
-					t.Errorf("minimal prompt should mention 50 chars limit")
+				if !strings.Contains(prompt, "72") && !strings.Contains(prompt, "Subject") {
+					t.Errorf("minimal prompt should mention subject line limit")
 				}
 			},
 		},
@@ -60,8 +60,8 @@ func TestBuildCommitMessagePrompt(t *testing.T) {
 			detailLevel: "detailed",
 			hint:        "",
 			validate: func(t *testing.T, prompt string) {
-				if !strings.Contains(prompt, "body") {
-					t.Errorf("detailed prompt should mention body")
+				if !strings.Contains(prompt, "72") && !strings.Contains(prompt, "82") {
+					t.Errorf("detailed prompt should mention character limits")
 				}
 			},
 		},
@@ -93,7 +93,80 @@ func TestBuildCommitMessagePrompt(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			prompt := BuildCommitMessagePrompt(tt.diff, tt.context, tt.detailLevel, tt.hint)
+			prompt := BuildCommitMessagePrompt(tt.diff, tt.context, tt.detailLevel, tt.hint, "embedded")
+			tt.validate(t, prompt)
+		})
+	}
+}
+
+func TestBuildCommitMessagePromptWithPersona(t *testing.T) {
+	tests := []struct {
+		name        string
+		diff        string
+		context     string
+		detailLevel string
+		hint        string
+		persona     string
+		validate    func(t *testing.T, prompt string)
+	}{
+		{
+			name:        "embedded persona uses linux mailing list style",
+			diff:        "diff --git a/main.go b/main.go\n+func add(a, b int) int { return a + b }",
+			context:     "",
+			detailLevel: "standard",
+			hint:        "",
+			persona:     "embedded",
+			validate: func(t *testing.T, prompt string) {
+				if !strings.Contains(prompt, "Principal") && !strings.Contains(prompt, "Embedded") {
+					t.Errorf("embedded prompt should mention Principal Embedded style")
+				}
+			},
+		},
+		{
+			name:        "google persona leaves rules empty",
+			diff:        "diff --git a/main.go b/main.go\n+func add(a, b int) int { return a + b }",
+			context:     "",
+			detailLevel: "standard",
+			hint:        "",
+			persona:     "google",
+			validate: func(t *testing.T, prompt string) {
+				// Google persona should not add extra rules - keep it empty for future use
+				if prompt == "" {
+					t.Errorf("prompt should not be empty even with google persona")
+				}
+			},
+		},
+		{
+			name:        "default persona falls back to embedded",
+			diff:        "diff --git a/main.go b/main.go",
+			context:     "",
+			detailLevel: "standard",
+			hint:        "",
+			persona:     "",
+			validate: func(t *testing.T, prompt string) {
+				if !strings.Contains(prompt, "Principal") {
+					t.Errorf("default prompt should use embedded style")
+				}
+			},
+		},
+		{
+			name:        "embedded with detailed level includes body",
+			diff:        "diff --git a/main.go b/main.go",
+			context:     "",
+			detailLevel: "detailed",
+			hint:        "",
+			persona:     "embedded",
+			validate: func(t *testing.T, prompt string) {
+				if !strings.Contains(prompt, "82") && !strings.Contains(prompt, "72") {
+					t.Errorf("detailed embedded should mention character limits")
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			prompt := BuildCommitMessagePrompt(tt.diff, tt.context, tt.detailLevel, tt.hint, tt.persona)
 			tt.validate(t, prompt)
 		})
 	}

@@ -18,6 +18,7 @@ const version = "0.1.0"
 // Config holds CLI configuration.
 type Config struct {
 	DetailLevel   string
+	Persona       string
 	Hint          string
 	Context       string
 	APIKey        string
@@ -44,6 +45,7 @@ func main() {
 func parseFlags() *Config {
 	config := &Config{}
 	flag.StringVar(&config.DetailLevel, "detail-level", "standard", "Set the detail level (minimal, standard, detailed)")
+	flag.StringVar(&config.Persona, "persona", "embedded", "Set output style (embedded, google)")
 	flag.StringVar(&config.Hint, "hint", "", "Focus boundaries for the AI")
 	flag.StringVar(&config.Context, "context", "", "Additional context for the commit message")
 	flag.StringVar(&config.APIKey, "api-key", "", "Gemini API key (or use GEMINI_API_KEY env)")
@@ -58,6 +60,11 @@ func parseFlags() *Config {
 	// Validate detail-level
 	if config.DetailLevel != "minimal" && config.DetailLevel != "standard" && config.DetailLevel != "detailed" {
 		config.DetailLevel = "standard"
+	}
+
+	// Validate persona (default to embedded)
+	if config.Persona != "embedded" && config.Persona != "google" {
+		config.Persona = "embedded"
 	}
 
 	// Get API key from env if not provided
@@ -121,12 +128,12 @@ func uninstallHook(global bool) error {
 }
 
 func runHookMode(config *Config) error {
-	return git.RunHookMode(config.HookMode, config.APIKey, config.DetailLevel, config.Hint)
+	return git.RunHookMode(context.Background(), config.HookMode, config.APIKey, config.DetailLevel, config.Hint)
 }
 
 func generateAndShow(config *Config) error {
 	// Get staged diff first (needed for both dry-run and normal mode)
-	diff, err := git.GetStagedDiff(context.Background(), ".")
+	diff, err := git.GetStagedDiff(context.Background())
 	if err != nil {
 		return fmt.Errorf("failed to get staged diff: %w", err)
 	}
@@ -154,7 +161,7 @@ func generateAndShow(config *Config) error {
 		return fmt.Errorf("failed to create request client: %w", err)
 	}
 
-	msg, err := client.GenerateCommitMessage(context.Background(), diff, config.Context, config.DetailLevel, config.Hint)
+	msg, err := client.GenerateCommitMessage(context.Background(), diff, config.Context, config.DetailLevel, config.Hint, config.Persona)
 	if err != nil {
 		return fmt.Errorf("failed to generate commit message: %w", err)
 	}

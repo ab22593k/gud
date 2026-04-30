@@ -41,10 +41,9 @@ func InstallHook(hookDir, hookType string) error {
 // apiKey is the Gemini API key (can be empty to use env var).
 // detailLevel is the detail level (minimal, standard, detailed).
 // hint is the focus hint for the AI.
-func RunHookMode(msgFile, apiKey, detailLevel, hint string) error {
+func RunHookMode(ctx context.Context, msgFile, apiKey, detailLevel, hint string) error {
 	// Get staged diff
-	ctx := context.Background()
-	diff, err := GetStagedDiff(ctx, ".")
+	diff, err := GetStagedDiff(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get staged diff: %w", err)
 	}
@@ -61,7 +60,7 @@ func RunHookMode(msgFile, apiKey, detailLevel, hint string) error {
 	}
 
 	// Generate commit message
-	msg, err := client.GenerateCommitMessage(ctx, diff, "", detailLevel, hint)
+	msg, err := client.GenerateCommitMessage(ctx, diff, "", detailLevel, hint, "embedded")
 	if err != nil {
 		return fmt.Errorf("failed to generate commit message: %w", err)
 	}

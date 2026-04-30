@@ -8,8 +8,8 @@ import (
 )
 
 // GetStagedDiff returns the git diff of staged changes (git diff --cached).
-func GetStagedDiff(ctx context.Context, repoPath string) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", "diff", "--cached", "--", repoPath)
+func GetStagedDiff(ctx context.Context) (string, error) {
+	cmd := exec.CommandContext(ctx, "git", "diff", "--cached")
 	var out bytes.Buffer
 	cmd.Stdout = &out
 
@@ -21,8 +21,8 @@ func GetStagedDiff(ctx context.Context, repoPath string) (string, error) {
 }
 
 // GetUnstagedDiff returns the git diff of unstaged changes (git diff).
-func GetUnstagedDiff(ctx context.Context, repoPath string) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", "diff", "--", repoPath)
+func GetUnstagedDiff(ctx context.Context) (string, error) {
+	cmd := exec.CommandContext(ctx, "git", "diff")
 	var out bytes.Buffer
 	cmd.Stdout = &out
 
