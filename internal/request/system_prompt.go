@@ -48,6 +48,7 @@ func GetPersona(name string) PersonaConfig {
 	return personas["embedded"]
 }
 
+// BuildPrompt constructs a full prompt from persona config, detail level, hint, context, and diff.
 func (p PersonaConfig) BuildPrompt(detailLevel, hint, additionalContext, diff string) string {
 	var sb strings.Builder
 
