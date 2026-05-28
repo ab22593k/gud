@@ -1,12 +1,14 @@
-package main
+package cli
 
 import (
+	"bytes"
+	"strings"
 	"testing"
 
 	"gud/internal/request"
 )
 
-func TestConfig_Validate(t *testing.T) {
+func TestValidateConfig(t *testing.T) {
 	tests := []struct {
 		name         string
 		inputDetail  request.DetailLevel
@@ -57,6 +59,13 @@ func TestConfig_Validate(t *testing.T) {
 			wantPersona:  request.PersonaEmbedded,
 		},
 		{
+			name:         "valid conventional persona preserved",
+			inputDetail:  request.DetailStandard,
+			inputPersona: request.PersonaConventional,
+			wantDetail:   request.DetailStandard,
+			wantPersona:  request.PersonaConventional,
+		},
+		{
 			name:         "invalid persona defaults to embedded",
 			inputDetail:  request.DetailStandard,
 			inputPersona: "google",
@@ -95,19 +104,85 @@ func TestConfig_Validate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := &Config{
-				DetailLevel: tt.inputDetail,
-				Persona:     tt.inputPersona,
-			}
+			// Save original config and restore after test
+			origDetail := cfg.DetailLevel
+			origPersona := cfg.Persona
+			defer func() {
+				cfg.DetailLevel = origDetail
+				cfg.Persona = origPersona
+			}()
 
-			c.validate()
+			cfg.DetailLevel = tt.inputDetail
+			cfg.Persona = tt.inputPersona
 
-			if c.DetailLevel != tt.wantDetail {
-				t.Errorf("DetailLevel = %q, want %q", c.DetailLevel, tt.wantDetail)
+			validateConfig()
+
+			if cfg.DetailLevel != tt.wantDetail {
+				t.Errorf("DetailLevel = %q, want %q", cfg.DetailLevel, tt.wantDetail)
 			}
-			if c.Persona != tt.wantPersona {
-				t.Errorf("Persona = %q, want %q", c.Persona, tt.wantPersona)
+			if cfg.Persona != tt.wantPersona {
+				t.Errorf("Persona = %q, want %q", cfg.Persona, tt.wantPersona)
 			}
 		})
+	}
+}
+
+func TestVersionCommand(t *testing.T) {
+	var buf bytes.Buffer
+	rootCmd.SetOut(&buf)
+	rootCmd.SetArgs([]string{"version"})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("version command failed: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "gud version") {
+		t.Errorf("version output = %q, want to contain 'gud version'", output)
+	}
+}
+
+func TestRootCommandHelp(t *testing.T) {
+	var buf bytes.Buffer
+	rootCmd.SetOut(&buf)
+	rootCmd.SetArgs([]string{"--help"})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("help command failed: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "Usage:") {
+		t.Errorf("help output should contain 'Usage:', got %q", output)
+	}
+	if !strings.Contains(output, "hook") {
+		t.Errorf("help output should list 'hook' subcommand, got %q", output)
+	}
+	if !strings.Contains(output, "version") {
+		t.Errorf("help output should list 'version' subcommand, got %q", output)
+	}
+}
+
+func TestHookCommandHelp(t *testing.T) {
+	var buf bytes.Buffer
+	rootCmd.SetOut(&buf)
+	rootCmd.SetArgs([]string{"hook", "--help"})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("hook help command failed: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "install") {
+		t.Errorf("hook help output should contain 'install', got %q", output)
+	}
+	if !strings.Contains(output, "uninstall") {
+		t.Errorf("hook help output should contain 'uninstall', got %q", output)
+	}
+	if !strings.Contains(output, "run") {
+		t.Errorf("hook help output should contain 'run', got %q", output)
 	}
 }

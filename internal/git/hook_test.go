@@ -32,8 +32,8 @@ func TestInstallHook(t *testing.T) {
 				if err != nil {
 					t.Fatalf("failed to read hook file: %v", err)
 				}
-				if !strings.Contains(string(content), "git message") {
-					t.Errorf("hook should call git message")
+				if !strings.Contains(string(content), "gud hook run") {
+					t.Errorf("hook should call gud hook run")
 				}
 			},
 		},
