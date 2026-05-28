@@ -6,9 +6,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/spf13/cobra"
 	"gud/internal/git"
 	"gud/internal/request"
+
+	"github.com/spf13/cobra"
 )
 
 // runGenerate is the default action: generate a commit message from staged changes.
@@ -17,14 +18,14 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 
 	// Resolve API key and model from env if not provided via flag
 	if cfg.APIKey == "" {
-		cfg.APIKey = os.Getenv("GEMINI_API_KEY")
+		cfg.APIKey = os.Getenv("GOOGLE_API_KEY")
 	}
 	if cfg.Model == "" {
 		cfg.Model = os.Getenv("GEMINI_MODEL")
 	}
 
 	if cfg.APIKey == "" {
-		return fmt.Errorf("API key is required. Set GEMINI_API_KEY env or use --api-key flag")
+		return fmt.Errorf("API key is required. Set GOOGLE_API_KEY env or use --api-key flag")
 	}
 
 	ctx := context.Background()

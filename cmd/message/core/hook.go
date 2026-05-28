@@ -6,8 +6,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/spf13/cobra"
 	"gud/internal/git"
+
+	"github.com/spf13/cobra"
 )
 
 var hookCmd = &cobra.Command{
@@ -87,7 +88,7 @@ func runHookMode(msgFile string) error {
 	validateConfig()
 
 	if cfg.APIKey == "" {
-		cfg.APIKey = os.Getenv("GEMINI_API_KEY")
+		cfg.APIKey = os.Getenv("GOOGLE_API_KEY")
 	}
 	if cfg.Model == "" {
 		cfg.Model = os.Getenv("GEMINI_MODEL")
