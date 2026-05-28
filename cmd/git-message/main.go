@@ -60,26 +60,31 @@ func parseFlags() *Config {
 	flag.BoolVar(&config.Global, "global", false, "Use global hooks directory")
 	flag.Parse()
 
-	// Convert and validate detail-level
 	config.DetailLevel = request.DetailLevel(detailLevelStr)
-	if config.DetailLevel != request.DetailMinimal &&
-		config.DetailLevel != request.DetailStandard &&
-		config.DetailLevel != request.DetailDetailed {
-		config.DetailLevel = request.DetailStandard
-	}
-
-	// Convert and validate persona
 	config.Persona = request.PersonaName(personaStr)
-	if config.Persona != request.PersonaEmbedded {
-		config.Persona = request.PersonaEmbedded
-	}
 
-	// Get API key from env if not provided
+	// Resolve API key from env if not provided via flag
 	if config.APIKey == "" {
 		config.APIKey = os.Getenv("GEMINI_API_KEY")
 	}
 
+	config.validate()
+
 	return config
+}
+
+// validate normalizes and validates the parsed configuration.
+func (c *Config) validate() {
+	switch c.DetailLevel {
+	case request.DetailMinimal, request.DetailStandard, request.DetailDetailed:
+		// valid
+	default:
+		c.DetailLevel = request.DetailStandard
+	}
+
+	if c.Persona != request.PersonaEmbedded {
+		c.Persona = request.PersonaEmbedded
+	}
 }
 
 func run(config *Config) error {
@@ -135,6 +140,10 @@ func runHookMode(config *Config) error {
 }
 
 func generateAndShow(config *Config) error {
+	if config.APIKey == "" {
+		return fmt.Errorf("API key is required. Set GEMINI_API_KEY env or use --api-key flag")
+	}
+
 	diff, err := git.GetStagedDiff(context.Background())
 	if err != nil {
 		return fmt.Errorf("failed to get staged diff: %w", err)
@@ -149,10 +158,6 @@ func generateAndShow(config *Config) error {
 		fmt.Println(diff)
 		fmt.Println("=== End Diff ===")
 		return nil
-	}
-
-	if config.APIKey == "" {
-		return fmt.Errorf("API key is required. Set GEMINI_API_KEY env or use --api-key flag")
 	}
 
 	client, err := request.NewClient(config.APIKey)

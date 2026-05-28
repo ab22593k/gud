@@ -3,6 +3,7 @@ package git
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -31,7 +32,7 @@ func TestInstallHook(t *testing.T) {
 				if err != nil {
 					t.Fatalf("failed to read hook file: %v", err)
 				}
-				if !contains(string(content), "git message") {
+				if !strings.Contains(string(content), "git message") {
 					t.Errorf("hook should call git message")
 				}
 			},
@@ -108,8 +109,4 @@ func TestUninstallHook(t *testing.T) {
 	if _, err := os.Stat(hookPath); !os.IsNotExist(err) {
 		t.Errorf("hook file should be removed")
 	}
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && contains(s[1:], substr) || len(s) >= len(substr) && s[0:len(substr)] == substr)
 }
