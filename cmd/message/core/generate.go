@@ -27,7 +27,9 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("API key is required. Set GEMINI_API_KEY env or use --api-key flag")
 	}
 
-	diff, err := git.GetStagedDiff(context.Background())
+	ctx := context.Background()
+
+	diff, err := git.GetStagedDiff(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get staged diff: %w", err)
 	}
@@ -36,12 +38,25 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("no staged changes found. Use 'git add' to stage changes")
 	}
 
+	var commitHistory string
+	if cfg.History > 0 {
+		commitHistory = git.GetRecentCommits(ctx, cfg.History)
+	}
+
+	promptContext := cfg.Context
+	if commitHistory != "" {
+		if promptContext != "" {
+			promptContext += "\n\n"
+		}
+		promptContext += "Recent commits:\n" + commitHistory
+	}
+
 	client, err := request.NewClient(cfg.APIKey, cfg.Model, cfg.Temperature)
 	if err != nil {
 		return fmt.Errorf("failed to create request client: %w", err)
 	}
 
-	msg, err := client.GenerateCommitMessage(context.Background(), diff, cfg.Context, cfg.DetailLevel, cfg.Hint, cfg.Persona)
+	msg, err := client.GenerateCommitMessage(ctx, diff, promptContext, cfg.DetailLevel, cfg.Hint, cfg.Persona)
 	if err != nil {
 		return fmt.Errorf("failed to generate commit message: %w", err)
 	}
@@ -49,6 +64,10 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 	cmd.Println(msg)
 	return nil
 }
+
+// maxHistory is the maximum number of recent commits the --history flag can request.
+// This prevents accidentally dumping hundreds of commits into the prompt and wasting tokens.
+const maxHistory = 50
 
 // validateConfig normalizes and validates the shared configuration values.
 func validateConfig() {
@@ -64,5 +83,11 @@ func validateConfig() {
 		// valid
 	default:
 		cfg.Persona = request.PersonaEmbedded
+	}
+
+	if cfg.History < 0 {
+		cfg.History = 0
+	} else if cfg.History > maxHistory {
+		cfg.History = maxHistory
 	}
 }
