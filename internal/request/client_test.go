@@ -31,25 +31,35 @@ func (m *mockContentResponse) Text() string {
 
 func TestNewClient(t *testing.T) {
 	tests := []struct {
-		name    string
-		apiKey  string
-		wantErr bool
+		name        string
+		apiKey      string
+		model       string
+		temperature float64
+		wantErr     bool
 	}{
 		{
 			name:    "empty API key returns error",
 			apiKey:  "",
+			model:   "",
 			wantErr: true,
 		},
 		{
-			name:    "valid API key creates client",
+			name:    "valid API key with no model uses default",
 			apiKey:  "test-api-key",
+			model:   "",
+			wantErr: false,
+		},
+		{
+			name:    "valid API key with custom model",
+			apiKey:  "test-api-key",
+			model:   "gemini-2.5-pro",
 			wantErr: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client, err := NewClient(tt.apiKey)
+			client, err := NewClient(tt.apiKey, tt.model, tt.temperature)
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("NewClient() error = %v, wantErr %v", err, tt.wantErr)
@@ -58,13 +68,19 @@ func TestNewClient(t *testing.T) {
 			if !tt.wantErr && client == nil {
 				t.Errorf("NewClient() should return non-nil client")
 			}
+			if !tt.wantErr && tt.model != "" && client.model != tt.model {
+				t.Errorf("client.model = %q, want %q", client.model, tt.model)
+			}
+			if !tt.wantErr && tt.model == "" && client.model != defaultModel {
+				t.Errorf("client.model = %q, want default %q", client.model, defaultModel)
+			}
 		})
 	}
 }
 
 func TestNewClientWithGenerator(t *testing.T) {
 	mock := &mockModelGenerator{}
-	client := NewClientWithGenerator(mock, "test-model")
+	client := NewClientWithGenerator(mock, "test-model", 0)
 
 	if client == nil {
 		t.Fatal("NewClientWithGenerator() returned nil")
@@ -74,6 +90,9 @@ func TestNewClientWithGenerator(t *testing.T) {
 	}
 	if client.generator != mock {
 		t.Errorf("generator should be the mock")
+	}
+	if client.temperature != nil {
+		t.Errorf("temperature should be nil for default 0")
 	}
 }
 
@@ -167,7 +186,7 @@ func TestClient_GenerateCommitMessage(t *testing.T) {
 				},
 			}
 
-			client := NewClientWithGenerator(mock, "gemini-3-flash-preview")
+			client := NewClientWithGenerator(mock, "gemini-3.1-flash-lite", 0)
 
 			msg, err := client.GenerateCommitMessage(context.Background(), tt.diff, tt.context, tt.detailLevel, tt.hint, tt.persona)
 

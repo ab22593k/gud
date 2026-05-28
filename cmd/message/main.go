@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	cli "gud/cmd/git-message/core"
+	cli "gud/cmd/message/core"
 )
 
 func main() {

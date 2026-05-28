@@ -45,7 +45,7 @@ gud hook run "$1"
 }
 
 // RunHookMode generates a commit message and writes it to the message file.
-func RunHookMode(ctx context.Context, msgFile, apiKey string, detailLevel request.DetailLevel, hint string, persona request.PersonaName) error {
+func RunHookMode(ctx context.Context, msgFile, apiKey, model string, temperature float64, detailLevel request.DetailLevel, hint string, persona request.PersonaName) error {
 	diff, err := getStagedDiffOrSkip(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get staged diff: %w", err)
@@ -54,7 +54,7 @@ func RunHookMode(ctx context.Context, msgFile, apiKey string, detailLevel reques
 		return nil
 	}
 
-	client, err := request.NewClient(apiKey)
+	client, err := request.NewClient(apiKey, model, temperature)
 	if err != nil {
 		return fmt.Errorf("failed to create request client: %w", err)
 	}

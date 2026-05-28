@@ -29,19 +29,28 @@ func (a *genaiAdapter) GenerateContent(ctx context.Context, model string, parts 
 
 // Client wraps the GenAI client for generating commit messages.
 type Client struct {
-	generator ModelGenerator
-	model     string
+	generator   ModelGenerator
+	model       string
+	temperature *float32
 }
 
+const defaultModel = "gemini-3.1-flash-lite"
+
 // NewClient creates a new request client using the provided API key.
-// It uses the Gemini API backend with the flash model for fast responses.
-func NewClient(apiKey string) (*Client, error) {
+// It uses the Gemini API backend with the specified model, or the default flash model.
+// If model is empty, it defaults to "gemini-3-flash-preview".
+// If temperature is 0, it is left unset (the API uses the model default).
+func NewClient(apiKey, model string, temperature float64) (*Client, error) {
 	if apiKey == "" {
 		return nil, fmt.Errorf("API key is required")
 	}
 
+	if model == "" {
+		model = defaultModel
+	}
+
 	ctx := context.Background()
-	client, err := genai.NewClient(ctx, &genai.ClientConfig{
+	genaiClient, err := genai.NewClient(ctx, &genai.ClientConfig{
 		APIKey:  apiKey,
 		Backend: genai.BackendGeminiAPI,
 	})
@@ -49,22 +58,35 @@ func NewClient(apiKey string) (*Client, error) {
 		return nil, fmt.Errorf("failed to create genai client: %w", err)
 	}
 
-	slog.Debug("created genai client", "model", "gemini-3-flash-preview")
+	var temp *float32
+	if temperature != 0 {
+		t := float32(temperature)
+		temp = &t
+	}
+
+	slog.Debug("created genai client", "model", model, "temperature", temperature)
 
 	return &Client{
-		generator: &genaiAdapter{client: client},
-		model:     "gemini-3-flash-preview",
+		generator:   &genaiAdapter{client: genaiClient},
+		model:       model,
+		temperature: temp,
 	}, nil
 }
 
 // NewClientWithGenerator creates a new client with a custom generator for testing.
-func NewClientWithGenerator(generator ModelGenerator, model string) *Client {
+func NewClientWithGenerator(generator ModelGenerator, model string, temperature float64) *Client {
 	if model == "" {
-		model = "gemini-3-flash-preview"
+		model = defaultModel
+	}
+	var temp *float32
+	if temperature != 0 {
+		t := float32(temperature)
+		temp = &t
 	}
 	return &Client{
-		generator: generator,
-		model:     model,
+		generator:   generator,
+		model:       model,
+		temperature: temp,
 	}
 }
 
@@ -91,11 +113,17 @@ func (c *Client) GenerateCommitMessage(ctx context.Context, diff, context string
 }
 
 func generateContent(c *Client, ctx context.Context, prompt string) (string, error) {
+	var config *genai.GenerateContentConfig
+	if c.temperature != nil {
+		config = &genai.GenerateContentConfig{
+			Temperature: c.temperature,
+		}
+	}
 	result, err := c.generator.GenerateContent(
 		ctx,
 		c.model,
 		genai.Text(prompt),
-		nil,
+		config,
 	)
 	if err != nil {
 		return "", err

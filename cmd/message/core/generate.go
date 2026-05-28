@@ -15,9 +15,12 @@ import (
 func runGenerate(cmd *cobra.Command, args []string) error {
 	validateConfig()
 
-	// Resolve API key from env if not provided via flag
+	// Resolve API key and model from env if not provided via flag
 	if cfg.APIKey == "" {
 		cfg.APIKey = os.Getenv("GEMINI_API_KEY")
+	}
+	if cfg.Model == "" {
+		cfg.Model = os.Getenv("GEMINI_MODEL")
 	}
 
 	if cfg.APIKey == "" {
@@ -40,7 +43,7 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	client, err := request.NewClient(cfg.APIKey)
+	client, err := request.NewClient(cfg.APIKey, cfg.Model, cfg.Temperature)
 	if err != nil {
 		return fmt.Errorf("failed to create request client: %w", err)
 	}

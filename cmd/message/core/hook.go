@@ -89,9 +89,12 @@ func runHookMode(msgFile string) error {
 	if cfg.APIKey == "" {
 		cfg.APIKey = os.Getenv("GEMINI_API_KEY")
 	}
+	if cfg.Model == "" {
+		cfg.Model = os.Getenv("GEMINI_MODEL")
+	}
 
 	ctx := context.Background()
-	return git.RunHookMode(ctx, msgFile, cfg.APIKey, cfg.DetailLevel, cfg.Hint, cfg.Persona)
+	return git.RunHookMode(ctx, msgFile, cfg.APIKey, cfg.Model, cfg.Temperature, cfg.DetailLevel, cfg.Hint, cfg.Persona)
 }
 
 func init() {

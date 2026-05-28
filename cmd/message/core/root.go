@@ -12,6 +12,8 @@ const version = "0.1.0"
 type Config struct {
 	DetailLevel request.DetailLevel
 	Persona     request.PersonaName
+	Model       string
+	Temperature float64
 	Hint        string
 	Context     string
 	APIKey      string
@@ -47,6 +49,8 @@ func init() {
 	rootCmd.PersistentFlags().StringVar((*string)(&cfg.Persona), "persona", "embedded", "Set output style (embedded, conventional)")
 	rootCmd.PersistentFlags().StringVar(&cfg.Hint, "hint", "", "Focus boundaries for the AI")
 	rootCmd.PersistentFlags().StringVar(&cfg.Context, "context", "", "Additional context for the commit message")
+	rootCmd.PersistentFlags().StringVar(&cfg.Model, "model", "", "Gemini model to use (or use GEMINI_MODEL env)")
+	rootCmd.PersistentFlags().Float64Var(&cfg.Temperature, "temperature", 0, "Set the generation temperature (0-2, default: model default)")
 	rootCmd.PersistentFlags().StringVar(&cfg.APIKey, "api-key", "", "Gemini API key (or use GEMINI_API_KEY env)")
 	rootCmd.PersistentFlags().BoolVar(&cfg.DryRun, "dry-run", false, "Show the staged diff without generating a message")
 }
