@@ -1,4 +1,4 @@
-package cli
+package core
 
 import (
 	"gud/internal/request"
@@ -24,7 +24,7 @@ type Config struct {
 var cfg Config
 
 var rootCmd = &cobra.Command{
-	Use:   "git-message",
+	Use:   "message",
 	Short: "Spontaneously combust commit message",
 	Long: `Tool that generates meaningful git commit messages
 using Google's Gemini API, based on your staged changes.
