@@ -17,7 +17,6 @@ type Config struct {
 	Hint        string
 	Context     string
 	APIKey      string
-	DryRun      bool
 	Global      bool
 }
 
@@ -52,5 +51,4 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&cfg.Model, "model", "", "Gemini model to use (or use GEMINI_MODEL env)")
 	rootCmd.PersistentFlags().Float64Var(&cfg.Temperature, "temperature", 0, "Set the generation temperature (0-2, default: model default)")
 	rootCmd.PersistentFlags().StringVar(&cfg.APIKey, "api-key", "", "Gemini API key (or use GEMINI_API_KEY env)")
-	rootCmd.PersistentFlags().BoolVar(&cfg.DryRun, "dry-run", false, "Show the staged diff without generating a message")
 }

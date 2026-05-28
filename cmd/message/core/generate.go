@@ -36,13 +36,6 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("no staged changes found. Use 'git add' to stage changes")
 	}
 
-	if cfg.DryRun {
-		cmd.Println("=== Staged Diff ===")
-		cmd.Println(diff)
-		cmd.Println("=== End Diff ===")
-		return nil
-	}
-
 	client, err := request.NewClient(cfg.APIKey, cfg.Model, cfg.Temperature)
 	if err != nil {
 		return fmt.Errorf("failed to create request client: %w", err)
