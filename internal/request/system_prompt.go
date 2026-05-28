@@ -2,7 +2,7 @@ package request
 
 import "strings"
 
-type Example struct {
+type Showcase struct {
 	Diff   string
 	Output string
 }
@@ -25,81 +25,54 @@ const (
 )
 
 type PersonaConfig struct {
-	Name     string
-	System   string
-	Examples []Example
-	Rules    map[DetailLevel]string
+	Name      string
+	System    string
+	Showcases []Showcase
+	Rules     map[DetailLevel]string
 }
 
 var personas = map[PersonaName]PersonaConfig{
 	PersonaEmbedded: {
 		Name: "embedded",
-		System: `# PERSONA
-You are a Principal Embedded Kernel Maintainer. You are technically rigorous, demanding, and believe that a commit message is a permanent piece of technical documentation. You expect developers to explain *why* a change is necessary with absolute precision.
-
-**Formatting Constraints (STRICT):**
-- **Subject Line:** Maximum 72 characters.
-- **Body Content:** Wrap all lines at exactly 82 characters. This is a hard limit
-for mailing list compatibility and readability.`,
+		System: `You are a Embedded engineer. A commit message is permanent technical documentation. Explain *why* a change is necessary with precision.
+Subject: max 72 chars. Body: wrap at 82 chars.`,
 		Rules: map[DetailLevel]string{
-			DetailMinimal:  "EXIGENCY: Keep it technical and concise. A subsystem subject and a single paragraph of technical reasoning.",
-			DetailStandard: "EXIGENCY: Provide a multi-paragraph technical justification explaining the problem and solution.",
-			DetailDetailed: "EXIGENCY: Exhaustive technical documentation. Explain the state before/after, the logic flow, and architectural implications.",
+			DetailMinimal:  "Subject line + single paragraph of technical reasoning.",
+			DetailStandard: "Multi-paragraph technical justification: problem and solution.",
+			DetailDetailed: "Exhaustive docs: before/after state, logic flow, architectural implications.",
 		},
 	},
 	PersonaConventional: {
 		Name: "conventional",
-		System: `# PERSONA
-You are a commit message expert that strictly follows the Conventional Commits specification (v1.0.0).
-
-## Conventional Commits Specification
-
-Commit messages MUST be structured as follows:
-
-<type>[optional scope]: <description>
-[optional body]
-[optional footer(s)]
-
-### Types
-- fix: a commit of the type fix patches a bug (correlates with PATCH in SemVer)
-- feat: a commit of the type feat introduces a new feature (correlates with MINOR in SemVer)
-- build: changes that affect the build system or external dependencies
-- chore: other changes that don't modify src or test files
-- ci: changes to CI configuration files and scripts
-- docs: documentation only changes
-- style: changes that do not affect the meaning of the code (formatting, etc)
-- refactor: a code change that neither fixes a bug nor adds a feature
-- perf: a code change that improves performance
-- test: adding missing or correcting existing tests
-
-### Rules
-- A scope MAY be provided after a type in parentheses, e.g., feat(parser): add ability to parse arrays
-- Breaking changes MUST be indicated by a "!" before the colon, or by a BREAKING CHANGE: footer
-- The description MUST immediately follow the colon and space after the type/scope prefix
-- The description is a short summary of the code changes
-- A longer commit body MAY be provided after one blank line following the description
-- One or more footers MAY be provided one blank line after the body
-- Footer tokens MUST use "-" in place of whitespace, with BREAKING CHANGE as an exception
-- Maximum subject line: 72 characters
-- Body lines: wrap at 82 characters`,
-		Examples: []Example{
+		System: `Follow Conventional Commits v1.0.0.
+Format: <type>[optional scope]: <description>
+Types: fix, feat, build, chore, ci, docs, style, refactor, perf, test
+Scope: optional, in parentheses after type, e.g. feat(parser): ...
+Breaking: "!" before colon or BREAKING CHANGE: footer
+Subject: max 72 chars. Body: wrap at 82 chars.
+Body after blank line. Footers after blank line. Footer tokens use "-" not whitespace.`,
+		Showcases: []Showcase{
 			{
-				Diff:   "diff --git a/config.js b/config.js\n+allowUsersToExtendConfig()",
+				Diff:   "+allowUsersToExtendConfig()",
 				Output: "feat: allow provided config object to extend other configs\n\nBREAKING CHANGE: `extends` key in config file is now used for extending other config files",
 			},
 			{
-				Diff:   "diff --git a/lang.js b/lang.js\n+const polish = require('polish')",
+				Diff:   "+const polish = require('polish')",
 				Output: "feat(lang): add Polish language",
 			},
 			{
-				Diff:   "diff --git a/api.js b/api.js\n+function sendEmailOnShipment() {}",
+				Diff:   "+function sendEmailOnShipment() {}",
 				Output: "feat(api)!: send an email to the customer when a product is shipped",
+			},
+			{
+				Diff:   "-deleteUser(id) +removeUser(id)",
+				Output: "fix: rename deleteUser to removeUser for API consistency",
 			},
 		},
 		Rules: map[DetailLevel]string{
-			DetailMinimal:  "EXIGENCY: Generate only a subject line with the format '<type>[optional scope]: <description>'. No body or footers.",
-			DetailStandard: "EXIGENCY: Generate a subject line with type and optional scope, followed by a body explaining what changed and why. Include footers when relevant (e.g., BREAKING CHANGE, Refs, Reviewed-by).",
-			DetailDetailed: "EXIGENCY: Generate a comprehensive commit message with type, optional scope, detailed multi-paragraph body explaining motivation and implementation details, and all relevant footers (BREAKING CHANGE, Refs, Reviewed-by, etc.).",
+			DetailMinimal:  "Subject only: '<type>[optional scope]: <description>'. No body or footers.",
+			DetailStandard: "Subject + body explaining what changed and why. Include footers when relevant (BREAKING CHANGE, Refs, Reviewed-by).",
+			DetailDetailed: "Subject + detailed multi-paragraph body with motivation and implementation, plus all relevant footers.",
 		},
 	},
 }
@@ -120,7 +93,7 @@ func GetPersona(name PersonaName) PersonaConfig {
 func (p PersonaConfig) BuildPrompt(detailLevel DetailLevel, hint, context, diff string) string {
 	var sb strings.Builder
 	writeSystem(&sb, p)
-	writeExamples(&sb, p.Examples)
+	writeExamples(&sb, p.Showcases)
 	writeDetailRules(&sb, detailLevel, p.Rules)
 	writeHint(&sb, hint)
 	writeContext(&sb, context)
@@ -130,10 +103,10 @@ func (p PersonaConfig) BuildPrompt(detailLevel DetailLevel, hint, context, diff 
 
 func writeSystem(sb *strings.Builder, p PersonaConfig) {
 	sb.WriteString(p.System)
-	sb.WriteString("\n\n")
+	sb.WriteString("\n")
 }
 
-func writeExamples(sb *strings.Builder, examples []Example) {
+func writeExamples(sb *strings.Builder, examples []Showcase) {
 	if len(examples) == 0 {
 		return
 	}
@@ -146,7 +119,7 @@ func writeExamples(sb *strings.Builder, examples []Example) {
 			sb.WriteString("\n\n")
 		}
 	}
-	sb.WriteString("\n\n")
+	sb.WriteString("\n")
 }
 
 func writeDetailRules(sb *strings.Builder, level DetailLevel, rules map[DetailLevel]string) {
@@ -177,7 +150,7 @@ func writeContext(sb *strings.Builder, context string) {
 }
 
 func writeDiff(sb *strings.Builder, diff string) {
-	sb.WriteString("\nDiff:\n")
+	sb.WriteString("Diff:\n")
 	sb.WriteString(diff)
-	sb.WriteString("\n\nOutput:\n")
+	sb.WriteString("\nOutput:\n")
 }
