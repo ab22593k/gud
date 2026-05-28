@@ -1,6 +1,6 @@
 module gud/internal/request
 
-go 1.24.0
+go 1.26.3
 
 require google.golang.org/genai v1.54.0
 
