@@ -17,6 +17,21 @@ func GetUnstagedDiff(ctx context.Context) (string, error) {
 	return runGitDiff(ctx, "diff")
 }
 
+// Commit runs git commit with the given message piped via stdin.
+func Commit(ctx context.Context, message string) error {
+	cmd := exec.CommandContext(ctx, "git", "commit", "-F", "-")
+	cmd.Stdin = bytes.NewBufferString(message)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("git commit failed: %w\n%s", err, out.String())
+	}
+
+	return nil
+}
+
 // GetRecentCommits returns the last n commit summaries (one-line format).
 // If n <= 0, it returns an empty string. If the repository has no commits yet
 // or git log fails for any other reason, it returns an empty string rather than

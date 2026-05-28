@@ -102,14 +102,28 @@ func TestValidateConfig(t *testing.T) {
 		},
 	}
 
+	historyTests := []struct {
+		name      string
+		inputHist int
+		wantHist  int
+	}{
+		{name: "history default (5) preserved", inputHist: 5, wantHist: 5},
+		{name: "history 0 preserved", inputHist: 0, wantHist: 0},
+		{name: "negative history clamped to 0", inputHist: -3, wantHist: 0},
+		{name: "history above maxHistory clamped", inputHist: maxHistory + 10, wantHist: maxHistory},
+		{name: "history at maxHistory preserved", inputHist: maxHistory, wantHist: maxHistory},
+	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Save original config and restore after test
 			origDetail := cfg.DetailLevel
 			origPersona := cfg.Persona
+			origHist := cfg.History
 			defer func() {
 				cfg.DetailLevel = origDetail
 				cfg.Persona = origPersona
+				cfg.History = origHist
 			}()
 
 			cfg.DetailLevel = tt.inputDetail
@@ -122,6 +136,20 @@ func TestValidateConfig(t *testing.T) {
 			}
 			if cfg.Persona != tt.wantPersona {
 				t.Errorf("Persona = %q, want %q", cfg.Persona, tt.wantPersona)
+			}
+		})
+	}
+
+	for _, tt := range historyTests {
+		t.Run(tt.name, func(t *testing.T) {
+			origHist := cfg.History
+			defer func() { cfg.History = origHist }()
+
+			cfg.History = tt.inputHist
+			validateConfig()
+
+			if cfg.History != tt.wantHist {
+				t.Errorf("History = %d, want %d", cfg.History, tt.wantHist)
 			}
 		})
 	}
@@ -162,6 +190,9 @@ func TestRootCommandHelp(t *testing.T) {
 	}
 	if !strings.Contains(output, "version") {
 		t.Errorf("help output should list 'version' subcommand, got %q", output)
+	}
+	if !strings.Contains(output, "--history") {
+		t.Errorf("help output should include --history flag, got %q", output)
 	}
 }
 

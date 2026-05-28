@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
 )
 
@@ -86,6 +87,90 @@ func TestGetRecentCommits_NonEmpty(t *testing.T) {
 		t.Fatal("GetRecentCommits(5) returned empty, expected at least one commit")
 	}
 	t.Logf("Recent commits:\n%s", got)
+}
+
+func TestCommit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	// Set up a temp repo with a staged file
+	dir := t.TempDir()
+	for _, cmd := range []string{
+		"git init",
+		"git config user.email test@example.com",
+		"git config user.name Test",
+	} {
+		c := exec.Command("sh", "-c", cmd)
+		c.Dir = dir
+		if err := c.Run(); err != nil {
+			t.Fatalf("%s failed: %v", cmd, err)
+		}
+	}
+	if err := os.WriteFile(dir+"/file.go", []byte("package main\n"), 0644); err != nil {
+		t.Fatalf("write file failed: %v", err)
+	}
+	addCmd := exec.Command("git", "add", ".")
+	addCmd.Dir = dir
+	if err := addCmd.Run(); err != nil {
+		t.Fatalf("git add failed: %v", err)
+	}
+
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("Chdir failed: %v", err)
+	}
+	defer os.Chdir(origDir)
+
+	ctx := context.Background()
+	if err := Commit(ctx, "feat: initial commit\n\nAdd main package."); err != nil {
+		t.Fatalf("Commit() unexpected error: %v", err)
+	}
+
+	// Verify the commit was created
+	got := GetRecentCommits(ctx, 1)
+	if !strings.Contains(got, "feat: initial commit") {
+		t.Errorf("Commit message not found in log, got: %s", got)
+	}
+}
+
+func TestCommit_EmptyMessage(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	dir := t.TempDir()
+	for _, cmd := range []string{
+		"git init",
+		"git config user.email test@example.com",
+		"git config user.name Test",
+	} {
+		c := exec.Command("sh", "-c", cmd)
+		c.Dir = dir
+		if err := c.Run(); err != nil {
+			t.Fatalf("%s failed: %v", cmd, err)
+		}
+	}
+	if err := os.WriteFile(dir+"/file.go", []byte("package main\n"), 0644); err != nil {
+		t.Fatalf("write file failed: %v", err)
+	}
+	addCmd := exec.Command("git", "add", ".")
+	addCmd.Dir = dir
+	if err := addCmd.Run(); err != nil {
+		t.Fatalf("git add failed: %v", err)
+	}
+
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("Chdir failed: %v", err)
+	}
+	defer os.Chdir(origDir)
+
+	ctx := context.Background()
+	err := Commit(ctx, "")
+	if err == nil {
+		t.Fatal("Commit() with empty message should return error")
+	}
 }
 
 func TestGetRecentCommits_EmptyRepo(t *testing.T) {
