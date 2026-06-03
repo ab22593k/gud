@@ -87,9 +87,7 @@ func runHookUninstall(global bool) error {
 func runHookMode(msgFile string) error {
 	validateConfig()
 
-	if cfg.APIKey == "" {
-		cfg.APIKey = os.Getenv("GOOGLE_API_KEY")
-	}
+	cfg.APIKey = os.Getenv("GOOGLE_API_KEY")
 	if cfg.Model == "" {
 		cfg.Model = os.Getenv("GEMINI_MODEL")
 	}
