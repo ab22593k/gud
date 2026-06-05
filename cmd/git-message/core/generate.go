@@ -3,7 +3,7 @@ package core
 import (
 	"context"
 	"fmt"
-	"os"
+	"log/slog"
 	"strings"
 
 	"gud/internal/git"
@@ -14,8 +14,7 @@ import (
 
 // runGenerate is the default action: generate a commit message from staged changes.
 func runGenerate(cmd *cobra.Command, args []string) error {
-	validateConfig()
-	resolveEnvConfig()
+	cfg := configFromCmd(cmd)
 
 	if cfg.APIKey == "" {
 		return fmt.Errorf("API key is required. Set the GOOGLE_API_KEY environment variable")
@@ -28,22 +27,14 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	promptContext := buildHistoryContext(ctx)
+	promptContext := buildHistoryContext(ctx, cfg)
 
-	client, err := request.NewClient(cfg.APIKey, cfg.Model, cfg.Temperature)
+	client, err := request.NewClient(ctx, cfg.APIKey, cfg.Model, cfg.Temperature)
 	if err != nil {
 		return fmt.Errorf("failed to create request client: %w", err)
 	}
 
-	return interactiveCommit(ctx, cmd, client, diff, promptContext)
-}
-
-// resolveEnvConfig reads API key and model from environment variables.
-func resolveEnvConfig() {
-	cfg.APIKey = os.Getenv("GOOGLE_API_KEY")
-	if cfg.Model == "" {
-		cfg.Model = os.Getenv("GEMINI_MODEL")
-	}
+	return interactiveCommit(ctx, cmd, client, diff, promptContext, cfg)
 }
 
 // getStagedDiffOrError retrieves the staged diff and returns an error if none exists.
@@ -60,10 +51,17 @@ func getStagedDiffOrError(ctx context.Context) (string, error) {
 
 // buildHistoryContext returns a formatted string of recent commit history, or
 // empty string if --history is disabled or there are no recent commits.
-func buildHistoryContext(ctx context.Context) string {
+// Errors from git are logged at debug level and silently discarded —
+// history is optional context for the AI prompt and should never block generation.
+func buildHistoryContext(ctx context.Context, cfg Config) string {
 	var history string
 	if cfg.History > 0 {
-		history = git.GetRecentCommits(ctx, cfg.History)
+		var err error
+		history, err = git.GetRecentCommits(ctx, cfg.History)
+		if err != nil {
+			slog.Debug("failed to get recent commits, proceeding without history", "error", err)
+			history = ""
+		}
 	}
 	if history != "" {
 		history = "Recent commits:\n" + history
@@ -76,7 +74,7 @@ func buildHistoryContext(ctx context.Context) string {
 const maxHistory = 50
 
 // validateConfig normalizes and validates the shared configuration values.
-func validateConfig() {
+func validateConfig(cfg Config) Config {
 	switch cfg.DetailLevel {
 	case request.DetailMinimal, request.DetailStandard, request.DetailDetailed:
 		// valid
@@ -96,4 +94,5 @@ func validateConfig() {
 	} else if cfg.History > maxHistory {
 		cfg.History = maxHistory
 	}
+	return cfg
 }

@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gud/internal/git"
+	"gud/internal/request"
 
 	"github.com/spf13/cobra"
 )
@@ -48,7 +50,7 @@ and writes it to the specified message file.
 This is used internally by the git hook and should not be called directly.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runHookMode(args[0])
+		return runHookMode(cmd, args[0])
 	},
 }
 
@@ -84,16 +86,54 @@ func runHookUninstall(global bool) error {
 	return nil
 }
 
-func runHookMode(msgFile string) error {
-	validateConfig()
-
-	cfg.APIKey = os.Getenv("GOOGLE_API_KEY")
-	if cfg.Model == "" {
-		cfg.Model = os.Getenv("GEMINI_MODEL")
-	}
+func runHookMode(cmd *cobra.Command, msgFile string) error {
+	cfg := configFromCmd(cmd)
 
 	ctx := context.Background()
-	return git.RunHookMode(ctx, msgFile, cfg.APIKey, cfg.Model, cfg.Temperature, cfg.DetailLevel, cfg.Hint, cfg.Persona)
+	return runHookModeInternal(ctx, msgFile, cfg.APIKey, cfg.Model, cfg.Temperature, cfg.DetailLevel, cfg.Hint, cfg.Persona)
+}
+
+// runHookModeInternal generates a commit message and writes it to the message file.
+func runHookModeInternal(ctx context.Context, msgFile, apiKey, model string, temperature float64, detailLevel request.DetailLevel, hint string, persona request.PersonaName) error {
+	diff, err := getStagedDiffOrSkip(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get staged diff: %w", err)
+	}
+	if diff == "" {
+		return nil
+	}
+
+	client, err := request.NewClient(ctx, apiKey, model, temperature)
+	if err != nil {
+		return fmt.Errorf("failed to create request client: %w", err)
+	}
+
+	return generateAndWriteMsg(client, ctx, diff, detailLevel, hint, persona, msgFile)
+}
+
+// getStagedDiffOrSkip returns the staged diff, or an empty string if there are no staged changes.
+func getStagedDiffOrSkip(ctx context.Context) (string, error) {
+	diff, err := git.GetStagedDiff(ctx)
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(diff) == "" {
+		return "", nil
+	}
+	return diff, nil
+}
+
+// generateAndWriteMsg generates a commit message and writes it to the message file.
+func generateAndWriteMsg(client *request.Client, ctx context.Context, diff string, detailLevel request.DetailLevel, hint string, persona request.PersonaName, msgFile string) error {
+	msg, err := client.GenerateCommitMessage(ctx, diff, "", detailLevel, hint, persona)
+	if err != nil {
+		return fmt.Errorf("failed to generate commit message: %w", err)
+	}
+
+	if err := os.WriteFile(msgFile, []byte(msg), 0644); err != nil {
+		return fmt.Errorf("failed to write message file: %w", err)
+	}
+	return nil
 }
 
 func init() {

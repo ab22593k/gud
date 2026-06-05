@@ -33,22 +33,21 @@ func Commit(ctx context.Context, message string) error {
 }
 
 // GetRecentCommits returns the last n commit summaries (one-line format).
-// If n <= 0, it returns an empty string. If the repository has no commits yet
-// or git log fails for any other reason, it returns an empty string rather than
-// an error — missing history should not block the caller.
-func GetRecentCommits(ctx context.Context, n int) string {
+// If n <= 0, it returns an empty string with no error.
+// It returns an error if git log fails (e.g. the repository has no commits yet).
+func GetRecentCommits(ctx context.Context, n int) (string, error) {
 	if n <= 0 {
-		return ""
+		return "", nil
 	}
 	cmd := exec.CommandContext(ctx, "git", "log", fmt.Sprintf("-%d", n), "--oneline", "--no-decorate")
 	var out bytes.Buffer
 	cmd.Stdout = &out
 
 	if err := cmd.Run(); err != nil {
-		return ""
+		return "", fmt.Errorf("failed to get recent commits: %w", err)
 	}
 
-	return out.String()
+	return out.String(), nil
 }
 
 // runGitDiff runs a git diff command with the given arguments and returns the output.

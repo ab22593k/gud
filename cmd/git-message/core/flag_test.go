@@ -102,6 +102,24 @@ func TestValidateConfig(t *testing.T) {
 		},
 	}
 
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := Config{
+				DetailLevel: tt.inputDetail,
+				Persona:     tt.inputPersona,
+			}
+
+			got := validateConfig(cfg)
+
+			if got.DetailLevel != tt.wantDetail {
+				t.Errorf("DetailLevel = %q, want %q", got.DetailLevel, tt.wantDetail)
+			}
+			if got.Persona != tt.wantPersona {
+				t.Errorf("Persona = %q, want %q", got.Persona, tt.wantPersona)
+			}
+		})
+	}
+
 	historyTests := []struct {
 		name      string
 		inputHist int
@@ -114,42 +132,12 @@ func TestValidateConfig(t *testing.T) {
 		{name: "history at maxHistory preserved", inputHist: maxHistory, wantHist: maxHistory},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Save original config and restore after test
-			origDetail := cfg.DetailLevel
-			origPersona := cfg.Persona
-			origHist := cfg.History
-			defer func() {
-				cfg.DetailLevel = origDetail
-				cfg.Persona = origPersona
-				cfg.History = origHist
-			}()
-
-			cfg.DetailLevel = tt.inputDetail
-			cfg.Persona = tt.inputPersona
-
-			validateConfig()
-
-			if cfg.DetailLevel != tt.wantDetail {
-				t.Errorf("DetailLevel = %q, want %q", cfg.DetailLevel, tt.wantDetail)
-			}
-			if cfg.Persona != tt.wantPersona {
-				t.Errorf("Persona = %q, want %q", cfg.Persona, tt.wantPersona)
-			}
-		})
-	}
-
 	for _, tt := range historyTests {
 		t.Run(tt.name, func(t *testing.T) {
-			origHist := cfg.History
-			defer func() { cfg.History = origHist }()
-
-			cfg.History = tt.inputHist
-			validateConfig()
-
-			if cfg.History != tt.wantHist {
-				t.Errorf("History = %d, want %d", cfg.History, tt.wantHist)
+			cfg := Config{History: tt.inputHist}
+			got := validateConfig(cfg)
+			if got.History != tt.wantHist {
+				t.Errorf("History = %d, want %d", got.History, tt.wantHist)
 			}
 		})
 	}

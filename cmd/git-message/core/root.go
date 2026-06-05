@@ -1,6 +1,8 @@
 package core
 
 import (
+	"os"
+
 	"gud/internal/request"
 
 	"github.com/spf13/cobra"
@@ -17,10 +19,7 @@ type Config struct {
 	Hint        string
 	History     int
 	APIKey      string
-	Global      bool
 }
-
-var cfg Config
 
 var rootCmd = &cobra.Command{
 	Use:   "message",
@@ -43,11 +42,37 @@ func Execute() error {
 }
 
 func init() {
-	// Persistent flags available to all commands
-	rootCmd.PersistentFlags().StringVar((*string)(&cfg.DetailLevel), "detail-level", "standard", "Set the detail level (minimal, standard, detailed)")
-	rootCmd.PersistentFlags().StringVar((*string)(&cfg.Persona), "persona", "embedded", "Set output style (embedded, conventional)")
-	rootCmd.PersistentFlags().StringVar(&cfg.Hint, "hint", "", "Focus boundaries for the AI")
-	rootCmd.PersistentFlags().IntVar(&cfg.History, "history", 5, "Number of recent commits to include as context (0 to disable)")
-	rootCmd.PersistentFlags().StringVar(&cfg.Model, "model", "", "Gemini model to use (or use GEMINI_MODEL env)")
-	rootCmd.PersistentFlags().Float64Var(&cfg.Temperature, "temperature", 0, "Set the generation temperature (0-2, default: model default)")
+	// Persistent flags available to all commands (no global variable binding)
+	rootCmd.PersistentFlags().String("detail-level", "standard", "Set the detail level (minimal, standard, detailed)")
+	rootCmd.PersistentFlags().String("persona", "embedded", "Set output style (embedded, conventional)")
+	rootCmd.PersistentFlags().String("hint", "", "Focus boundaries for the AI")
+	rootCmd.PersistentFlags().Int("history", 5, "Number of recent commits to include as context (0 to disable)")
+	rootCmd.PersistentFlags().String("model", "", "Gemini model to use (or use GEMINI_MODEL env)")
+	rootCmd.PersistentFlags().Float64("temperature", 0, "Set the generation temperature (0-2, default: model default)")
+}
+
+// configFromCmd reads flags from the cobra command and environment variables
+// to construct a normalized Config.
+func configFromCmd(cmd *cobra.Command) Config {
+	detail, _ := cmd.Flags().GetString("detail-level")
+	persona, _ := cmd.Flags().GetString("persona")
+	hint, _ := cmd.Flags().GetString("hint")
+	history, _ := cmd.Flags().GetInt("history")
+	model, _ := cmd.Flags().GetString("model")
+	temp, _ := cmd.Flags().GetFloat64("temperature")
+
+	cfg := Config{
+		DetailLevel: request.DetailLevel(detail),
+		Persona:     request.PersonaName(persona),
+		Hint:        hint,
+		History:     history,
+		Model:       model,
+		Temperature: temp,
+		APIKey:      os.Getenv("GOOGLE_API_KEY"),
+	}
+	if cfg.Model == "" {
+		cfg.Model = os.Getenv("GEMINI_MODEL")
+	}
+	cfg = validateConfig(cfg)
+	return cfg
 }

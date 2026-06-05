@@ -37,10 +37,12 @@ type Client struct {
 const defaultModel = "gemini-3.1-flash-lite"
 
 // NewClient creates a new request client using the provided API key.
-// It uses the Gemini API backend with the specified model, or the default flash model.
-// If model is empty, it defaults to "gemini-3-flash-preview".
+// The caller is responsible for providing a context that can carry timeouts
+// and cancellation. It uses the Gemini API backend with the specified model,
+// or the default flash model.
+// If model is empty, it defaults to "gemini-3.1-flash-lite".
 // If temperature is 0, it is left unset (the API uses the model default).
-func NewClient(apiKey, model string, temperature float64) (*Client, error) {
+func NewClient(ctx context.Context, apiKey, model string, temperature float64) (*Client, error) {
 	if apiKey == "" {
 		return nil, fmt.Errorf("API key is required")
 	}
@@ -49,7 +51,6 @@ func NewClient(apiKey, model string, temperature float64) (*Client, error) {
 		model = defaultModel
 	}
 
-	ctx := context.Background()
 	genaiClient, err := genai.NewClient(ctx, &genai.ClientConfig{
 		APIKey:  apiKey,
 		Backend: genai.BackendGeminiAPI,

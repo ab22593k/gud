@@ -68,9 +68,12 @@ func TestGetRecentCommits(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := GetRecentCommits(ctx, tt.n)
+			got, err := GetRecentCommits(ctx, tt.n)
 			if got != "" {
 				t.Errorf("GetRecentCommits(%d) = %q, want empty string", tt.n, got)
+			}
+			if err != nil {
+				t.Errorf("GetRecentCommits(%d) unexpected error: %v", tt.n, err)
 			}
 		})
 	}
@@ -82,7 +85,10 @@ func TestGetRecentCommits_NonEmpty(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	got := GetRecentCommits(ctx, 5)
+	got, err := GetRecentCommits(ctx, 5)
+	if err != nil {
+		t.Fatalf("GetRecentCommits(5) unexpected error: %v", err)
+	}
 	if got == "" {
 		t.Fatal("GetRecentCommits(5) returned empty, expected at least one commit")
 	}
@@ -128,7 +134,10 @@ func TestCommit(t *testing.T) {
 	}
 
 	// Verify the commit was created
-	got := GetRecentCommits(ctx, 1)
+	got, err := GetRecentCommits(ctx, 1)
+	if err != nil {
+		t.Fatalf("GetRecentCommits(1) unexpected error: %v", err)
+	}
 	if !strings.Contains(got, "feat: initial commit") {
 		t.Errorf("Commit message not found in log, got: %s", got)
 	}
@@ -192,8 +201,11 @@ func TestGetRecentCommits_EmptyRepo(t *testing.T) {
 	defer os.Chdir(origDir)
 
 	ctx := context.Background()
-	got := GetRecentCommits(ctx, 5)
+	got, err := GetRecentCommits(ctx, 5)
 	if got != "" {
 		t.Errorf("GetRecentCommits(5) on empty repo = %q, want empty string", got)
+	}
+	if err == nil {
+		t.Errorf("GetRecentCommits(5) on empty repo should return an error")
 	}
 }

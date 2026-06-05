@@ -17,7 +17,7 @@ import (
 )
 
 // interactiveCommit runs the generate → review → commit loop.
-func interactiveCommit(ctx context.Context, cmd *cobra.Command, client *request.Client, diff, promptContext string) error {
+func interactiveCommit(ctx context.Context, cmd *cobra.Command, client *request.Client, diff, promptContext string, cfg Config) error {
 	scanner := bufio.NewScanner(cmd.InOrStdin())
 	out := cmd.OutOrStdout()
 

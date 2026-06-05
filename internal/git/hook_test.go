@@ -59,40 +59,6 @@ func TestInstallHook(t *testing.T) {
 	}
 }
 
-func TestRunHookMode(t *testing.T) {
-	tests := []struct {
-		name     string
-		msgFile  string
-		content  string
-		wantErr  bool
-		validate func(t *testing.T, msgFile string)
-	}{
-		{
-			name:    "writes message to file",
-			content: "feat: add new feature",
-			validate: func(t *testing.T, msgFile string) {
-				content, err := os.ReadFile(msgFile)
-				if err != nil {
-					t.Fatalf("failed to read msg file: %v", err)
-				}
-				if string(content) != "feat: add new feature" {
-					t.Errorf("got %q, want %q", string(content), "feat: add new feature")
-				}
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tmpFile := filepath.Join(t.TempDir(), "COMMIT_MSG")
-			if tt.content != "" {
-				os.WriteFile(tmpFile, []byte("initial content"), 0644)
-			}
-			t.Skip("skipping RunHookMode test - needs valid API key")
-		})
-	}
-}
-
 func TestUninstallHook(t *testing.T) {
 	tmpDir := t.TempDir()
 	hookDir := filepath.Join(tmpDir, ".git", "hooks")
