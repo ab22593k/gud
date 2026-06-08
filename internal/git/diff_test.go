@@ -126,7 +126,7 @@ func TestCommit(t *testing.T) {
 	if err := os.Chdir(dir); err != nil {
 		t.Fatalf("Chdir failed: %v", err)
 	}
-	defer os.Chdir(origDir)
+	defer func() { _ = os.Chdir(origDir) }()
 
 	ctx := context.Background()
 	if err := Commit(ctx, "feat: initial commit\n\nAdd main package."); err != nil {
@@ -173,7 +173,7 @@ func TestCommit_EmptyMessage(t *testing.T) {
 	if err := os.Chdir(dir); err != nil {
 		t.Fatalf("Chdir failed: %v", err)
 	}
-	defer os.Chdir(origDir)
+	defer func() { _ = os.Chdir(origDir) }()
 
 	ctx := context.Background()
 	err := Commit(ctx, "")
@@ -198,7 +198,7 @@ func TestGetRecentCommits_EmptyRepo(t *testing.T) {
 	if err := os.Chdir(dir); err != nil {
 		t.Fatalf("Chdir to temp repo failed: %v", err)
 	}
-	defer os.Chdir(origDir)
+	defer func() { _ = os.Chdir(origDir) }()
 
 	ctx := context.Background()
 	got, err := GetRecentCommits(ctx, 5)

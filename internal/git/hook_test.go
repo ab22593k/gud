@@ -43,7 +43,9 @@ func TestInstallHook(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tmpDir := t.TempDir()
 			hookDir := filepath.Join(tmpDir, ".git", "hooks")
-			os.MkdirAll(hookDir, 0755)
+			if err := os.MkdirAll(hookDir, 0755); err != nil {
+				t.Fatalf("failed to create hooks dir: %v", err)
+			}
 
 			err := InstallHook(hookDir, tt.hookType)
 			if (err != nil) != tt.wantErr {
@@ -62,10 +64,14 @@ func TestInstallHook(t *testing.T) {
 func TestUninstallHook(t *testing.T) {
 	tmpDir := t.TempDir()
 	hookDir := filepath.Join(tmpDir, ".git", "hooks")
-	os.MkdirAll(hookDir, 0755)
+	if err := os.MkdirAll(hookDir, 0755); err != nil {
+		t.Fatalf("failed to create hooks dir: %v", err)
+	}
 	hookPath := filepath.Join(hookDir, string(PrepareCommitMsg))
 
-	os.WriteFile(hookPath, []byte("#!/bin/sh\necho test"), 0755)
+	if err := os.WriteFile(hookPath, []byte("#!/bin/sh\necho test"), 0755); err != nil {
+		t.Fatalf("failed to write hook file: %v", err)
+	}
 
 	err := UninstallHook(hookDir, PrepareCommitMsg)
 	if err != nil {
