@@ -145,6 +145,12 @@ func TestValidateConfig(t *testing.T) {
 }
 
 func TestVersionCommand(t *testing.T) {
+	origOut := rootCmd.OutOrStdout()
+	t.Cleanup(func() {
+		rootCmd.SetOut(origOut)
+		rootCmd.SetArgs(nil)
+	})
+
 	var buf bytes.Buffer
 	rootCmd.SetOut(&buf)
 	rootCmd.SetArgs([]string{"version"})
@@ -161,6 +167,12 @@ func TestVersionCommand(t *testing.T) {
 }
 
 func TestRootCommandHelp(t *testing.T) {
+	origOut := rootCmd.OutOrStdout()
+	t.Cleanup(func() {
+		rootCmd.SetOut(origOut)
+		rootCmd.SetArgs(nil)
+	})
+
 	var buf bytes.Buffer
 	rootCmd.SetOut(&buf)
 	rootCmd.SetArgs([]string{"--help"})
@@ -186,6 +198,12 @@ func TestRootCommandHelp(t *testing.T) {
 }
 
 func TestHookCommandHelp(t *testing.T) {
+	origOut := rootCmd.OutOrStdout()
+	t.Cleanup(func() {
+		rootCmd.SetOut(origOut)
+		rootCmd.SetArgs(nil)
+	})
+
 	var buf bytes.Buffer
 	rootCmd.SetOut(&buf)
 	rootCmd.SetArgs([]string{"hook", "--help"})
