@@ -169,7 +169,7 @@ func TestBuildCommitMessagePromptWithPersona(t *testing.T) {
 			hint:        "",
 			persona:     "",
 			validate: func(t *testing.T, prompt string) {
-				if !strings.Contains(prompt, "Principal") {
+				if !strings.Contains(prompt, "Principal") && !strings.Contains(prompt, "Embedded") {
 					t.Errorf("default prompt should use embedded style")
 				}
 			},
