@@ -28,6 +28,7 @@ func showProgress[T any](msg string, fn func() (T, error)) (T, error) {
 		select {
 		case r := <-resCh:
 			fmt.Fprintf(os.Stderr, "\r%s ✓\n", msg)
+
 			return r.val, r.err
 		case <-ticker.C:
 			fmt.Fprintf(os.Stderr, "\r%s %s", spinner[i], msg)

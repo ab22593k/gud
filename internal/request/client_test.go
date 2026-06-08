@@ -30,6 +30,7 @@ func (m *mockContentResponse) Text() string {
 }
 
 func TestNewClient(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name        string
 		apiKey      string
@@ -59,6 +60,7 @@ func TestNewClient(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			client, err := NewClient(context.Background(), tt.apiKey, tt.model, tt.temperature)
 
 			if (err != nil) != tt.wantErr {
@@ -79,6 +81,7 @@ func TestNewClient(t *testing.T) {
 }
 
 func TestNewClientWithGenerator(t *testing.T) {
+	t.Parallel()
 	mock := &mockModelGenerator{}
 	client := NewClientWithGenerator(mock, "test-model", 0)
 
@@ -97,6 +100,7 @@ func TestNewClientWithGenerator(t *testing.T) {
 }
 
 func TestClient_GenerateCommitMessage(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name         string
 		diff         string
@@ -177,6 +181,7 @@ func TestClient_GenerateCommitMessage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			mock := &mockModelGenerator{
 				generateContentFunc: func(ctx context.Context, model string, parts []*genai.Content, config *genai.GenerateContentConfig) (ContentResponse, error) {
 					if tt.mockError != nil {

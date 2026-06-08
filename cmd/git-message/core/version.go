@@ -9,6 +9,7 @@ var versionCmd = &cobra.Command{
 	Short: "Print the version number",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cmd.Printf("gud version %s\n", version)
+
 		return nil
 	},
 }

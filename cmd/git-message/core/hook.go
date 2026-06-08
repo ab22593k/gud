@@ -28,6 +28,7 @@ var hookInstallCmd = &cobra.Command{
 	Short: "Install the git prepare-commit-msg hook",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		global, _ := cmd.Flags().GetBool("global")
+
 		return runHookInstall(global)
 	},
 }
@@ -37,6 +38,7 @@ var hookUninstallCmd = &cobra.Command{
 	Short: "Uninstall the git prepare-commit-msg hook",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		global, _ := cmd.Flags().GetBool("global")
+
 		return runHookUninstall(global)
 	},
 }
@@ -69,6 +71,7 @@ func runHookInstall(global bool) error {
 	}
 
 	fmt.Printf("Hook installed to %s\n", filepath.Join(hookDir, string(git.PrepareCommitMsg)))
+
 	return nil
 }
 
@@ -83,6 +86,7 @@ func runHookUninstall(global bool) error {
 	}
 
 	fmt.Println("Hook uninstalled")
+
 	return nil
 }
 
@@ -90,6 +94,7 @@ func runHookMode(cmd *cobra.Command, msgFile string) error {
 	cfg := configFromCmd(cmd)
 
 	ctx := context.Background()
+
 	return runHookModeInternal(ctx, msgFile, cfg.APIKey, cfg.Model, cfg.Temperature, cfg.DetailLevel, cfg.Hint, cfg.Persona)
 }
 
@@ -120,6 +125,7 @@ func getStagedDiffOrSkip(ctx context.Context) (string, error) {
 	if strings.TrimSpace(diff) == "" {
 		return "", nil
 	}
+
 	return diff, nil
 }
 
@@ -133,6 +139,7 @@ func generateAndWriteMsg(client *request.Client, ctx context.Context, diff strin
 	if err := os.WriteFile(msgFile, []byte(msg), 0644); err != nil {
 		return fmt.Errorf("failed to write message file: %w", err)
 	}
+
 	return nil
 }
 

@@ -1,0 +1,42 @@
+version: "2"
+linters:
+  default: standard
+  enable:
+    - perfsprint
+    - gocritic
+    - nlreturn
+    - misspell
+    - whitespace
+    - copyloopvar
+    - godot
+    - gosec
+    - goconst
+    - revive
+    - lll
+  settings:
+    lll:
+      line-length: 120
+    revive:
+      rules:
+        - name: package-comments
+          disabled: false
+        - name: context-as-argument
+          disabled: false
+        - name: unused-parameter
+          disabled: false
+    varnamelen:
+      min-name-length: 2
+      ignore-decls:
+        - tt
+        - fn
+        - i
+  exclusions:
+    generate:
+      rules:
+        - linters:
+            - lll
+          path: \.go
+formatters:
+  enable:
+    - gofmt
+    - goimports

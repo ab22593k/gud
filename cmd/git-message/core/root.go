@@ -31,9 +31,7 @@ It supports multiple personas and detail levels to match your project's style.`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	// Default action: generate a commit message from staged changes
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return runGenerate(cmd, args)
-	},
+	RunE: runGenerate,
 }
 
 // Execute runs the root command. It is the entry point for the CLI.
@@ -74,5 +72,6 @@ func configFromCmd(cmd *cobra.Command) Config {
 		cfg.Model = os.Getenv("GEMINI_MODEL")
 	}
 	cfg = validateConfig(cfg)
+
 	return cfg
 }

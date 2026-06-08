@@ -1,3 +1,4 @@
+// Command git-message generates meaningful git commit messages using Google's Gemini API.
 package main
 
 import (

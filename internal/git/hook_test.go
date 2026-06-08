@@ -8,6 +8,7 @@ import (
 )
 
 func TestInstallHook(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name         string
 		hookType     HookType
@@ -41,6 +42,7 @@ func TestInstallHook(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			tmpDir := t.TempDir()
 			hookDir := filepath.Join(tmpDir, ".git", "hooks")
 			if err := os.MkdirAll(hookDir, 0755); err != nil {
@@ -62,6 +64,7 @@ func TestInstallHook(t *testing.T) {
 }
 
 func TestUninstallHook(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	hookDir := filepath.Join(tmpDir, ".git", "hooks")
 	if err := os.MkdirAll(hookDir, 0755); err != nil {

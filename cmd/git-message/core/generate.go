@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -17,7 +18,7 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 	cfg := configFromCmd(cmd)
 
 	if cfg.APIKey == "" {
-		return fmt.Errorf("API key is required. Set the GOOGLE_API_KEY environment variable")
+		return errors.New("API key is required. Set the GOOGLE_API_KEY environment variable")
 	}
 
 	ctx := context.Background()
@@ -44,8 +45,9 @@ func getStagedDiffOrError(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("failed to get staged diff: %w", err)
 	}
 	if strings.TrimSpace(diff) == "" {
-		return "", fmt.Errorf("no staged changes found. Use 'git add' to stage changes")
+		return "", errors.New("no staged changes found. Use 'git add' to stage changes")
 	}
+
 	return diff, nil
 }
 
@@ -66,6 +68,7 @@ func buildHistoryContext(ctx context.Context, cfg Config) string {
 	if history != "" {
 		history = "Recent commits:\n" + history
 	}
+
 	return history
 }
 
@@ -94,5 +97,6 @@ func validateConfig(cfg Config) Config {
 	} else if cfg.History > maxHistory {
 		cfg.History = maxHistory
 	}
+
 	return cfg
 }

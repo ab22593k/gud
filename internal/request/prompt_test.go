@@ -6,6 +6,7 @@ import (
 )
 
 func TestBuildCommitMessagePrompt(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name        string
 		diff        string
@@ -100,6 +101,7 @@ func TestBuildCommitMessagePrompt(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			prompt := BuildCommitMessagePrompt(tt.diff, tt.context, tt.detailLevel, tt.hint, tt.persona)
 			tt.validate(t, prompt)
 		})
@@ -107,6 +109,7 @@ func TestBuildCommitMessagePrompt(t *testing.T) {
 }
 
 func TestBuildCommitMessagePromptWithPersona(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name        string
 		diff        string
@@ -191,6 +194,7 @@ func TestBuildCommitMessagePromptWithPersona(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			prompt := BuildCommitMessagePrompt(tt.diff, tt.context, tt.detailLevel, tt.hint, tt.persona)
 			tt.validate(t, prompt)
 		})

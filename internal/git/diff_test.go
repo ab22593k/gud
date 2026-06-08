@@ -9,6 +9,7 @@ import (
 )
 
 func TestGetStagedDiff(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	_, err := GetStagedDiff(ctx)
 
@@ -18,6 +19,7 @@ func TestGetStagedDiff(t *testing.T) {
 }
 
 func TestGetStagedDiff_Integration(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")
 	}
@@ -33,6 +35,7 @@ func TestGetStagedDiff_Integration(t *testing.T) {
 }
 
 func TestGetUnstagedDiff(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	_, err := GetUnstagedDiff(ctx)
 
@@ -42,6 +45,7 @@ func TestGetUnstagedDiff(t *testing.T) {
 }
 
 func TestGetUnstagedDiff_Integration(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")
 	}
@@ -57,6 +61,7 @@ func TestGetUnstagedDiff_Integration(t *testing.T) {
 }
 
 func TestGetRecentCommits(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	tests := []struct {
@@ -68,6 +73,7 @@ func TestGetRecentCommits(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			got, err := GetRecentCommits(ctx, tt.n)
 			if got != "" {
 				t.Errorf("GetRecentCommits(%d) = %q, want empty string", tt.n, got)

@@ -40,6 +40,7 @@ func interactiveCommit(ctx context.Context, cmd *cobra.Command, client *request.
 				return err
 			}
 			_, _ = fmt.Fprintln(out, "Committed successfully.")
+
 			return nil
 
 		case "edit":
@@ -51,6 +52,7 @@ func interactiveCommit(ctx context.Context, cmd *cobra.Command, client *request.
 				return err
 			}
 			_, _ = fmt.Fprintln(out, "Committed successfully.")
+
 			return nil
 
 		case "regenerate":
@@ -58,6 +60,7 @@ func interactiveCommit(ctx context.Context, cmd *cobra.Command, client *request.
 
 		case "abort":
 			_, _ = fmt.Fprintln(out, "Aborted.")
+
 			return nil
 		}
 	}
