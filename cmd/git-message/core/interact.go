@@ -16,8 +16,16 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const (
+	actionCommit     = "commit"
+	actionEdit       = "edit"
+	actionRegenerate = "regenerate"
+	actionAbort      = "abort"
+)
+
 // interactiveCommit runs the generate → review → commit loop.
-func interactiveCommit(ctx context.Context, cmd *cobra.Command, client *request.Client, diff, promptContext string, cfg Config) error {
+func interactiveCommit(ctx context.Context, cmd *cobra.Command, client *request.Client,
+	diff, promptContext string, cfg Config) error {
 	scanner := bufio.NewScanner(cmd.InOrStdin())
 	out := cmd.OutOrStdout()
 
@@ -35,7 +43,7 @@ func interactiveCommit(ctx context.Context, cmd *cobra.Command, client *request.
 
 		action := promptAction(scanner, out)
 		switch action {
-		case "commit":
+		case actionCommit:
 			if err := git.Commit(ctx, msg); err != nil {
 				return err
 			}
@@ -43,7 +51,7 @@ func interactiveCommit(ctx context.Context, cmd *cobra.Command, client *request.
 
 			return nil
 
-		case "edit":
+		case actionEdit:
 			edited, err := editMessage(msg)
 			if err != nil {
 				return fmt.Errorf("failed to edit message: %w", err)
@@ -55,10 +63,10 @@ func interactiveCommit(ctx context.Context, cmd *cobra.Command, client *request.
 
 			return nil
 
-		case "regenerate":
+		case actionRegenerate:
 			continue
 
-		case "abort":
+		case actionAbort:
 			_, _ = fmt.Fprintln(out, "Aborted.")
 
 			return nil
@@ -73,23 +81,23 @@ func promptAction(scanner *bufio.Scanner, out io.Writer) string {
 		_, _ = fmt.Fprint(out, "? Continue  [y]es  [r]egenerate  [e]dit  [a]bort  (default: yes): ")
 
 		if !scanner.Scan() {
-			return "abort"
+			return actionAbort
 		}
 
 		input := strings.TrimSpace(scanner.Text())
 		if input == "" {
-			return "commit"
+			return actionCommit
 		}
 
 		switch strings.ToLower(input) {
 		case "y", "yes", "commit", "c":
-			return "commit"
+			return actionCommit
 		case "r", "regenerate":
-			return "regenerate"
+			return actionRegenerate
 		case "e", "edit":
-			return "edit"
+			return actionEdit
 		case "a", "abort", "q", "quit":
-			return "abort"
+			return actionAbort
 		}
 	}
 }
@@ -109,10 +117,11 @@ func editMessage(msg string) (string, error) {
 	defer func() { _ = os.RemoveAll(dir) }()
 
 	path := filepath.Join(dir, "COMMIT_EDITMSG")
-	if err := os.WriteFile(path, []byte(msg), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(msg), 0600); err != nil {
 		return "", fmt.Errorf("failed to write temp file: %w", err)
 	}
 
+	//nolint:gosec // editor comes from user's $EDITOR env var, running their own CLI
 	editCmd := exec.Command(editor, path)
 	editCmd.Stdin = os.Stdin
 	editCmd.Stdout = os.Stdout
@@ -122,6 +131,7 @@ func editMessage(msg string) (string, error) {
 		return "", fmt.Errorf("editor failed: %w", err)
 	}
 
+	//nolint:gosec // path is constructed from os.MkdirTemp, not user input
 	edited, err := os.ReadFile(path)
 	if err != nil {
 		return "", fmt.Errorf("failed to read edited file: %w", err)

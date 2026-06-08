@@ -14,7 +14,7 @@ import (
 )
 
 // runGenerate is the default action: generate a commit message from staged changes.
-func runGenerate(cmd *cobra.Command, args []string) error {
+func runGenerate(cmd *cobra.Command, _ []string) error {
 	cfg := configFromCmd(cmd)
 
 	if cfg.APIKey == "" {

@@ -26,7 +26,7 @@ from your staged changes.`,
 var hookInstallCmd = &cobra.Command{
 	Use:   "install",
 	Short: "Install the git prepare-commit-msg hook",
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, _ []string) error {
 		global, _ := cmd.Flags().GetBool("global")
 
 		return runHookInstall(global)
@@ -36,7 +36,7 @@ var hookInstallCmd = &cobra.Command{
 var hookUninstallCmd = &cobra.Command{
 	Use:   "uninstall",
 	Short: "Uninstall the git prepare-commit-msg hook",
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, _ []string) error {
 		global, _ := cmd.Flags().GetBool("global")
 
 		return runHookUninstall(global)
@@ -62,7 +62,7 @@ func runHookInstall(global bool) error {
 		return fmt.Errorf("failed to get hook directory: %w", err)
 	}
 
-	if err := os.MkdirAll(hookDir, 0755); err != nil {
+	if err := os.MkdirAll(hookDir, 0750); err != nil {
 		return fmt.Errorf("failed to create hook directory: %w", err)
 	}
 
@@ -95,11 +95,13 @@ func runHookMode(cmd *cobra.Command, msgFile string) error {
 
 	ctx := context.Background()
 
-	return runHookModeInternal(ctx, msgFile, cfg.APIKey, cfg.Model, cfg.Temperature, cfg.DetailLevel, cfg.Hint, cfg.Persona)
+	return runHookModeInternal(ctx, msgFile,
+		cfg.APIKey, cfg.Model, cfg.Temperature, cfg.DetailLevel, cfg.Hint, cfg.Persona)
 }
 
 // runHookModeInternal generates a commit message and writes it to the message file.
-func runHookModeInternal(ctx context.Context, msgFile, apiKey, model string, temperature float64, detailLevel request.DetailLevel, hint string, persona request.PersonaName) error {
+func runHookModeInternal(ctx context.Context, msgFile, apiKey, model string,
+	temperature float64, detailLevel request.DetailLevel, hint string, persona request.PersonaName) error {
 	diff, err := getStagedDiffOrSkip(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get staged diff: %w", err)
@@ -113,7 +115,7 @@ func runHookModeInternal(ctx context.Context, msgFile, apiKey, model string, tem
 		return fmt.Errorf("failed to create request client: %w", err)
 	}
 
-	return generateAndWriteMsg(client, ctx, diff, detailLevel, hint, persona, msgFile)
+	return generateAndWriteMsg(ctx, client, diff, detailLevel, hint, persona, msgFile)
 }
 
 // getStagedDiffOrSkip returns the staged diff, or an empty string if there are no staged changes.
@@ -130,13 +132,14 @@ func getStagedDiffOrSkip(ctx context.Context) (string, error) {
 }
 
 // generateAndWriteMsg generates a commit message and writes it to the message file.
-func generateAndWriteMsg(client *request.Client, ctx context.Context, diff string, detailLevel request.DetailLevel, hint string, persona request.PersonaName, msgFile string) error {
+func generateAndWriteMsg(ctx context.Context, client *request.Client, diff string,
+	detailLevel request.DetailLevel, hint string, persona request.PersonaName, msgFile string) error {
 	msg, err := client.GenerateCommitMessage(ctx, diff, "", detailLevel, hint, persona)
 	if err != nil {
 		return fmt.Errorf("failed to generate commit message: %w", err)
 	}
 
-	if err := os.WriteFile(msgFile, []byte(msg), 0644); err != nil {
+	if err := os.WriteFile(msgFile, []byte(msg), 0600); err != nil {
 		return fmt.Errorf("failed to write message file: %w", err)
 	}
 
