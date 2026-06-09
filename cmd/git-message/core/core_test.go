@@ -57,7 +57,7 @@ func TestBuildHistoryContext_Disabled(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got := buildHistoryContext(context.TODO(), tt.cfg)
+			got := buildHistoryContext(context.Background(), tt.cfg)
 			if got != "" {
 				t.Errorf("buildHistoryContext() = %q, want empty string", got)
 			}
