@@ -1,8 +1,8 @@
 // Command acpmock is a minimal ACP (Agent Client Protocol) mock server for testing.
 // It communicates over JSON-RPC 2.0 via stdio and responds to initialize,
-// session/new, and session/prompt requests.
+// session/new, and multiple session/prompt requests.
 //
-// Build: go build -o /dev/null  # checked into testdata for go test
+// It stays alive until stdin is closed, supporting keep-alive tests.
 package main
 
 import (
@@ -29,11 +29,23 @@ type jsonrpcError struct {
 var decoder = json.NewDecoder(os.Stdin)
 var encoder = json.NewEncoder(os.Stdout)
 
+var promptCount int
+
 func main() {
+	if err := run(); err != nil {
+		fmt.Fprintf(os.Stderr, "acpmock: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	// === Handle initialize ===
-	req := readRequest()
+	req, err := readRequest()
+	if err != nil {
+		return fmt.Errorf("read initialize: %w", err)
+	}
 	if req.Method != "initialize" {
-		fatal(fmt.Sprintf("expected initialize, got %s", req.Method))
+		return fmt.Errorf("expected initialize, got %s", req.Method)
 	}
 	writeResult(*req.ID, map[string]interface{}{
 		"protocolVersion": 1,
@@ -47,52 +59,61 @@ func main() {
 		"authMethods": []interface{}{},
 	})
 
-	// === Handle session/new ===
-	req = readRequest()
+	// === Handle session/new (only once) ===
+	req, err = readRequest()
+	if err != nil {
+		return fmt.Errorf("read session/new: %w", err)
+	}
 	if req.Method != "session/new" {
-		fatal(fmt.Sprintf("expected session/new, got %s", req.Method))
+		return fmt.Errorf("expected session/new, got %s", req.Method)
 	}
 	writeResult(*req.ID, map[string]interface{}{
 		"sessionId": "sess_mock_001",
 	})
 
-	// === Handle session/prompt (with streaming notification) ===
-	req = readRequest()
-	if req.Method != "session/prompt" {
-		fatal(fmt.Sprintf("expected session/prompt, got %s", req.Method))
-	}
+	// === Handle multiple session/prompt requests in a loop ===
+	// Keep-alive: the mock stays alive processing prompts until stdin closes.
+	for {
+		req, err = readRequest()
+		if err != nil {
+			// Stdin closed — normal shutdown
+			return nil
+		}
+		if req.Method != "session/prompt" {
+			return fmt.Errorf("expected session/prompt, got %s", req.Method)
+		}
 
-	// Send a session/update notification with agent_message_chunk
-	writeNotification("session/update", map[string]interface{}{
-		"sessionId": "sess_mock_001",
-		"update": map[string]interface{}{
-			"sessionUpdate": "agent_message_chunk",
-			"messageId":     "msg_mock_001",
-			"content": map[string]string{
-				"type": "text",
-				"text": "Generated commit message",
+		promptCount++
+
+		// Send a session/update notification with agent_message_chunk
+		writeNotification("session/update", map[string]interface{}{
+			"sessionId": "sess_mock_001",
+			"update": map[string]interface{}{
+				"sessionUpdate": "agent_message_chunk",
+				"messageId":     fmt.Sprintf("msg_mock_%d", promptCount),
+				"content": map[string]string{
+					"type": "text",
+					"text": fmt.Sprintf("Generated commit message #%d", promptCount),
+				},
 			},
-		},
-	})
+		})
 
-	// Send the session/prompt response with stopReason
-	writeResult(*req.ID, map[string]interface{}{
-		"stopReason": "end_turn",
-	})
-
-	// Close stdin to signal end of input
-	os.Exit(0)
+		// Send the session/prompt response
+		writeResult(*req.ID, map[string]interface{}{
+			"stopReason": "end_turn",
+		})
+	}
 }
 
-func readRequest() jsonrpcMessage {
+func readRequest() (jsonrpcMessage, error) {
 	var msg jsonrpcMessage
 	if err := decoder.Decode(&msg); err != nil {
-		fatal(fmt.Sprintf("decode error: %v", err))
+		return msg, fmt.Errorf("decode: %w", err)
 	}
 	if msg.ID == nil {
-		fatal("expected request with ID, got notification")
+		return msg, fmt.Errorf("expected request with ID, got notification")
 	}
-	return msg
+	return msg, nil
 }
 
 func writeResult(id int, result interface{}) {

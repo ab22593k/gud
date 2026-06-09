@@ -338,8 +338,8 @@ func TestMustMarshal(t *testing.T) {
 }
 
 // Test that the Model can be reused across multiple GenerateContent calls
-// (the mock handles sequential sessions)
-func TestModel_GenerateContent_MultipleCalls(t *testing.T) {
+// using the same client/session (keep-alive).
+func TestModel_GenerateContent_KeepAlive(t *testing.T) {
 	mockPath := buildACPMock(t)
 
 	m := NewModel(Config{
@@ -354,21 +354,28 @@ func TestModel_GenerateContent_MultipleCalls(t *testing.T) {
 		Config:   &genai.GenerateContentConfig{},
 	}
 
-	for resp := range m.GenerateContent(context.Background(), req, false) {
+	respText := func(resp *model.LLMResponse) string {
+		var text string
 		if resp != nil && resp.Content != nil {
-			var text string
 			for _, part := range resp.Content.Parts {
 				if part != nil {
 					text += part.Text
 				}
 			}
-			if !strings.Contains(text, "Generated commit message") {
-				t.Errorf("first call: expected 'Generated commit message', got %q", text)
+		}
+		return text
+	}
+
+	for resp := range m.GenerateContent(context.Background(), req, false) {
+		if resp != nil && resp.Content != nil {
+			if got := respText(resp); got != "Generated commit message #1" {
+				t.Errorf("first call: got %q, want %q", got, "Generated commit message #1")
 			}
 		}
 	}
 
-	// Second call (should trigger a new client since the mock exits after one prompt)
+	// Second call — should reuse the same client + session (keep-alive).
+	// The mock stays alive and processes the second prompt in the same session.
 	req2 := &model.LLMRequest{
 		Model:    "test-model",
 		Contents: genai.Text("second prompt"),
@@ -377,16 +384,72 @@ func TestModel_GenerateContent_MultipleCalls(t *testing.T) {
 
 	for resp := range m.GenerateContent(context.Background(), req2, false) {
 		if resp != nil && resp.Content != nil {
-			var text string
-			for _, part := range resp.Content.Parts {
-				if part != nil {
-					text += part.Text
-				}
-			}
-			if !strings.Contains(text, "Generated commit message") {
-				t.Errorf("second call: expected 'Generated commit message', got %q", text)
+			if got := respText(resp); got != "Generated commit message #2" {
+				t.Errorf("second call: got %q, want %q", got, "Generated commit message #2")
 			}
 		}
+	}
+
+	// Also verify the client is still alive after two prompts.
+	m.mu.Lock()
+	client := m.client
+	m.mu.Unlock()
+
+	if client == nil {
+		t.Fatal("expected client to still be alive after two calls")
+	}
+	if !client.alive() {
+		t.Error("expected client to be alive after two prompts (keep-alive)")
+	}
+	if client.sessionID != "sess_mock_001" {
+		t.Errorf("expected same session across calls, got sessionID = %q", client.sessionID)
+	}
+}
+
+// Test that the Model reuses the same client when alive (keep-alive).
+// This tests that getOrStartClient returns the existing live client
+// instead of creating a new one.
+func TestModel_GenerateContent_ReusesClient(t *testing.T) {
+	mockPath := buildACPMock(t)
+
+	m := NewModel(Config{
+		APIKey:   "test-key",
+		BasePath: mockPath,
+	})
+
+	req := &model.LLMRequest{
+		Model:    "test-model",
+		Contents: genai.Text("prompt one"),
+		Config:   &genai.GenerateContentConfig{},
+	}
+
+	// First call — creates the client
+	for range m.GenerateContent(context.Background(), req, false) {
+	}
+
+	// Capture the client after the first call
+	m.mu.Lock()
+	clientAfterFirst := m.client
+	m.mu.Unlock()
+
+	if clientAfterFirst == nil {
+		t.Fatal("expected client to be set after first call")
+	}
+	if !clientAfterFirst.alive() {
+		t.Fatal("expected client to be alive for second call")
+	}
+
+	// Second call — should reuse the same client
+	for range m.GenerateContent(context.Background(), req, false) {
+	}
+
+	m.mu.Lock()
+	clientAfterSecond := m.client
+	m.mu.Unlock()
+
+	// The client pointer should be the same (reused, not recreated)
+	if clientAfterSecond != clientAfterFirst {
+		t.Error("expected second call to reuse the same client instance (keep-alive)")
 	}
 }
 
