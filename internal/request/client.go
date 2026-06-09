@@ -105,6 +105,11 @@ func newOpenCodeClient(_ context.Context, cfg ClientConfig) (*Client, error) {
 	}, nil
 }
 
+// ModelName returns the model name used by this client.
+func (c *Client) ModelName() string {
+	return c.model
+}
+
 // NewClientWithGenerator creates a new client with a custom model for testing.
 func NewClientWithGenerator(llm model.LLM, modelName string, temperature float64) *Client {
 	if modelName == "" {

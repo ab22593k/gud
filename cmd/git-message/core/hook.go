@@ -166,6 +166,8 @@ func generateAndWriteMsg(ctx context.Context, client *request.Client, diff, msgF
 		return fmt.Errorf("failed to generate commit message: %w", err)
 	}
 
+	msg = appendAssistedBy(msg, client.ModelName())
+
 	if err := os.WriteFile(msgFile, []byte(msg), 0600); err != nil {
 		return fmt.Errorf("failed to write message file: %w", err)
 	}

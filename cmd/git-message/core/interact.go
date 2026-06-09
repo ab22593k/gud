@@ -44,6 +44,7 @@ func interactiveCommit(ctx context.Context, cmd *cobra.Command, client *request.
 		action := promptAction(scanner, out)
 		switch action {
 		case actionCommit:
+			msg = appendAssistedBy(msg, client.ModelName())
 			if err := git.Commit(ctx, msg); err != nil {
 				return err
 			}
@@ -56,6 +57,7 @@ func interactiveCommit(ctx context.Context, cmd *cobra.Command, client *request.
 			if err != nil {
 				return fmt.Errorf("failed to edit message: %w", err)
 			}
+			edited = appendAssistedBy(edited, client.ModelName())
 			if err := git.Commit(ctx, edited); err != nil {
 				return err
 			}
@@ -100,6 +102,14 @@ func promptAction(scanner *bufio.Scanner, out io.Writer) string {
 			return actionAbort
 		}
 	}
+}
+
+// appendAssistedBy appends an "Assisted-by: <model>" git trailer to the message.
+// It ensures a blank line separator before the trailer, following git trailer conventions.
+func appendAssistedBy(msg, modelName string) string {
+	msg = strings.TrimRight(msg, "\n")
+	msg += "\n\nAssisted-by: " + modelName + "\n"
+	return msg
 }
 
 // editMessage opens the user's $EDITOR with the given message content,
