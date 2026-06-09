@@ -92,20 +92,31 @@ func GetPersona(name PersonaName) PersonaConfig {
 // BuildPrompt creates a full prompt for generating a commit message.
 func (p PersonaConfig) BuildPrompt(detailLevel DetailLevel, hint, context, diff string) string {
 	var sb strings.Builder
-	writeSystem(&sb, p)
+
+	sb.WriteString(p.System)
+	sb.WriteString("\n")
 	writeExamples(&sb, p.Showcases)
-	writeDetailRules(&sb, detailLevel, p.Rules)
-	writeHint(&sb, hint)
-	writeContext(&sb, context)
-	writeDiff(&sb, diff)
+	writeLabeled(&sb, "", ruleForLevel(detailLevel, p.Rules))
+	writeLabeled(&sb, "Focus: ", hint)
+	writeLabeled(&sb, "Context: ", context)
+	sb.WriteString("Diff:\n")
+	sb.WriteString(diff)
+	sb.WriteString("\nOutput:\n")
+
 	return sb.String()
 }
 
-func writeSystem(sb *strings.Builder, p PersonaConfig) {
-	sb.WriteString(p.System)
-	sb.WriteString("\n")
+// ruleForLevel returns the rule string for the given detail level, falling back
+// to DetailStandard if the level is not found.
+func ruleForLevel(level DetailLevel, rules map[DetailLevel]string) string {
+	rule, ok := rules[level]
+	if !ok {
+		rule = rules[DetailStandard]
+	}
+	return rule
 }
 
+// writeExamples writes persona examples as a diff → output showcase.
 func writeExamples(sb *strings.Builder, examples []Showcase) {
 	if len(examples) == 0 {
 		return
@@ -122,35 +133,13 @@ func writeExamples(sb *strings.Builder, examples []Showcase) {
 	sb.WriteString("\n")
 }
 
-func writeDetailRules(sb *strings.Builder, level DetailLevel, rules map[DetailLevel]string) {
-	rule, ok := rules[level]
-	if !ok {
-		rule = rules[DetailStandard]
-	}
-	sb.WriteString(rule)
-	sb.WriteString("\n")
-}
-
-func writeHint(sb *strings.Builder, hint string) {
-	if hint == "" {
+// writeLabeled writes content prefixed with label, but only if content is
+// non-empty. If label is empty, it writes content directly.
+func writeLabeled(sb *strings.Builder, label, content string) {
+	if content == "" {
 		return
 	}
-	sb.WriteString("Focus: ")
-	sb.WriteString(hint)
+	sb.WriteString(label)
+	sb.WriteString(content)
 	sb.WriteString("\n")
-}
-
-func writeContext(sb *strings.Builder, context string) {
-	if context == "" {
-		return
-	}
-	sb.WriteString("Context: ")
-	sb.WriteString(context)
-	sb.WriteString("\n")
-}
-
-func writeDiff(sb *strings.Builder, diff string) {
-	sb.WriteString("Diff:\n")
-	sb.WriteString(diff)
-	sb.WriteString("\nOutput:\n")
 }
