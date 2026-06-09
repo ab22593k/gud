@@ -10,6 +10,16 @@ import (
 
 const version = "0.1.0"
 
+// ACPProvider represents the ACP/A2A provider to use.
+type ACPProvider string
+
+const (
+	// ACPProviderGemini uses Google Gemini via ADK.
+	ACPProviderGemini ACPProvider = "gemini"
+	// ACPProviderOpenCode uses OpenCode.ai via ADK.
+	ACPProviderOpenCode ACPProvider = "opencode"
+)
+
 // Config holds CLI configuration shared across commands.
 type Config struct {
 	DetailLevel request.DetailLevel
@@ -19,13 +29,14 @@ type Config struct {
 	Hint        string
 	History     int
 	APIKey      string
+	ACP         ACPProvider
 }
 
 var rootCmd = &cobra.Command{
 	Use:   "message",
 	Short: "Spontaneously combust commit message",
 	Long: `Tool that generates meaningful git commit messages
-using Google's Gemini API, based on your staged changes.
+using AI (Gemini or OpenCode.ai), based on your staged changes.
 
 It supports multiple personas and detail levels to match your project's style.`,
 	SilenceUsage:  true,
@@ -47,6 +58,8 @@ func init() {
 	rootCmd.PersistentFlags().Int("history", 5, "Number of recent commits to include as context (0 to disable)")
 	rootCmd.PersistentFlags().String("model", "", "Gemini model to use (or use GEMINI_MODEL env)")
 	rootCmd.PersistentFlags().Float64("temperature", 0, "Set the generation temperature (0-2, default: model default)")
+	rootCmd.PersistentFlags().String("acp", string(ACPProviderGemini),
+		"ACP provider to use (gemini, opencode)")
 }
 
 // configFromCmd reads flags from the cobra command and environment variables
@@ -59,6 +72,8 @@ func configFromCmd(cmd *cobra.Command) Config {
 	model, _ := cmd.Flags().GetString("model")
 	temp, _ := cmd.Flags().GetFloat64("temperature")
 
+	acpString, _ := cmd.Flags().GetString("acp")
+
 	cfg := Config{
 		DetailLevel: request.DetailLevel(detail),
 		Persona:     request.PersonaName(persona),
@@ -67,9 +82,14 @@ func configFromCmd(cmd *cobra.Command) Config {
 		Model:       model,
 		Temperature: temp,
 		APIKey:      os.Getenv("GOOGLE_API_KEY"),
+		ACP:         ACPProvider(acpString),
 	}
 	if cfg.Model == "" {
 		cfg.Model = os.Getenv("GEMINI_MODEL")
+	}
+	// Use provider-specific API key
+	if cfg.ACP == ACPProviderOpenCode {
+		cfg.APIKey = os.Getenv("OPENCODE_API_KEY")
 	}
 	cfg = validateConfig(cfg)
 

@@ -17,7 +17,7 @@ import (
 func runGenerate(cmd *cobra.Command, _ []string) error {
 	cfg := configFromCmd(cmd)
 
-	if cfg.APIKey == "" {
+	if cfg.APIKey == "" && cfg.ACP != ACPProviderOpenCode {
 		return errors.New("API key is required. Set the GOOGLE_API_KEY environment variable")
 	}
 
@@ -30,7 +30,12 @@ func runGenerate(cmd *cobra.Command, _ []string) error {
 
 	promptContext := buildHistoryContext(ctx, cfg)
 
-	client, err := request.NewClient(ctx, cfg.APIKey, cfg.Model, cfg.Temperature)
+	client, err := request.NewClient(ctx, request.ClientConfig{
+		APIKey:      cfg.APIKey,
+		Model:       cfg.Model,
+		Temperature: cfg.Temperature,
+		ACP:         string(cfg.ACP),
+	})
 	if err != nil {
 		return fmt.Errorf("failed to create request client: %w", err)
 	}
@@ -90,6 +95,13 @@ func validateConfig(cfg Config) Config {
 		// valid
 	default:
 		cfg.Persona = request.PersonaEmbedded
+	}
+
+	switch cfg.ACP {
+	case ACPProviderGemini, ACPProviderOpenCode:
+		// valid
+	default:
+		cfg.ACP = ACPProviderGemini
 	}
 
 	if cfg.History < 0 {

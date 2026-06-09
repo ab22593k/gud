@@ -4,7 +4,12 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 
+	"gud/internal/opencode"
+
+	"google.golang.org/adk/model"
+	"google.golang.org/adk/model/gemini"
 	"google.golang.org/genai"
 )
 
@@ -13,71 +18,97 @@ type ContentResponse interface {
 	Text() string
 }
 
-// ModelGenerator defines the interface for AI models that can generate content.
-type ModelGenerator interface {
-	GenerateContent(ctx context.Context, model string, parts []*genai.Content, config *genai.GenerateContentConfig) (ContentResponse, error)
+// ClientConfig holds configuration for creating a Client.
+type ClientConfig struct {
+	APIKey      string
+	Model       string
+	Temperature float64
+	ACP         string // "gemini" or "opencode"
 }
 
-// genaiAdapter adapts genai.Client to the ModelGenerator interface.
-type genaiAdapter struct {
-	client *genai.Client
-}
-
-func (a *genaiAdapter) GenerateContent(ctx context.Context, model string, parts []*genai.Content, config *genai.GenerateContentConfig) (ContentResponse, error) {
-	return a.client.Models.GenerateContent(ctx, model, parts, config)
-}
-
-// Client wraps the GenAI client for generating commit messages.
+// Client wraps an ADK model.LLM for generating commit messages.
 type Client struct {
-	generator   ModelGenerator
+	modelImpl   model.LLM
 	model       string
 	temperature *float32
 }
 
 const defaultModel = "gemini-3.1-flash-lite"
 
-// NewClient creates a new request client using the provided API key.
+// NewClient creates a new request client.
 // The caller is responsible for providing a context that can carry timeouts
-// and cancellation. It uses the Gemini API backend with the specified model,
-// or the default flash model.
-// If model is empty, it defaults to "gemini-3.1-flash-lite".
-// If temperature is 0, it is left unset (the API uses the model default).
-func NewClient(ctx context.Context, apiKey, model string, temperature float64) (*Client, error) {
-	if apiKey == "" {
+// and cancellation.
+func NewClient(ctx context.Context, cfg ClientConfig) (*Client, error) {
+	if cfg.APIKey == "" && cfg.ACP != "opencode" {
 		return nil, fmt.Errorf("API key is required")
 	}
-
-	if model == "" {
-		model = defaultModel
+	if cfg.Model == "" {
+		cfg.Model = defaultModel
 	}
 
-	genaiClient, err := genai.NewClient(ctx, &genai.ClientConfig{
-		APIKey:  apiKey,
-		Backend: genai.BackendGeminiAPI,
+	switch cfg.ACP {
+	case "opencode":
+		return newOpenCodeClient(ctx, cfg)
+	default:
+		return newGeminiClient(ctx, cfg)
+	}
+}
+
+// newGeminiClient creates a client using the ADK Gemini model.
+func newGeminiClient(ctx context.Context, cfg ClientConfig) (*Client, error) {
+	adkModel, err := gemini.NewModel(ctx, cfg.Model, &genai.ClientConfig{
+		APIKey: cfg.APIKey,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create genai client: %w", err)
+		return nil, fmt.Errorf("failed to create gemini model: %w", err)
 	}
 
 	var temp *float32
-	if temperature != 0 {
-		t := float32(temperature)
+	if cfg.Temperature != 0 {
+		t := float32(cfg.Temperature)
 		temp = &t
 	}
 
-	slog.Debug("created genai client", "model", model, "temperature", temperature)
+	slog.Debug("created gemini client via ADK", "model", cfg.Model, "temperature", cfg.Temperature)
 
 	return &Client{
-		generator:   &genaiAdapter{client: genaiClient},
-		model:       model,
+		modelImpl:   adkModel,
+		model:       cfg.Model,
 		temperature: temp,
 	}, nil
 }
 
-// NewClientWithGenerator creates a new client with a custom generator for testing.
-func NewClientWithGenerator(generator ModelGenerator, model string, temperature float64) *Client {
-	if model == "" {
-		model = defaultModel
+// newOpenCodeClient creates a client using the OpenCode.ai provider.
+func newOpenCodeClient(_ context.Context, cfg ClientConfig) (*Client, error) {
+	modelName := cfg.Model
+	if modelName == "" || modelName == defaultModel {
+		modelName = "deepseek-v4-flash"
+	}
+
+	openCodeModel := opencode.NewModel(opencode.Config{
+		APIKey: cfg.APIKey,
+		Model:  modelName,
+	})
+
+	var temp *float32
+	if cfg.Temperature != 0 {
+		t := float32(cfg.Temperature)
+		temp = &t
+	}
+
+	slog.Debug("created opencode client", "model", modelName, "temperature", cfg.Temperature)
+
+	return &Client{
+		modelImpl:   openCodeModel,
+		model:       modelName,
+		temperature: temp,
+	}, nil
+}
+
+// NewClientWithGenerator creates a new client with a custom model for testing.
+func NewClientWithGenerator(llm model.LLM, modelName string, temperature float64) *Client {
+	if modelName == "" {
+		modelName = defaultModel
 	}
 	var temp *float32
 	if temperature != 0 {
@@ -85,8 +116,8 @@ func NewClientWithGenerator(generator ModelGenerator, model string, temperature 
 		temp = &t
 	}
 	return &Client{
-		generator:   generator,
-		model:       model,
+		modelImpl:   llm,
+		model:       modelName,
 		temperature: temp,
 	}
 }
@@ -101,33 +132,56 @@ func (c *Client) GenerateCommitMessage(ctx context.Context, diff, context string
 
 	prompt := BuildCommitMessagePrompt(diff, context, detailLevel, hint, persona)
 
-	msg, err := generateContent(c, ctx, prompt)
+	req := &model.LLMRequest{
+		Model:    c.model,
+		Contents: genai.Text(prompt),
+		Config: &genai.GenerateContentConfig{
+			Temperature: c.temperature,
+		},
+	}
+
+	result, err := generateContent(c, ctx, req)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate content: %w", err)
 	}
 
-	if msg == "" {
+	if result == "" {
 		return "", fmt.Errorf("generated message is empty")
 	}
 
-	return msg, nil
+	return result, nil
 }
 
-func generateContent(c *Client, ctx context.Context, prompt string) (string, error) {
-	var config *genai.GenerateContentConfig
-	if c.temperature != nil {
-		config = &genai.GenerateContentConfig{
-			Temperature: c.temperature,
+func generateContent(c *Client, ctx context.Context, req *model.LLMRequest) (string, error) {
+	var response *model.LLMResponse
+	for resp := range c.modelImpl.GenerateContent(ctx, req, false) {
+		if resp.ErrorMessage != "" {
+			return "", fmt.Errorf("model error: %s", resp.ErrorMessage)
 		}
+		if resp.ErrorCode != "" {
+			return "", fmt.Errorf("model error code: %s", resp.ErrorCode)
+		}
+		response = resp
 	}
-	result, err := c.generator.GenerateContent(
-		ctx,
-		c.model,
-		genai.Text(prompt),
-		config,
-	)
-	if err != nil {
-		return "", err
+
+	if response == nil {
+		return "", fmt.Errorf("no response from model")
 	}
-	return result.Text(), nil
+
+	return extractText(response.Content)
+}
+
+// extractText pulls text from genai.Content parts.
+func extractText(content *genai.Content) (string, error) {
+	if content == nil {
+		return "", fmt.Errorf("content is nil")
+	}
+	var sb strings.Builder
+	for _, part := range content.Parts {
+		if part == nil {
+			continue
+		}
+		sb.WriteString(part.Text)
+	}
+	return sb.String(), nil
 }

@@ -1,0 +1,403 @@
+package opencode
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
+
+	"google.golang.org/adk/model"
+	"google.golang.org/genai"
+)
+
+// ---------------------------------------------------------------------------
+// Unit tests (no subprocess needed)
+// ---------------------------------------------------------------------------
+
+func TestContentsToPromptText(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name     string
+		contents []*genai.Content
+		want     string
+	}{
+		{
+			name: "single text part",
+			contents: []*genai.Content{
+				genai.NewContentFromText("hello world", "user"),
+			},
+			want: "hello world",
+		},
+		{
+			name: "multiple contents",
+			contents: []*genai.Content{
+				genai.NewContentFromText("part one", "user"),
+				genai.NewContentFromText("part two", "model"),
+			},
+			want: "part onepart two",
+		},
+		{
+			name:     "empty contents",
+			contents: []*genai.Content{},
+			want:     "",
+		},
+		{
+			name: "content with nil parts",
+			contents: []*genai.Content{
+				{Role: "user", Parts: []*genai.Part{nil, {Text: "text"}, nil}},
+			},
+			want: "text",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := contentsToPromptText(tt.contents)
+			if got != tt.want {
+				t.Errorf("contentsToPromptText() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCollectAgentMessageChunk(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		msg           jsonrpcMessage
+		wantCollected string
+	}{
+		{
+			name: "agent_message_chunk with text",
+			msg: jsonrpcMessage{
+				Method: "session/update",
+				Params: mustMarshal(map[string]interface{}{
+					"sessionId": "sess_1",
+					"update": map[string]interface{}{
+						"sessionUpdate": "agent_message_chunk",
+						"messageId":     "msg_1",
+						"content": map[string]string{
+							"type": "text",
+							"text": "Hello ",
+						},
+					},
+				}),
+			},
+			wantCollected: "Hello ",
+		},
+		{
+			name: "non-text content type is ignored",
+			msg: jsonrpcMessage{
+				Method: "session/update",
+				Params: mustMarshal(map[string]interface{}{
+					"sessionId": "sess_1",
+					"update": map[string]interface{}{
+						"sessionUpdate": "agent_message_chunk",
+						"content": map[string]string{
+							"type": "image",
+							"text": "should not appear",
+						},
+					},
+				}),
+			},
+			wantCollected: "",
+		},
+		{
+			name: "non-agent_message_chunk update is ignored",
+			msg: jsonrpcMessage{
+				Method: "session/update",
+				Params: mustMarshal(map[string]interface{}{
+					"sessionId": "sess_1",
+					"update": map[string]interface{}{
+						"sessionUpdate": "plan",
+						"content": map[string]string{
+							"type": "text",
+							"text": "plan text",
+						},
+					},
+				}),
+			},
+			wantCollected: "",
+		},
+		{
+			name: "wrong method is ignored",
+			msg: jsonrpcMessage{
+				Method: "other_method",
+				Params: mustMarshal(map[string]interface{}{}),
+			},
+			wantCollected: "",
+		},
+		{
+			name:          "nil params",
+			msg:           jsonrpcMessage{Method: "session/update"},
+			wantCollected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			var sb strings.Builder
+			collectAgentMessageChunk(tt.msg, &sb)
+			if sb.String() != tt.wantCollected {
+				t.Errorf("collected %q, want %q", sb.String(), tt.wantCollected)
+			}
+		})
+	}
+}
+
+func TestNewModel(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name     string
+		cfg      Config
+		wantName string
+	}{
+		{
+			name:     "default model name",
+			cfg:      Config{APIKey: "key"},
+			wantName: defaultModel,
+		},
+		{
+			name:     "custom model name",
+			cfg:      Config{APIKey: "key", Model: "custom-model"},
+			wantName: "custom-model",
+		},
+		{
+			name:     "default base path",
+			cfg:      Config{APIKey: "key"},
+			wantName: defaultModel,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			m := NewModel(tt.cfg)
+			if m.Name() != tt.wantName {
+				t.Errorf("Name() = %q, want %q", m.Name(), tt.wantName)
+			}
+			if m.config.BasePath == "" {
+				t.Error("BasePath should default to 'opencode'")
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Integration tests (using mock ACP binary)
+// ---------------------------------------------------------------------------
+
+// Global temp dir for the mock binary, shared across all tests in this package.
+// Using os.MkdirTemp instead of tb.TempDir() so the binary survives individual
+// test cleanup and can be reused via sync.Once.
+var (
+	acpMockPath string
+	acpMockOnce sync.Once
+	acpMockErr  error
+)
+
+func buildACPMock(tb testing.TB) string {
+	tb.Helper()
+	acpMockOnce.Do(func() {
+		dir, err := os.MkdirTemp("", "acpmock-*")
+		if err != nil {
+			acpMockErr = fmt.Errorf("create temp dir: %w", err)
+			return
+		}
+		src := filepath.Join("testdata", "acpmock", "main.go")
+		dest := filepath.Join(dir, "acpmock")
+		cmd := exec.Command("go", "build", "-o", dest, src)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			acpMockErr = fmt.Errorf("build acpmock: %w\n%s", err, out)
+			return
+		}
+		acpMockPath = dest
+	})
+	if acpMockErr != nil {
+		tb.Fatal(acpMockErr)
+	}
+	return acpMockPath
+}
+
+func TestModel_GenerateContent_Success(t *testing.T) {
+	mockPath := buildACPMock(t)
+
+	m := NewModel(Config{
+		APIKey:   "test-key",
+		Model:    "test-model",
+		BasePath: mockPath,
+	})
+
+	req := &model.LLMRequest{
+		Model:    "test-model",
+		Contents: genai.Text("generate a commit message"),
+		Config:   &genai.GenerateContentConfig{},
+	}
+
+	var response *model.LLMResponse
+	for resp := range m.GenerateContent(context.Background(), req, false) {
+		if resp != nil && resp.Content != nil {
+			response = resp
+		}
+	}
+
+	if response == nil {
+		t.Fatal("expected non-nil response")
+	}
+	if response.Content == nil {
+		t.Fatal("expected non-nil content")
+	}
+
+	var text string
+	for _, part := range response.Content.Parts {
+		if part != nil {
+			text += part.Text
+		}
+	}
+	if !strings.Contains(text, "Generated commit message") {
+		t.Errorf("expected text to contain 'Generated commit message', got %q", text)
+	}
+}
+
+func TestModel_GenerateContent_BinaryNotFound(t *testing.T) {
+	m := NewModel(Config{
+		APIKey:   "test-key",
+		BasePath: "/nonexistent/acp-binary",
+	})
+
+	req := &model.LLMRequest{
+		Model:    "test-model",
+		Contents: genai.Text("test"),
+		Config:   &genai.GenerateContentConfig{},
+	}
+
+	hadError := false
+	for range m.GenerateContent(context.Background(), req, false) {
+		hadError = true
+	}
+	if !hadError {
+		t.Error("expected error for nonexistent binary, got no error")
+	}
+}
+
+// Test that the Go JSON serialization of our RPC messages works correctly
+func TestJSONRPCMessageSerialization(t *testing.T) {
+	id := 1
+	msg := jsonrpcMessage{
+		Jsonrpc: "2.0",
+		ID:      &id,
+		Method:  "session/prompt",
+		Params: mustMarshal(map[string]interface{}{
+			"sessionId": "sess_1",
+			"prompt": []map[string]interface{}{
+				{"type": "text", "text": "hello"},
+			},
+		}),
+	}
+
+	data, err := json.Marshal(msg)
+	if err != nil {
+		t.Fatalf("marshal error: %v", err)
+	}
+
+	var decoded jsonrpcMessage
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal error: %v", err)
+	}
+
+	if decoded.Jsonrpc != "2.0" {
+		t.Errorf("Jsonrpc = %q, want %q", decoded.Jsonrpc, "2.0")
+	}
+	if decoded.ID == nil || *decoded.ID != 1 {
+		t.Errorf("ID = %v, want 1", decoded.ID)
+	}
+	if decoded.Method != "session/prompt" {
+		t.Errorf("Method = %q, want %q", decoded.Method, "session/prompt")
+	}
+}
+
+func TestMustMarshal(t *testing.T) {
+	t.Parallel()
+	result := mustMarshal(map[string]string{"key": "value"})
+	var decoded map[string]string
+	if err := json.Unmarshal(result, &decoded); err != nil {
+		t.Fatalf("unmarshal error: %v", err)
+	}
+	if decoded["key"] != "value" {
+		t.Errorf("key = %q, want %q", decoded["key"], "value")
+	}
+}
+
+// Test that the Model can be reused across multiple GenerateContent calls
+// (the mock handles sequential sessions)
+func TestModel_GenerateContent_MultipleCalls(t *testing.T) {
+	mockPath := buildACPMock(t)
+
+	m := NewModel(Config{
+		APIKey:   "test-key",
+		BasePath: mockPath,
+	})
+
+	// First call
+	req := &model.LLMRequest{
+		Model:    "test-model",
+		Contents: genai.Text("first prompt"),
+		Config:   &genai.GenerateContentConfig{},
+	}
+
+	for resp := range m.GenerateContent(context.Background(), req, false) {
+		if resp != nil && resp.Content != nil {
+			var text string
+			for _, part := range resp.Content.Parts {
+				if part != nil {
+					text += part.Text
+				}
+			}
+			if !strings.Contains(text, "Generated commit message") {
+				t.Errorf("first call: expected 'Generated commit message', got %q", text)
+			}
+		}
+	}
+
+	// Second call (should trigger a new client since the mock exits after one prompt)
+	req2 := &model.LLMRequest{
+		Model:    "test-model",
+		Contents: genai.Text("second prompt"),
+		Config:   &genai.GenerateContentConfig{},
+	}
+
+	for resp := range m.GenerateContent(context.Background(), req2, false) {
+		if resp != nil && resp.Content != nil {
+			var text string
+			for _, part := range resp.Content.Parts {
+				if part != nil {
+					text += part.Text
+				}
+			}
+			if !strings.Contains(text, "Generated commit message") {
+				t.Errorf("second call: expected 'Generated commit message', got %q", text)
+			}
+		}
+	}
+}
+
+// Test that the config stores the API key correctly.
+func TestConfigStoresAPIKey(t *testing.T) {
+	m := NewModel(Config{
+		APIKey:   "my-secret-key",
+		BasePath: "opencode",
+	})
+
+	if m.config.APIKey != "my-secret-key" {
+		t.Errorf("config.APIKey = %q, want %q", m.config.APIKey, "my-secret-key")
+	}
+}

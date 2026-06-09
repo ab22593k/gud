@@ -121,6 +121,27 @@ func TestValidateConfig(t *testing.T) {
 		})
 	}
 
+	acpTests := []struct {
+		name  string
+		input ACPProvider
+		want  ACPProvider
+	}{
+		{name: "valid gemini preserved", input: ACPProviderGemini, want: ACPProviderGemini},
+		{name: "valid opencode preserved", input: ACPProviderOpenCode, want: ACPProviderOpenCode},
+		{name: "empty defaults to gemini", input: "", want: ACPProviderGemini},
+		{name: "invalid value defaults to gemini", input: "unknown", want: ACPProviderGemini},
+	}
+
+	for _, tt := range acpTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := Config{ACP: tt.input}
+			got := validateConfig(cfg)
+			if got.ACP != tt.want {
+				t.Errorf("ACP = %q, want %q", got.ACP, tt.want)
+			}
+		})
+	}
+
 	historyTests := []struct {
 		name      string
 		inputHist int
@@ -194,6 +215,9 @@ func TestRootCommandHelp(t *testing.T) {
 	}
 	if !strings.Contains(output, "--history") {
 		t.Errorf("help output should include --history flag, got %q", output)
+	}
+	if !strings.Contains(output, "--acp") {
+		t.Errorf("help output should include --acp flag, got %q", output)
 	}
 }
 

@@ -90,18 +90,41 @@ func runHookUninstall(global bool) error {
 	return nil
 }
 
+// HookConfig holds configuration for the hook mode's commit message generation.
+type HookConfig struct {
+	APIKey      string
+	Model       string
+	Temperature float64
+	DetailLevel request.DetailLevel
+	Hint        string
+	Persona     request.PersonaName
+	ACP         ACPProvider
+}
+
+// hookConfigFromConfig extracts a HookConfig from the shared CLI Config.
+func hookConfigFromConfig(cfg Config) HookConfig {
+	return HookConfig{
+		APIKey:      cfg.APIKey,
+		Model:       cfg.Model,
+		Temperature: cfg.Temperature,
+		DetailLevel: cfg.DetailLevel,
+		Hint:        cfg.Hint,
+		Persona:     cfg.Persona,
+		ACP:         cfg.ACP,
+	}
+}
+
 func runHookMode(cmd *cobra.Command, msgFile string) error {
 	cfg := configFromCmd(cmd)
+	hc := hookConfigFromConfig(cfg)
 
 	ctx := context.Background()
 
-	return runHookModeInternal(ctx, msgFile,
-		cfg.APIKey, cfg.Model, cfg.Temperature, cfg.DetailLevel, cfg.Hint, cfg.Persona)
+	return runHookModeInternal(ctx, msgFile, hc)
 }
 
 // runHookModeInternal generates a commit message and writes it to the message file.
-func runHookModeInternal(ctx context.Context, msgFile, apiKey, model string,
-	temperature float64, detailLevel request.DetailLevel, hint string, persona request.PersonaName) error {
+func runHookModeInternal(ctx context.Context, msgFile string, hc HookConfig) error {
 	diff, err := getStagedDiffOrSkip(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get staged diff: %w", err)
@@ -110,12 +133,17 @@ func runHookModeInternal(ctx context.Context, msgFile, apiKey, model string,
 		return nil
 	}
 
-	client, err := request.NewClient(ctx, apiKey, model, temperature)
+	client, err := request.NewClient(ctx, request.ClientConfig{
+		APIKey:      hc.APIKey,
+		Model:       hc.Model,
+		Temperature: hc.Temperature,
+		ACP:         string(hc.ACP),
+	})
 	if err != nil {
 		return fmt.Errorf("failed to create request client: %w", err)
 	}
 
-	return generateAndWriteMsg(ctx, client, diff, detailLevel, hint, persona, msgFile)
+	return generateAndWriteMsg(ctx, client, diff, msgFile, hc)
 }
 
 // getStagedDiffOrSkip returns the staged diff, or an empty string if there are no staged changes.
@@ -132,9 +160,8 @@ func getStagedDiffOrSkip(ctx context.Context) (string, error) {
 }
 
 // generateAndWriteMsg generates a commit message and writes it to the message file.
-func generateAndWriteMsg(ctx context.Context, client *request.Client, diff string,
-	detailLevel request.DetailLevel, hint string, persona request.PersonaName, msgFile string) error {
-	msg, err := client.GenerateCommitMessage(ctx, diff, "", detailLevel, hint, persona)
+func generateAndWriteMsg(ctx context.Context, client *request.Client, diff, msgFile string, hc HookConfig) error {
+	msg, err := client.GenerateCommitMessage(ctx, diff, "", hc.DetailLevel, hc.Hint, hc.Persona)
 	if err != nil {
 		return fmt.Errorf("failed to generate commit message: %w", err)
 	}
