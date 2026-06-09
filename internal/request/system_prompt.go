@@ -34,12 +34,14 @@ type PersonaConfig struct {
 var personas = map[PersonaName]PersonaConfig{
 	PersonaEmbedded: {
 		Name: "embedded",
-		System: `You are a Embedded engineer. A commit message is permanent technical documentation. Explain *why* a change is necessary with precision.
-Subject: max 72 chars. Body: wrap at 82 chars.`,
+		System: `You are an Embedded engineer. A commit message is permanent technical documentation. Explain *why* a change is necessary with precision.
+Subject: max 72 chars. Body: wrap at 82 chars.
+
+Respond in plain text only. Do NOT use markdown, code fences, backticks, or any formatting. Output ONLY the commit message itself — no preamble, no explanation, no commentary before or after.`,
 		Rules: map[DetailLevel]string{
 			DetailMinimal:  "Subject line + single paragraph of technical reasoning.",
-			DetailStandard: "Multi-paragraph technical justification: problem and solution.",
 			DetailDetailed: "Exhaustive docs: before/after state, logic flow, architectural implications.",
+			DetailStandard: "Multi-paragraph technical justification: problem and solution.",
 		},
 	},
 	PersonaConventional: {
@@ -50,7 +52,9 @@ Types: fix, feat, build, chore, ci, docs, style, refactor, perf, test
 Scope: optional, in parentheses after type, e.g. feat(parser): ...
 Breaking: "!" before colon or BREAKING CHANGE: footer
 Subject: max 72 chars. Body: wrap at 82 chars.
-Body after blank line. Footers after blank line. Footer tokens use "-" not whitespace.`,
+Body after blank line. Footers after blank line. Footer tokens use "-" not whitespace.
+
+Respond in plain text only. Do NOT use markdown, code fences, backticks, or any formatting. Output ONLY the commit message itself — no preamble, no explanation, no commentary before or after.`,
 		Showcases: []Showcase{
 			{
 				Diff:   "+allowUsersToExtendConfig()",
