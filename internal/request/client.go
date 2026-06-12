@@ -159,7 +159,13 @@ func (c *Client) GenerateCommitMessage(ctx context.Context, diff, context string
 
 func generateContent(c *Client, ctx context.Context, req *model.LLMRequest) (string, error) {
 	var response *model.LLMResponse
-	for resp := range c.modelImpl.GenerateContent(ctx, req, false) {
+	for resp, err := range c.modelImpl.GenerateContent(ctx, req, false) {
+		if err != nil {
+			return "", fmt.Errorf("model error: %w", err)
+		}
+		if resp == nil {
+			return "", fmt.Errorf("model returned nil response")
+		}
 		if resp.ErrorMessage != "" {
 			return "", fmt.Errorf("model error: %s", resp.ErrorMessage)
 		}

@@ -12,8 +12,9 @@ import (
 )
 
 // initialize sends the ACP initialize handshake and verifies the response.
-func (c *acpClient) initialize() error {
-	_, err := c.doRequest(acpMethodInitialize, map[string]interface{}{
+// It respects context cancellation.
+func (c *acpClient) initialize(ctx context.Context) error {
+	_, err := c.doRequest(ctx, acpMethodInitialize, map[string]interface{}{
 		"protocolVersion":    1,
 		"clientCapabilities": map[string]interface{}{},
 		"clientInfo": map[string]string{
@@ -30,10 +31,11 @@ func (c *acpClient) initialize() error {
 }
 
 // createSession sends session/new and stores the returned session ID.
-func (c *acpClient) createSession() error {
+// It respects context cancellation.
+func (c *acpClient) createSession(ctx context.Context) error {
 	wd, _ := os.Getwd()
 
-	result, err := c.doRequest(acpMethodSessionNew, map[string]interface{}{
+	result, err := c.doRequest(ctx, acpMethodSessionNew, map[string]interface{}{
 		"cwd":        wd,
 		"mcpServers": []interface{}{},
 	})
@@ -55,8 +57,6 @@ func (c *acpClient) createSession() error {
 // sendPrompt sends a session/prompt request and collects the response,
 // handling streaming session/update notifications along the way.
 func (c *acpClient) sendPrompt(ctx context.Context, req *model.LLMRequest) (*model.LLMResponse, error) {
-	_ = ctx // context is used indirectly via the subprocess lifecycle
-
 	promptText := contentsToPromptText(req.Contents)
 
 	params := map[string]interface{}{
@@ -71,23 +71,42 @@ func (c *acpClient) sendPrompt(ctx context.Context, req *model.LLMRequest) (*mod
 		return nil, err
 	}
 
+	// decodeCh carries each decoded message from the read goroutine.
+	// Buffered with size 1 so the goroutine never blocks on send after
+	// context cancellation.
+	type decodeResult struct {
+		msg jsonrpcMessage
+		err error
+	}
+	decodeCh := make(chan decodeResult, 1)
+
 	var textBuilder strings.Builder
 	for {
-		var msg jsonrpcMessage
+		go func() {
+			var msg jsonrpcMessage
+			err := c.decoder.Decode(&msg)
+			decodeCh <- decodeResult{msg, err}
+		}()
 
-		if err := c.decoder.Decode(&msg); err != nil {
-			return nil, fmt.Errorf("failed to read prompt response: %w", err)
+		var r decodeResult
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case r = <-decodeCh:
+			if r.err != nil {
+				return nil, fmt.Errorf("failed to read prompt response: %w", r.err)
+			}
 		}
 
-		if msg.ID == nil {
-			collectAgentMessageChunk(msg, &textBuilder)
+		if r.msg.ID == nil {
+			collectAgentMessageChunk(r.msg, &textBuilder)
 
 			continue
 		}
 
-		if *msg.ID == id {
-			if msg.Error != nil {
-				return nil, fmt.Errorf("session/prompt error %d: %s", msg.Error.Code, msg.Error.Message)
+		if *r.msg.ID == id {
+			if r.msg.Error != nil {
+				return nil, fmt.Errorf("session/prompt error %d: %s", r.msg.Error.Code, r.msg.Error.Message)
 			}
 
 			content := genai.NewContentFromText(textBuilder.String(), roleModel)

@@ -73,12 +73,12 @@ func startACPClient(ctx context.Context, cfg Config) (*acpClient, error) {
 		close(c.done)
 	}()
 
-	if err := c.initialize(); err != nil {
+	if err := c.initialize(ctx); err != nil {
 		c.close()
 
 		return nil, err
 	}
-	if err := c.createSession(); err != nil {
+	if err := c.createSession(ctx); err != nil {
 		c.close()
 
 		return nil, err
@@ -133,37 +133,54 @@ func (c *acpClient) sendRequest(method string, params interface{}) (int, error) 
 
 // readResponse reads JSON-RPC messages from stdout until a response with the
 // expected ID arrives. Notifications (messages without an ID) are silently
-// skipped.
-func (c *acpClient) readResponse(expectedID int) (json.RawMessage, error) {
+// skipped. It respects context cancellation.
+func (c *acpClient) readResponse(ctx context.Context, expectedID int) (json.RawMessage, error) {
+	type decodeResult struct {
+		msg jsonrpcMessage
+		err error
+	}
+	decodeCh := make(chan decodeResult, 1)
+
 	for {
-		var msg jsonrpcMessage
+		go func() {
+			var msg jsonrpcMessage
+			err := c.decoder.Decode(&msg)
+			decodeCh <- decodeResult{msg, err}
+		}()
 
-		if err := c.decoder.Decode(&msg); err != nil {
-			return nil, fmt.Errorf("failed to read response: %w", err)
+		var r decodeResult
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case r = <-decodeCh:
+			if r.err != nil {
+				return nil, fmt.Errorf("failed to read response: %w", r.err)
+			}
 		}
 
-		if msg.ID == nil {
+		if r.msg.ID == nil {
 			continue
 		}
 
-		if *msg.ID != expectedID {
+		if *r.msg.ID != expectedID {
 			continue
 		}
 
-		if msg.Error != nil {
-			return nil, fmt.Errorf("RPC error %d: %s", msg.Error.Code, msg.Error.Message)
+		if r.msg.Error != nil {
+			return nil, fmt.Errorf("RPC error %d: %s", r.msg.Error.Code, r.msg.Error.Message)
 		}
 
-		return msg.Result, nil
+		return r.msg.Result, nil
 	}
 }
 
-// doRequest is a simple request/response helper that skips notifications.
-func (c *acpClient) doRequest(method string, params interface{}) (json.RawMessage, error) {
+// doRequest is a request/response helper that skips notifications.
+// It respects context cancellation.
+func (c *acpClient) doRequest(ctx context.Context, method string, params interface{}) (json.RawMessage, error) {
 	id, err := c.sendRequest(method, params)
 	if err != nil {
 		return nil, err
 	}
 
-	return c.readResponse(id)
+	return c.readResponse(ctx, id)
 }

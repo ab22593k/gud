@@ -2,6 +2,7 @@ package request
 
 import (
 	"context"
+	"errors"
 	"iter"
 	"testing"
 
@@ -194,6 +195,7 @@ func TestClient_GenerateCommitMessage(t *testing.T) {
 		persona     PersonaName
 		mockContent string
 		mockError   string
+		mockRespError string
 		wantErr     bool
 		validateMsg func(t *testing.T, msg string)
 	}{
@@ -252,7 +254,16 @@ func TestClient_GenerateCommitMessage(t *testing.T) {
 			wantErr:     true,
 		},
 		{
-			name:        "empty response returns error",
+			name:        "response error message returns error",
+			diff:        "diff --git a/main.go b/main.go",
+			context:     "",
+			detailLevel: DetailStandard,
+			hint:        "",
+			persona:     PersonaEmbedded,
+			mockRespError: "API quota exceeded",
+			wantErr:     true,
+		},
+		{
 			diff:        "diff --git a/main.go b/main.go",
 			context:     "",
 			detailLevel: DetailStandard,
@@ -269,16 +280,19 @@ func TestClient_GenerateCommitMessage(t *testing.T) {
 			mock := &mockLLM{
 				generateContentFunc: func(ctx context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {
 					return func(yield func(*model.LLMResponse, error) bool) {
-						if tt.mockError != "" {
-							yield(&model.LLMResponse{
-								Content:      nil,
-								ErrorMessage: tt.mockError,
-							}, nil)
-							return
-						}
+					if tt.mockError != "" {
+						yield(nil, errors.New(tt.mockError))
+						return
+					}
+					if tt.mockRespError != "" {
 						yield(&model.LLMResponse{
-							Content: genai.NewContentFromText(tt.mockContent, "model"),
+							ErrorMessage: tt.mockRespError,
 						}, nil)
+						return
+					}
+					yield(&model.LLMResponse{
+						Content: genai.NewContentFromText(tt.mockContent, "model"),
+					}, nil)
 					}
 				},
 			}

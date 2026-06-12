@@ -3,13 +3,16 @@ package opencode
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"google.golang.org/adk/model"
 	"google.golang.org/genai"
@@ -450,6 +453,104 @@ func TestModel_GenerateContent_ReusesClient(t *testing.T) {
 	// The client pointer should be the same (reused, not recreated)
 	if clientAfterSecond != clientAfterFirst {
 		t.Error("expected second call to reuse the same client instance (keep-alive)")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Context cancellation tests
+// ---------------------------------------------------------------------------
+
+// newBlockingClient creates an acpClient whose decoder blocks on reads.
+// The caller controls when data arrives via the returned write end of the
+// pipe. Drain done when shutting down.
+func newBlockingClient(t *testing.T) (*acpClient, *io.PipeWriter, *io.PipeReader) {
+	t.Helper()
+
+	// Pipe for the client's decoder (stdout from subprocess)
+	stdoutR, stdoutW := io.Pipe()
+
+	// Pipe for the client's stdin (stdin to subprocess)
+	stdinR, stdinW := io.Pipe()
+
+	c := &acpClient{
+		stdin:   stdinW,
+		decoder: json.NewDecoder(stdoutR),
+		nextID:  0,
+		done:    make(chan struct{}),
+	}
+
+	return c, stdoutW, stdinR
+}
+
+func TestReadResponse_ContextCancellation(t *testing.T) {
+	t.Parallel()
+	c, stdoutW, _ := newBlockingClient(t)
+	defer stdoutW.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	errCh := make(chan error, 1)
+
+	go func() {
+		_, err := c.readResponse(ctx, 1)
+		errCh <- err
+	}()
+
+	// Give the goroutine time to enter the decode loop and block
+	time.Sleep(50 * time.Millisecond)
+
+	cancel()
+
+	select {
+	case err := <-errCh:
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("expected context.Canceled, got %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timeout: readResponse did not return after cancellation")
+	}
+}
+
+func TestSendPrompt_ContextCancellation(t *testing.T) {
+	t.Parallel()
+	c, stdoutW, stdinR := newBlockingClient(t)
+	defer stdoutW.Close()
+	defer stdinR.Close()
+
+	c.sessionID = "test-session"
+
+	// Drain the request that sendPrompt writes to stdin so sendRequest
+	// doesn't block (pipe buffer can fill up).
+	reqRead := make(chan struct{}, 1)
+	go func() {
+		var msg jsonrpcMessage
+		json.NewDecoder(stdinR).Decode(&msg)
+		reqRead <- struct{}{}
+	}()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	errCh := make(chan error, 1)
+
+	go func() {
+		_, err := c.sendPrompt(ctx, &model.LLMRequest{
+			Contents: genai.Text("test prompt"),
+		})
+		errCh <- err
+	}()
+
+	// Wait for the request to be consumed, then let sendPrompt enter its
+	// decode loop.
+	<-reqRead
+	time.Sleep(50 * time.Millisecond)
+
+	cancel()
+
+	select {
+	case err := <-errCh:
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("expected context.Canceled, got %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timeout: sendPrompt did not return after cancellation")
 	}
 }
 
