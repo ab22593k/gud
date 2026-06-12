@@ -65,6 +65,55 @@ func TestBuildHistoryContext_Disabled(t *testing.T) {
 	}
 }
 
+func TestAppendDeletedContext(t *testing.T) {
+	t.Parallel()
+
+	sampleDiff := "diff --git a/foo.go b/foo.go" +
+		"\nindex abc..def 100644\n--- a/foo.go\n+++ b/foo.go" +
+		"\n@@ -1 +1 @@\n-package old\n+package new\n"
+
+	keepDiff := "diff --git a/keep.go b/keep.go" +
+		"\nindex abc..def 100644\n--- a/keep.go\n+++ b/keep.go" +
+		"\n@@ -1 +1 @@\n-package old\n+package new\n"
+
+	tests := []struct {
+		name    string
+		diff    string
+		deleted string
+		want    string
+	}{
+		{
+			name:    "no deleted files returns diff unchanged",
+			diff:    sampleDiff,
+			deleted: "",
+			want:    sampleDiff,
+		},
+		{
+			name:    "deleted files appended as section",
+			diff:    keepDiff,
+			deleted: "file.go\nold.go\n",
+			want: keepDiff +
+				"\n\nDeleted files:\nfile.go\nold.go\n",
+		},
+		{
+			name:    "whitespace-only deleted returns diff unchanged",
+			diff:    sampleDiff,
+			deleted: "  \n\t\n  ",
+			want:    sampleDiff,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := appendDeletedContext(tt.diff, tt.deleted)
+			if got != tt.want {
+				t.Errorf("appendDeletedContext() =\n%q\nwant:\n%q", got, tt.want)
+			}
+		})
+	}
+}
+
 type discardWriter struct{}
 
 func (discardWriter) Write(p []byte) (int, error) { return len(p), nil }

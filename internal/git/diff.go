@@ -7,14 +7,19 @@ import (
 	"os/exec"
 )
 
-// GetStagedDiff returns the git diff of staged changes (git diff --cached).
+// GetStagedDiff returns the git diff of staged changes, excluding deleted file content.
 func GetStagedDiff(ctx context.Context) (string, error) {
-	return runGitDiff(ctx, "diff", "--cached")
+	return runGitDiff(ctx, "diff", "--cached", "--diff-filter=d")
 }
 
-// GetUnstagedDiff returns the git diff of unstaged changes (git diff).
+// GetUnstagedDiff returns the git diff of unstaged changes, excluding deleted file content.
 func GetUnstagedDiff(ctx context.Context) (string, error) {
-	return runGitDiff(ctx, "diff")
+	return runGitDiff(ctx, "diff", "--diff-filter=d")
+}
+
+// GetStagedDeletedFiles returns the names of files deleted in staged changes (no content).
+func GetStagedDeletedFiles(ctx context.Context) (string, error) {
+	return runGitDiff(ctx, "diff", "--cached", "--diff-filter=D", "--name-only")
 }
 
 // Commit runs git commit with the given message piped via stdin.

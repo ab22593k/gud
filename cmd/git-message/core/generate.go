@@ -45,15 +45,45 @@ func runGenerate(cmd *cobra.Command, _ []string) error {
 
 // getStagedDiffOrError retrieves the staged diff and returns an error if none exists.
 func getStagedDiffOrError(ctx context.Context) (string, error) {
-	diff, err := git.GetStagedDiff(ctx)
+	diff, deleted, err := getStagedDiffAndDeleted(ctx)
 	if err != nil {
-		return "", fmt.Errorf("failed to get staged diff: %w", err)
+		return "", err
 	}
 	if strings.TrimSpace(diff) == "" {
 		return "", errors.New("no staged changes found. Use 'git add' to stage changes")
 	}
 
-	return diff, nil
+	return appendDeletedContext(diff, deleted), nil
+}
+
+// getStagedDiffAndDeleted retrieves both the staged diff (excluding deleted content)
+// and the list of deleted file names.
+func getStagedDiffAndDeleted(ctx context.Context) (diff, deleted string, err error) {
+	diff, err = git.GetStagedDiff(ctx)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to get staged diff: %w", err)
+	}
+
+	deleted, err = git.GetStagedDeletedFiles(ctx)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to get deleted files: %w", err)
+	}
+
+	return diff, deleted, nil
+}
+
+// appendDeletedContext appends a note about deleted files to the diff if any exist.
+func appendDeletedContext(diff, deleted string) string {
+	if strings.TrimSpace(deleted) == "" {
+		return diff
+	}
+
+	var b strings.Builder
+	b.WriteString(diff)
+	b.WriteString("\n\nDeleted files:\n")
+	b.WriteString(deleted)
+
+	return b.String()
 }
 
 // buildHistoryContext returns a formatted string of recent commit history, or

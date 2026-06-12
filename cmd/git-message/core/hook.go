@@ -133,6 +133,12 @@ func runHookModeInternal(ctx context.Context, msgFile string, hc HookConfig) err
 		return nil
 	}
 
+	deleted, err := git.GetStagedDeletedFiles(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get deleted files: %w", err)
+	}
+	diff = appendDeletedContext(diff, deleted)
+
 	client, err := request.NewClient(ctx, request.ClientConfig{
 		APIKey:      hc.APIKey,
 		Model:       hc.Model,
