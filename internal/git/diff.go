@@ -7,14 +7,14 @@ import (
 	"os/exec"
 )
 
-// GetStagedDiff returns the git diff of staged changes, excluding deleted file content.
+// GetStagedDiff returns the git diff of staged changes, excluding deleted and renamed file content.
 func GetStagedDiff(ctx context.Context) (string, error) {
-	return runGitDiff(ctx, "diff", "--cached", "--diff-filter=d")
+	return runGitDiff(ctx, "diff", "--cached", "--diff-filter=dr")
 }
 
-// GetUnstagedDiff returns the git diff of unstaged changes, excluding deleted file content.
+// GetUnstagedDiff returns the git diff of unstaged changes, excluding deleted and renamed file content.
 func GetUnstagedDiff(ctx context.Context) (string, error) {
-	return runGitDiff(ctx, "diff", "--diff-filter=d")
+	return runGitDiff(ctx, "diff", "--diff-filter=dr")
 }
 
 // GetStagedDeletedFiles returns the names of files deleted in staged changes (no content).

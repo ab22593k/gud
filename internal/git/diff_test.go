@@ -288,6 +288,77 @@ func TestGetStagedDeletedFiles_WithDeletion(t *testing.T) {
 	}
 }
 
+func TestGetStagedDiff_ExcludesRenames(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	dir := t.TempDir()
+	for _, cmd := range []string{
+		"git init",
+		"git config user.email test@example.com",
+		"git config user.name Test",
+	} { //nolint:goconst
+		c := exec.Command("sh", "-c", cmd)
+		c.Dir = dir
+		if err := c.Run(); err != nil {
+			t.Fatalf("%s failed: %v", cmd, err)
+		}
+	}
+	if err := os.WriteFile(dir+"/old.go", []byte("package main\n"), 0644); err != nil {
+		t.Fatalf("write old.go failed: %v", err)
+	}
+
+	addCmd := exec.Command("git", "add", ".")
+	addCmd.Dir = dir
+	if err := addCmd.Run(); err != nil {
+		t.Fatalf("git add failed: %v", err)
+	}
+
+	origDir, _ := os.Getwd()
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("Chdir failed: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	ctx := context.Background()
+
+	if err := Commit(ctx, "initial commit\n\nAdd old.go."); err != nil {
+		t.Fatalf("initial Commit() failed: %v", err)
+	}
+
+	// Rename the file
+	mvCmd := exec.Command("git", "mv", "old.go", "new.go")
+	mvCmd.Dir = dir
+	if err := mvCmd.Run(); err != nil {
+		t.Fatalf("git mv old.go new.go failed: %v", err)
+	}
+
+	// Verify GetStagedDiff excludes rename content
+	diff, err := GetStagedDiff(ctx)
+	if err != nil {
+		t.Fatalf("GetStagedDiff() unexpected error: %v", err)
+	}
+	if strings.Contains(diff, "old.go") {
+		t.Errorf("GetStagedDiff() should NOT contain renamed file name, got:\n%s", diff)
+	}
+	if strings.Contains(diff, "new.go") {
+		t.Errorf("GetStagedDiff() should NOT contain new file name of rename, got:\n%s", diff)
+	}
+	if diff != "" {
+		t.Errorf("GetStagedDiff() should be empty (only rename staged), got:\n%s", diff)
+	}
+
+	// Verify GetStagedDeletedFiles does not list the renamed file
+	deleted, err := GetStagedDeletedFiles(ctx)
+	if err != nil {
+		t.Fatalf("GetStagedDeletedFiles() unexpected error: %v", err)
+	}
+	if strings.Contains(deleted, "old.go") {
+		t.Errorf("GetStagedDeletedFiles() should NOT list renamed file, got: %q", deleted)
+	}
+}
+
 func TestGetRecentCommits_EmptyRepo(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")
