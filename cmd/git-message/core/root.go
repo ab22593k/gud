@@ -67,7 +67,7 @@ func init() {
 	rootCmd.PersistentFlags().String("hint", "", "Focus boundaries for the AI")
 	rootCmd.PersistentFlags().Int("history", 5, "Number of recent commits to include as context (0 to disable)")
 	rootCmd.PersistentFlags().String("model", "", "Gemini model to use (or use GEMINI_MODEL env)")
-	rootCmd.PersistentFlags().Float64("temperature", 0, "Set the generation temperature (0-2, default: model default)")
+	rootCmd.PersistentFlags().Float64("temperature", 1, "Set the generation temperature (0-2, default: 1)")
 	rootCmd.PersistentFlags().String("acp", string(ACPProviderGemini),
 		"ACP provider to use (gemini, opencode)")
 }
