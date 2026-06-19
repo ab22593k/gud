@@ -145,7 +145,10 @@ func (c *acpClient) readResponse(ctx context.Context, expectedID int) (json.RawM
 		go func() {
 			var msg jsonrpcMessage
 			err := c.decoder.Decode(&msg)
-			decodeCh <- decodeResult{msg, err}
+			select {
+			case decodeCh <- decodeResult{msg, err}:
+			case <-ctx.Done():
+			}
 		}()
 
 		var r decodeResult

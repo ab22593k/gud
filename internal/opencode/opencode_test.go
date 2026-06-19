@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -552,6 +553,113 @@ func TestSendPrompt_ContextCancellation(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("timeout: sendPrompt did not return after cancellation")
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Goroutine leak tests
+// ---------------------------------------------------------------------------
+
+// awaitGoroutineCount polls until the goroutine count drops to at most the
+// expected count, or until the deadline expires and calls t.Errorf.
+func awaitGoroutineCount(t *testing.T, initial int) {
+	t.Helper()
+	deadline := time.After(2 * time.Second)
+	for {
+		if runtime.NumGoroutine() <= initial {
+			return
+		}
+		select {
+		case <-deadline:
+			t.Errorf("goroutine leak: started with %d goroutines, ended with %d",
+				initial, runtime.NumGoroutine())
+			return
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
+}
+
+func TestReadResponse_GoroutineLeak(t *testing.T) {
+	t.Parallel()
+
+	initial := runtime.NumGoroutine()
+
+	c, stdoutW, _ := newBlockingClient(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	errCh := make(chan error, 1)
+	go func() {
+		_, err := c.readResponse(ctx, 1)
+		errCh <- err
+	}()
+
+	// Let the read goroutine enter the decode loop and block on Decode.
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-errCh:
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("expected context.Canceled, got %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timeout: readResponse did not return after cancellation")
+	}
+
+	// Close the pipe writer so the decode goroutine unblocks (receives EOF),
+	// completes the Decode call, and can exit via the <-ctx.Done() path.
+	stdoutW.Close()
+
+	awaitGoroutineCount(t, initial)
+}
+
+func TestSendPrompt_GoroutineLeak(t *testing.T) {
+	t.Parallel()
+
+	initial := runtime.NumGoroutine()
+
+	c, stdoutW, stdinR := newBlockingClient(t)
+	c.sessionID = "test-session"
+
+	// Drain the request that sendPrompt writes to stdin so sendRequest
+	// doesn't block (pipe buffer can fill up).
+	reqRead := make(chan struct{}, 1)
+	go func() {
+		var msg jsonrpcMessage
+		_ = json.NewDecoder(stdinR).Decode(&msg)
+		reqRead <- struct{}{}
+	}()
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	errCh := make(chan error, 1)
+	go func() {
+		_, err := c.sendPrompt(ctx, &model.LLMRequest{
+			Contents: genai.Text("test prompt"),
+		})
+		errCh <- err
+	}()
+
+	// Wait for the request to be consumed, then let sendPrompt enter its
+	// decode loop.
+	<-reqRead
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-errCh:
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("expected context.Canceled, got %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timeout: sendPrompt did not return after cancellation")
+	}
+
+	// Close the pipe writer so the decode goroutine unblocks and exits.
+	stdoutW.Close()
+	stdinR.Close()
+
+	awaitGoroutineCount(t, initial)
 }
 
 // Test that the config stores the API key correctly.

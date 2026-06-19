@@ -85,7 +85,10 @@ func (c *acpClient) sendPrompt(ctx context.Context, req *model.LLMRequest) (*mod
 		go func() {
 			var msg jsonrpcMessage
 			err := c.decoder.Decode(&msg)
-			decodeCh <- decodeResult{msg, err}
+			select {
+			case decodeCh <- decodeResult{msg, err}:
+			case <-ctx.Done():
+			}
 		}()
 
 		var r decodeResult
