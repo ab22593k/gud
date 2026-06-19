@@ -9,15 +9,21 @@ import (
 
 func TestInstallHook(t *testing.T) {
 	t.Parallel()
+
+	// Use a known binary path for testing.
+	testBinary := "/usr/local/bin/gud"
+
 	tests := []struct {
 		name         string
 		hookType     HookType
+		binaryPath   string
 		wantErr      bool
 		validateHook func(t *testing.T, hookPath string)
 	}{
 		{
-			name:     "install prepare-commit-msg hook",
-			hookType: PrepareCommitMsg,
+			name:       "install prepare-commit-msg hook",
+			hookType:   PrepareCommitMsg,
+			binaryPath: testBinary,
 			validateHook: func(t *testing.T, hookPath string) {
 				if _, err := os.Stat(hookPath); os.IsNotExist(err) {
 					t.Errorf("hook file should exist at %s", hookPath)
@@ -33,8 +39,9 @@ func TestInstallHook(t *testing.T) {
 				if err != nil {
 					t.Fatalf("failed to read hook file: %v", err)
 				}
-				if !strings.Contains(string(content), "gud hook run") {
-					t.Errorf("hook should call gud hook run")
+				quotedBinary := `"` + testBinary + `"`
+				if !strings.Contains(string(content), quotedBinary+" hook run") {
+					t.Errorf("hook should call %s hook run, got:\n%s", testBinary, string(content))
 				}
 			},
 		},
@@ -49,7 +56,7 @@ func TestInstallHook(t *testing.T) {
 				t.Fatalf("failed to create hooks dir: %v", err)
 			}
 
-			err := InstallHook(hookDir, tt.hookType)
+			err := InstallHook(hookDir, tt.hookType, tt.binaryPath)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("InstallHook() error = %v, wantErr %v", err, tt.wantErr)
 				return

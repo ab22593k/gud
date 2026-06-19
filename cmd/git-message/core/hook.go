@@ -66,7 +66,16 @@ func runHookInstall(global bool) error {
 		return fmt.Errorf("failed to create hook directory: %w", err)
 	}
 
-	if err := git.InstallHook(hookDir, git.PrepareCommitMsg); err != nil {
+	binaryPath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("failed to get executable path: %w", err)
+	}
+	binaryPath, err = filepath.Abs(binaryPath)
+	if err != nil {
+		return fmt.Errorf("failed to resolve absolute path: %w", err)
+	}
+
+	if err := git.InstallHook(hookDir, git.PrepareCommitMsg, binaryPath); err != nil {
 		return fmt.Errorf("failed to install hook: %w", err)
 	}
 
