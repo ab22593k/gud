@@ -106,10 +106,18 @@ func promptAction(scanner *bufio.Scanner, out io.Writer) string {
 
 // appendAssistedBy appends an "Assisted-by: <model>" git trailer to the message.
 // It ensures a blank line separator before the trailer, following git trailer conventions.
+// It is idempotent: calling it multiple times with the same model name does nothing.
 func appendAssistedBy(msg, modelName string) string {
+	trailer := "Assisted-by: " + modelName
+
 	msg = strings.TrimRight(msg, "\n")
-	msg += "\n\nAssisted-by: " + modelName + "\n"
-	return msg
+
+	// Already has this trailer — no-op aside from trailing newline.
+	if strings.HasSuffix(msg, trailer) {
+		return msg + "\n"
+	}
+
+	return msg + "\n\n" + trailer + "\n"
 }
 
 // editMessage opens the user's $EDITOR with the given message content,

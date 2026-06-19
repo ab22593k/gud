@@ -65,6 +65,86 @@ func TestBuildHistoryContext_Disabled(t *testing.T) {
 	}
 }
 
+func TestAppendAssistedBy(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		msg       string
+		modelName string
+		want      string
+	}{
+		{
+			name:      "appends trailer to plain message",
+			msg:       "feat: add foo",
+			modelName: "claude-3",
+			want:      "feat: add foo\n\nAssisted-by: claude-3\n",
+		},
+		{
+			name:      "appends trailer to message with body",
+			msg:       "feat: add foo\n\nThis is the body.",
+			modelName: "claude-3",
+			want:      "feat: add foo\n\nThis is the body.\n\nAssisted-by: claude-3\n",
+		},
+		{
+			name:      "trims trailing newlines before appending",
+			msg:       "feat: add foo\n\n",
+			modelName: "gpt-4",
+			want:      "feat: add foo\n\nAssisted-by: gpt-4\n",
+		},
+		{
+			name:      "trims multiple trailing newlines",
+			msg:       "feat: add foo\n\n\n\n",
+			modelName: "gpt-4",
+			want:      "feat: add foo\n\nAssisted-by: gpt-4\n",
+		},
+		{
+			name:      "idempotent — already has trailer",
+			msg:       "feat: add foo\n\nAssisted-by: claude-3",
+			modelName: "claude-3",
+			want:      "feat: add foo\n\nAssisted-by: claude-3\n",
+		},
+		{
+			name:      "idempotent — already has trailer with trailing newline",
+			msg:       "feat: add foo\n\nAssisted-by: claude-3\n",
+			modelName: "claude-3",
+			want:      "feat: add foo\n\nAssisted-by: claude-3\n",
+		},
+		{
+			name:      "idempotent — different model appends new trailer",
+			msg:       "feat: add foo\n\nAssisted-by: old-model\n",
+			modelName: "new-model",
+			// TrimRight removes the trailing \n, then \n\n is added before the new trailer.
+			// Result: one blank line between old-model and the new trailer.
+			want: "feat: add foo\n\nAssisted-by: old-model\n\nAssisted-by: new-model\n",
+		},
+		{
+			name:      "message has other trailer",
+			msg:       "feat: add foo\n\nSigned-off-by: Alice <alice@example.com>",
+			modelName: "claude-3",
+			// The Signed-off-by line has no trailing newline, so TrimRight is a no-op.
+			// \n\n is added before the new trailer.
+			want: "feat: add foo\n\nSigned-off-by: Alice <alice@example.com>\n\nAssisted-by: claude-3\n",
+		},
+		{
+			name:      "empty message",
+			msg:       "",
+			modelName: "claude-3",
+			want:      "\n\nAssisted-by: claude-3\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := appendAssistedBy(tt.msg, tt.modelName)
+			if got != tt.want {
+				t.Errorf("appendAssistedBy() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestAppendDeletedContext(t *testing.T) {
 	t.Parallel()
 
