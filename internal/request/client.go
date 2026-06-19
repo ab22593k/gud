@@ -127,15 +127,15 @@ func NewClientWithGenerator(llm model.LLM, modelName string, temperature float64
 	}
 }
 
-// GenerateCommitMessage generates a commit message based on the provided diff, context, detail level, hint, and persona.
-func (c *Client) GenerateCommitMessage(ctx context.Context, diff, context string, detailLevel DetailLevel, hint string, persona PersonaName) (string, error) {
+// GenerateCommitMessage generates a commit message based on the provided diff, commit context, detail level, hint, and persona.
+func (c *Client) GenerateCommitMessage(ctx context.Context, diff, commitContext string, detailLevel DetailLevel, hint string, persona PersonaName) (string, error) {
 	if diff == "" {
 		return "", fmt.Errorf("diff is required")
 	}
 
 	slog.Debug("generating commit message", "model", c.model, "detailLevel", detailLevel)
 
-	prompt := BuildCommitMessagePrompt(diff, context, detailLevel, hint, persona)
+	prompt := BuildCommitMessagePrompt(diff, commitContext, detailLevel, hint, persona)
 
 	req := &model.LLMRequest{
 		Model:    c.model,
