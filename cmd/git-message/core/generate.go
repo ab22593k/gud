@@ -5,13 +5,20 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"gud/internal/git"
 	"gud/internal/request"
 
 	"github.com/spf13/cobra"
 )
+
+// maxHistory is the maximum number of recent commits the --history flag can request.
+// This prevents accidentally dumping hundreds of commits into the prompt and wasting tokens.
+const maxHistory = git.MaxRecentCommits
 
 // runGenerate is the default action: generate a commit message from staged changes.
 func runGenerate(cmd *cobra.Command, _ []string) error {
@@ -21,7 +28,8 @@ func runGenerate(cmd *cobra.Command, _ []string) error {
 		return errors.New("API key is required. Set the GOOGLE_API_KEY environment variable")
 	}
 
-	ctx := context.Background()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	diff, err := getStagedDiffOrError(ctx)
 	if err != nil {
@@ -78,10 +86,27 @@ func appendDeletedContext(diff, deleted string) string {
 		return diff
 	}
 
+	// Sanitize each filename line: trim whitespace, filter empty lines.
+	// This prevents injection of fake diff context via malicious filenames
+	// containing embedded newlines, while preserving the one-per-line format.
+	lines := strings.Split(deleted, "\n")
+	var clean []string
+	for _, line := range lines {
+		if line = strings.TrimSpace(line); line != "" {
+			clean = append(clean, line)
+		}
+	}
+
 	var b strings.Builder
 	b.WriteString(diff)
 	b.WriteString("\n\nDeleted files:\n")
-	b.WriteString(deleted)
+	for i, line := range clean {
+		if i > 0 {
+			b.WriteString("\n")
+		}
+		b.WriteString(line)
+	}
+	b.WriteString("\n")
 
 	return b.String()
 }
@@ -106,10 +131,6 @@ func buildHistoryContext(ctx context.Context, cfg Config) string {
 
 	return history
 }
-
-// maxHistory is the maximum number of recent commits the --history flag can request.
-// This prevents accidentally dumping hundreds of commits into the prompt and wasting tokens.
-const maxHistory = 50
 
 // validateConfig normalizes and validates the shared configuration values.
 func validateConfig(cfg Config) Config {

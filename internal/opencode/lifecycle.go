@@ -33,7 +33,10 @@ func (c *acpClient) initialize(ctx context.Context) error {
 // createSession sends session/new and stores the returned session ID.
 // It respects context cancellation.
 func (c *acpClient) createSession(ctx context.Context) error {
-	wd, _ := os.Getwd()
+	wd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("session/new: getwd: %w", err)
+	}
 
 	result, err := c.doRequest(ctx, acpMethodSessionNew, map[string]interface{}{
 		"cwd":        wd,

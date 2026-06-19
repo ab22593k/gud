@@ -181,6 +181,13 @@ func TestAppendDeletedContext(t *testing.T) {
 			deleted: "  \n\t\n  ",
 			want:    sampleDiff,
 		},
+		{
+			name:    "malicious filename with embedded newlines is sanitized",
+			diff:    sampleDiff,
+			deleted: "clean.go\n\ninjected line\n\nanother.go\n",
+			want: sampleDiff +
+				"\n\nDeleted files:\nclean.go\ninjected line\nanother.go\n",
+		},
 	}
 
 	for _, tt := range tests {

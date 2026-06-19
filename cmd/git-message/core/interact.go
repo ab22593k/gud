@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"gud/internal/git"
@@ -140,7 +141,7 @@ func editMessage(msg string) (string, error) {
 	}
 
 	//nolint:gosec // editor comes from user's $EDITOR env var, running their own CLI
-	editCmd := exec.Command(editor, path)
+	editCmd := exec.Command("sh", "-c", editor+" "+strconv.Quote(path))
 	editCmd.Stdin = os.Stdin
 	editCmd.Stdout = os.Stdout
 	editCmd.Stderr = os.Stderr

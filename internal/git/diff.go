@@ -7,6 +7,11 @@ import (
 	"os/exec"
 )
 
+// MaxRecentCommits is the maximum number of recent commits GetRecentCommits can
+// request. This prevents accidentally dumping hundreds of commits into the prompt
+// and wasting tokens.
+const MaxRecentCommits = 50
+
 // GetStagedDiff returns the git diff of staged changes, excluding deleted and renamed file content.
 func GetStagedDiff(ctx context.Context) (string, error) {
 	return runGitDiff(ctx, "diff", "--cached", "--diff-filter=dr")
@@ -40,9 +45,13 @@ func Commit(ctx context.Context, message string) error {
 // GetRecentCommits returns the last n commit summaries (one-line format).
 // If n <= 0, it returns an empty string with no error.
 // It returns an error if git log fails (e.g. the repository has no commits yet).
+// n is capped at MaxRecentCommits to prevent excessive git log queries.
 func GetRecentCommits(ctx context.Context, n int) (string, error) {
 	if n <= 0 {
 		return "", nil
+	}
+	if n > MaxRecentCommits {
+		n = MaxRecentCommits
 	}
 	cmd := exec.CommandContext(ctx, "git", "log", fmt.Sprintf("-%d", n), "--oneline", "--no-decorate")
 	var out bytes.Buffer
