@@ -50,6 +50,16 @@ func Execute() error {
 	return rootCmd.Execute()
 }
 
+// mustGet panics if the flag name is not registered. Only use for flags
+// defined in init() — a missing flag is a programming error.
+func mustGet[T any](cmd *cobra.Command, name string, fn func(string) (T, error)) T {
+	v, err := fn(name)
+	if err != nil {
+		panic("config: " + err.Error())
+	}
+	return v
+}
+
 func init() {
 	// Persistent flags available to all commands (no global variable binding)
 	rootCmd.PersistentFlags().String("detail-level", "standard", "Set the detail level (minimal, standard, detailed)")
@@ -65,14 +75,17 @@ func init() {
 // configFromCmd reads flags from the cobra command and environment variables
 // to construct a normalized Config.
 func configFromCmd(cmd *cobra.Command) Config {
-	detail, _ := cmd.Flags().GetString("detail-level")
-	persona, _ := cmd.Flags().GetString("persona")
-	hint, _ := cmd.Flags().GetString("hint")
-	history, _ := cmd.Flags().GetInt("history")
-	model, _ := cmd.Flags().GetString("model")
-	temp, _ := cmd.Flags().GetFloat64("temperature")
+	// Get* methods can only fail if a flag name is missing at runtime (a
+	// programming error caught at compile-adjacent coverage), so panic
+	// guards make the code self-auditing.
+	detail := mustGet(cmd, "detail-level", cmd.Flags().GetString)
+	persona := mustGet(cmd, "persona", cmd.Flags().GetString)
+	hint := mustGet(cmd, "hint", cmd.Flags().GetString)
+	history := mustGet(cmd, "history", cmd.Flags().GetInt)
+	model := mustGet(cmd, "model", cmd.Flags().GetString)
+	temp := mustGet(cmd, "temperature", cmd.Flags().GetFloat64)
 
-	acpString, _ := cmd.Flags().GetString("acp")
+	acpString := mustGet(cmd, "acp", cmd.Flags().GetString)
 
 	cfg := Config{
 		DetailLevel: request.DetailLevel(detail),

@@ -27,7 +27,7 @@ var hookInstallCmd = &cobra.Command{
 	Use:   "install",
 	Short: "Install the git prepare-commit-msg hook",
 	RunE: func(cmd *cobra.Command, _ []string) error {
-		global, _ := cmd.Flags().GetBool("global")
+		global := mustGet(cmd, "global", cmd.Flags().GetBool)
 
 		return runHookInstall(global)
 	},
@@ -37,7 +37,7 @@ var hookUninstallCmd = &cobra.Command{
 	Use:   "uninstall",
 	Short: "Uninstall the git prepare-commit-msg hook",
 	RunE: func(cmd *cobra.Command, _ []string) error {
-		global, _ := cmd.Flags().GetBool("global")
+		global := mustGet(cmd, "global", cmd.Flags().GetBool)
 
 		return runHookUninstall(global)
 	},
