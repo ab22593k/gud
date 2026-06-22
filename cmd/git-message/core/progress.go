@@ -12,7 +12,7 @@ func showProgress[T any](msg string, fn func() (T, error)) (T, error) {
 	type result struct {
 		val      T
 		err      error
-		panicVal interface{}
+		panicVal any
 	}
 	resCh := make(chan result, 1)
 	go func() {
@@ -40,6 +40,7 @@ func showProgress[T any](msg string, fn func() (T, error)) (T, error) {
 			}
 
 			fmt.Fprintf(os.Stderr, "\r%s ✓\n", msg)
+
 			return r.val, r.err
 		case <-ticker.C:
 			fmt.Fprintf(os.Stderr, "\r%s %s", spinner[i], msg)

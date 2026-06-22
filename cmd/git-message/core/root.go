@@ -52,11 +52,12 @@ func Execute() error {
 
 // mustGet panics if the flag name is not registered. Only use for flags
 // defined in init() — a missing flag is a programming error.
-func mustGet[T any](cmd *cobra.Command, name string, fn func(string) (T, error)) T {
+func mustGet[T any](_ *cobra.Command, name string, fn func(string) (T, error)) T {
 	v, err := fn(name)
 	if err != nil {
 		panic("config: " + err.Error())
 	}
+
 	return v
 }
 

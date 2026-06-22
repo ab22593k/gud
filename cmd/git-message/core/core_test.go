@@ -65,6 +65,9 @@ func TestBuildHistoryContext_Disabled(t *testing.T) {
 	}
 }
 
+const testModelName = "claude-3"
+const testWantAssistedBy = "feat: add foo\n\nAssisted-by: claude-3\n"
+
 func TestAppendAssistedBy(t *testing.T) {
 	t.Parallel()
 
@@ -77,13 +80,13 @@ func TestAppendAssistedBy(t *testing.T) {
 		{
 			name:      "appends trailer to plain message",
 			msg:       "feat: add foo",
-			modelName: "claude-3",
-			want:      "feat: add foo\n\nAssisted-by: claude-3\n",
+			modelName: testModelName,
+			want:      testWantAssistedBy,
 		},
 		{
 			name:      "appends trailer to message with body",
 			msg:       "feat: add foo\n\nThis is the body.",
-			modelName: "claude-3",
+			modelName: testModelName,
 			want:      "feat: add foo\n\nThis is the body.\n\nAssisted-by: claude-3\n",
 		},
 		{
@@ -101,14 +104,14 @@ func TestAppendAssistedBy(t *testing.T) {
 		{
 			name:      "idempotent — already has trailer",
 			msg:       "feat: add foo\n\nAssisted-by: claude-3",
-			modelName: "claude-3",
-			want:      "feat: add foo\n\nAssisted-by: claude-3\n",
+			modelName: testModelName,
+			want:      testWantAssistedBy,
 		},
 		{
 			name:      "idempotent — already has trailer with trailing newline",
-			msg:       "feat: add foo\n\nAssisted-by: claude-3\n",
-			modelName: "claude-3",
-			want:      "feat: add foo\n\nAssisted-by: claude-3\n",
+			msg:       testWantAssistedBy,
+			modelName: testModelName,
+			want:      testWantAssistedBy,
 		},
 		{
 			name:      "idempotent — different model appends new trailer",
@@ -121,7 +124,7 @@ func TestAppendAssistedBy(t *testing.T) {
 		{
 			name:      "message has other trailer",
 			msg:       "feat: add foo\n\nSigned-off-by: Alice <alice@example.com>",
-			modelName: "claude-3",
+			modelName: testModelName,
 			// The Signed-off-by line has no trailing newline, so TrimRight is a no-op.
 			// \n\n is added before the new trailer.
 			want: "feat: add foo\n\nSigned-off-by: Alice <alice@example.com>\n\nAssisted-by: claude-3\n",
@@ -129,7 +132,7 @@ func TestAppendAssistedBy(t *testing.T) {
 		{
 			name:      "empty message",
 			msg:       "",
-			modelName: "claude-3",
+			modelName: testModelName,
 			want:      "\n\nAssisted-by: claude-3\n",
 		},
 	}
