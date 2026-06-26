@@ -31,8 +31,10 @@ func interactiveCommit(ctx context.Context, cmd *cobra.Command, client *request.
 	out := cmd.OutOrStdout()
 
 	for {
+		profileContent := resolveProfileContent(string(cfg.Profile))
 		msg, err := showProgress("Rolling in, obscuring the landscape of the codebase...", func() (string, error) {
-			return client.GenerateCommitMessage(ctx, diff, promptContext, cfg.DetailLevel, cfg.Hint, cfg.Persona)
+			return client.GenerateCommitMessageWithContent(ctx, diff, promptContext, cfg.DetailLevel,
+				cfg.Hint, cfg.Profile, profileContent, cfg.WrapLine)
 		})
 		if err != nil {
 			return fmt.Errorf("failed to generate commit message: %w", err)

@@ -106,8 +106,9 @@ type HookConfig struct {
 	Temperature float64
 	DetailLevel request.DetailLevel
 	Hint        string
-	Persona     request.PersonaName
+	Profile     request.ProfileName
 	ACP         ACPProvider
+	WrapLine    int
 }
 
 // hookConfigFromConfig extracts a HookConfig from the shared CLI Config.
@@ -118,8 +119,9 @@ func hookConfigFromConfig(cfg Config) HookConfig {
 		Temperature: cfg.Temperature,
 		DetailLevel: cfg.DetailLevel,
 		Hint:        cfg.Hint,
-		Persona:     cfg.Persona,
+		Profile:     cfg.Profile,
 		ACP:         cfg.ACP,
+		WrapLine:    cfg.WrapLine,
 	}
 }
 
@@ -176,7 +178,9 @@ func getStagedDiffOrSkip(ctx context.Context) (string, error) {
 
 // generateAndWriteMsg generates a commit message and writes it to the message file.
 func generateAndWriteMsg(ctx context.Context, client *request.Client, diff, msgFile string, hc HookConfig) error {
-	msg, err := client.GenerateCommitMessage(ctx, diff, "", hc.DetailLevel, hc.Hint, hc.Persona)
+	profileContent := resolveProfileContent(string(hc.Profile))
+	msg, err := client.GenerateCommitMessageWithContent(ctx, diff, "", hc.DetailLevel, hc.Hint,
+		hc.Profile, profileContent, hc.WrapLine)
 	if err != nil {
 		return fmt.Errorf("failed to generate commit message: %w", err)
 	}

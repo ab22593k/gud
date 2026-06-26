@@ -192,7 +192,7 @@ func TestClient_GenerateCommitMessage(t *testing.T) {
 		context     string
 		detailLevel DetailLevel
 		hint        string
-		persona     PersonaName
+		profile     ProfileName
 		mockContent string
 		mockError   string
 		mockRespError string
@@ -205,7 +205,7 @@ func TestClient_GenerateCommitMessage(t *testing.T) {
 			context:     "",
 			detailLevel: DetailStandard,
 			hint:        "",
-			persona:     PersonaEmbedded,
+			profile:     "",
 			wantErr:     true,
 		},
 		{
@@ -214,7 +214,7 @@ func TestClient_GenerateCommitMessage(t *testing.T) {
 			context:     "",
 			detailLevel: DetailStandard,
 			hint:        "",
-			persona:     PersonaEmbedded,
+			profile:     "",
 			mockContent: "feat: add hello world output",
 			wantErr:     false,
 			validateMsg: func(t *testing.T, msg string) {
@@ -229,7 +229,7 @@ func TestClient_GenerateCommitMessage(t *testing.T) {
 			context:     "",
 			detailLevel: DetailMinimal,
 			hint:        "",
-			persona:     PersonaEmbedded,
+			profile:     "",
 			mockContent: "feat: add hello",
 			wantErr:     false,
 		},
@@ -239,7 +239,7 @@ func TestClient_GenerateCommitMessage(t *testing.T) {
 			context:     "",
 			detailLevel: DetailStandard,
 			hint:        "focus on security",
-			persona:     PersonaEmbedded,
+			profile:     "",
 			mockContent: "fix: patch security vulnerability",
 			wantErr:     false,
 		},
@@ -249,7 +249,7 @@ func TestClient_GenerateCommitMessage(t *testing.T) {
 			context:     "",
 			detailLevel: DetailStandard,
 			hint:        "",
-			persona:     PersonaEmbedded,
+			profile:     "",
 			mockError:   "API error",
 			wantErr:     true,
 		},
@@ -259,7 +259,7 @@ func TestClient_GenerateCommitMessage(t *testing.T) {
 			context:     "",
 			detailLevel: DetailStandard,
 			hint:        "",
-			persona:     PersonaEmbedded,
+			profile:     "",
 			mockRespError: "API quota exceeded",
 			wantErr:     true,
 		},
@@ -268,7 +268,7 @@ func TestClient_GenerateCommitMessage(t *testing.T) {
 			context:     "",
 			detailLevel: DetailStandard,
 			hint:        "",
-			persona:     PersonaEmbedded,
+			profile:     "",
 			mockContent: "",
 			wantErr:     true,
 		},
@@ -299,7 +299,7 @@ func TestClient_GenerateCommitMessage(t *testing.T) {
 
 			client := NewClientWithGenerator(mock, "gemini-3.1-flash-lite", 0)
 
-			msg, err := client.GenerateCommitMessage(context.Background(), tt.diff, tt.context, tt.detailLevel, tt.hint, tt.persona)
+			msg, err := client.GenerateCommitMessage(context.Background(), tt.diff, tt.context, tt.detailLevel, tt.hint, tt.profile)
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GenerateCommitMessage() error = %v, wantErr %v", err, tt.wantErr)

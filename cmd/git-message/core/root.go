@@ -23,13 +23,14 @@ const (
 // Config holds CLI configuration shared across commands.
 type Config struct {
 	DetailLevel request.DetailLevel
-	Persona     request.PersonaName
+	Profile     request.ProfileName
 	Model       string
 	Temperature float64
 	Hint        string
 	History     int
 	APIKey      string
 	ACP         ACPProvider
+	WrapLine    int
 }
 
 var rootCmd = &cobra.Command{
@@ -38,7 +39,7 @@ var rootCmd = &cobra.Command{
 	Long: `Tool that generates meaningful git commit messages
 using AI (Gemini or OpenCode.ai), based on your staged changes.
 
-It supports multiple personas and detail levels to match your project's style.`,
+It supports multiple profiles and detail levels to match your project's style.`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	// Default action: generate a commit message from staged changes
@@ -64,13 +65,16 @@ func mustGet[T any](_ *cobra.Command, name string, fn func(string) (T, error)) T
 func init() {
 	// Persistent flags available to all commands (no global variable binding)
 	rootCmd.PersistentFlags().String("detail-level", "standard", "Set the detail level (minimal, standard, detailed)")
-	rootCmd.PersistentFlags().String("persona", "embedded", "Set output style (embedded, conventional)")
+	rootCmd.PersistentFlags().String("profile", "", "AI agent profile slug (download with 'gud profile save <slug>')")
 	rootCmd.PersistentFlags().String("hint", "", "Focus boundaries for the AI")
 	rootCmd.PersistentFlags().Int("history", 5, "Number of recent commits to include as context (0 to disable)")
 	rootCmd.PersistentFlags().String("model", "", "Gemini model to use (or use GEMINI_MODEL env)")
 	rootCmd.PersistentFlags().Float64("temperature", 1, "Set the generation temperature (0-2, default: 1)")
+	rootCmd.PersistentFlags().Int("wrapline", 72, "Wrap all lines at this character width")
 	rootCmd.PersistentFlags().String("acp", string(ACPProviderGemini),
 		"ACP provider to use (gemini, opencode)")
+
+	rootCmd.AddCommand(profileCmd)
 }
 
 // configFromCmd reads flags from the cobra command and environment variables
@@ -80,21 +84,23 @@ func configFromCmd(cmd *cobra.Command) Config {
 	// programming error caught at compile-adjacent coverage), so panic
 	// guards make the code self-auditing.
 	detail := mustGet(cmd, "detail-level", cmd.Flags().GetString)
-	persona := mustGet(cmd, "persona", cmd.Flags().GetString)
+	profile := mustGet(cmd, "profile", cmd.Flags().GetString)
 	hint := mustGet(cmd, "hint", cmd.Flags().GetString)
 	history := mustGet(cmd, "history", cmd.Flags().GetInt)
 	model := mustGet(cmd, "model", cmd.Flags().GetString)
 	temp := mustGet(cmd, "temperature", cmd.Flags().GetFloat64)
+	wrapLine := mustGet(cmd, "wrapline", cmd.Flags().GetInt)
 
 	acpString := mustGet(cmd, "acp", cmd.Flags().GetString)
 
 	cfg := Config{
 		DetailLevel: request.DetailLevel(detail),
-		Persona:     request.PersonaName(persona),
+		Profile:     request.ProfileName(profile),
 		Hint:        hint,
 		History:     history,
 		Model:       model,
 		Temperature: temp,
+		WrapLine:    wrapLine,
 		APIKey:      os.Getenv("GOOGLE_API_KEY"),
 		ACP:         ACPProvider(acpString),
 	}

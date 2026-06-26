@@ -1,3 +1,4 @@
+// Package core provides the CLI command structure and workflow orchestration for git-message.
 package core
 
 import (

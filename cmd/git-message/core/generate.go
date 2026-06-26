@@ -31,6 +31,10 @@ func runGenerate(cmd *cobra.Command, _ []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	if err := requireProfile(string(cfg.Profile)); err != nil {
+		return err
+	}
+
 	diff, err := getStagedDiffOrError(ctx)
 	if err != nil {
 		return err
@@ -49,6 +53,40 @@ func runGenerate(cmd *cobra.Command, _ []string) error {
 	}
 
 	return interactiveCommit(ctx, cmd, client, diff, promptContext, cfg)
+}
+
+// resolveProfileContent returns the AGENTS.md content for a cached profile.
+// Returns empty string if no profile is set.
+func resolveProfileContent(profileName string) string {
+	if profileName == "" {
+		return ""
+	}
+	initProfileManager()
+	p, err := profileManager.Get(profileName)
+	if err != nil {
+		slog.Debug("profile not found in cache", "profile", profileName)
+
+		return ""
+	}
+
+	return p.Content
+}
+
+// requireProfile checks that the given profile is cached (or empty).
+// If set but not found, it tells the user to download it first.
+func requireProfile(profileName string) error {
+	if profileName == "" {
+		return nil
+	}
+	initProfileManager()
+	_, err := profileManager.Get(profileName)
+	if err != nil {
+		return fmt.Errorf("profile %q not found.\n\n"+
+			"First download it:  gud profile save %s\n"+
+			"See all:            gud profile list --remote", profileName, profileName)
+	}
+
+	return nil
 }
 
 // getStagedDiffOrError retrieves the staged diff and returns an error if none exists.
@@ -141,13 +179,6 @@ func validateConfig(cfg Config) Config {
 		cfg.DetailLevel = request.DetailStandard
 	}
 
-	switch cfg.Persona {
-	case request.PersonaEmbedded, request.PersonaConventional:
-		// valid
-	default:
-		cfg.Persona = request.PersonaEmbedded
-	}
-
 	switch cfg.ACP {
 	case ACPProviderGemini, ACPProviderOpenCode:
 		// valid
@@ -159,6 +190,12 @@ func validateConfig(cfg Config) Config {
 		cfg.History = 0
 	} else if cfg.History > maxHistory {
 		cfg.History = maxHistory
+	}
+
+	if cfg.WrapLine < 40 {
+		cfg.WrapLine = 40
+	} else if cfg.WrapLine > 200 {
+		cfg.WrapLine = 200
 	}
 
 	return cfg

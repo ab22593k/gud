@@ -1,4 +1,3 @@
-// Package core provides the CLI command structure and workflow orchestration for git-message.
 package core
 
 import (
@@ -9,97 +8,89 @@ import (
 	"gud/internal/request"
 )
 
+const (
+	testUnknownProfile = "unknown"
+	testHelpFlag       = "--help"
+	testProfileCmdName = "profile"
+)
+
 func TestValidateConfig(t *testing.T) {
 	tests := []struct {
 		name         string
 		inputDetail  request.DetailLevel
-		inputPersona request.PersonaName
+		inputProfile request.ProfileName
 		wantDetail   request.DetailLevel
-		wantPersona  request.PersonaName
+		wantProfile  request.ProfileName
 	}{
 		{
 			name:         "valid minimal detail level preserved",
 			inputDetail:  request.DetailMinimal,
-			inputPersona: request.PersonaEmbedded,
+			inputProfile: "",
 			wantDetail:   request.DetailMinimal,
-			wantPersona:  request.PersonaEmbedded,
+			wantProfile:  "",
 		},
 		{
 			name:         "valid standard detail level preserved",
 			inputDetail:  request.DetailStandard,
-			inputPersona: request.PersonaEmbedded,
+			inputProfile: "",
 			wantDetail:   request.DetailStandard,
-			wantPersona:  request.PersonaEmbedded,
+			wantProfile:  "",
 		},
 		{
 			name:         "valid detailed detail level preserved",
 			inputDetail:  request.DetailDetailed,
-			inputPersona: request.PersonaEmbedded,
+			inputProfile: "",
 			wantDetail:   request.DetailDetailed,
-			wantPersona:  request.PersonaEmbedded,
+			wantProfile:  "",
 		},
 		{
 			name:         "invalid detail level defaults to standard",
 			inputDetail:  "verbose",
-			inputPersona: request.PersonaEmbedded,
+			inputProfile: "",
 			wantDetail:   request.DetailStandard,
-			wantPersona:  request.PersonaEmbedded,
+			wantProfile:  "",
 		},
 		{
 			name:         "empty detail level defaults to standard",
 			inputDetail:  "",
-			inputPersona: request.PersonaEmbedded,
+			inputProfile: "",
 			wantDetail:   request.DetailStandard,
-			wantPersona:  request.PersonaEmbedded,
+			wantProfile:  "",
 		},
 		{
-			name:         "valid embedded persona preserved",
+			name:         "empty profile preserved as empty",
 			inputDetail:  request.DetailStandard,
-			inputPersona: request.PersonaEmbedded,
+			inputProfile: "",
 			wantDetail:   request.DetailStandard,
-			wantPersona:  request.PersonaEmbedded,
+			wantProfile:  "",
 		},
 		{
-			name:         "valid conventional persona preserved",
+			name:         "unknown profile preserved (cached remote profiles are valid)",
 			inputDetail:  request.DetailStandard,
-			inputPersona: request.PersonaConventional,
+			inputProfile: "astrophysicist",
 			wantDetail:   request.DetailStandard,
-			wantPersona:  request.PersonaConventional,
+			wantProfile:  "astrophysicist",
 		},
 		{
-			name:         "invalid persona defaults to embedded",
-			inputDetail:  request.DetailStandard,
-			inputPersona: "google",
-			wantDetail:   request.DetailStandard,
-			wantPersona:  request.PersonaEmbedded,
-		},
-		{
-			name:         "empty persona defaults to embedded",
-			inputDetail:  request.DetailStandard,
-			inputPersona: "",
-			wantDetail:   request.DetailStandard,
-			wantPersona:  request.PersonaEmbedded,
-		},
-		{
-			name:         "both invalid values default correctly",
+			name:         "both detail invalid profile unknown",
 			inputDetail:  "ultra",
-			inputPersona: "unknown",
+			inputProfile: testUnknownProfile,
 			wantDetail:   request.DetailStandard,
-			wantPersona:  request.PersonaEmbedded,
+			wantProfile:  testUnknownProfile,
 		},
 		{
-			name:         "minimal detail with invalid persona",
+			name:         "minimal detail with cached profile",
 			inputDetail:  request.DetailMinimal,
-			inputPersona: "claude",
+			inputProfile: "computer-scientist",
 			wantDetail:   request.DetailMinimal,
-			wantPersona:  request.PersonaEmbedded,
+			wantProfile:  "computer-scientist",
 		},
 		{
-			name:         "detailed detail with empty persona",
+			name:         "detailed detail with empty profile",
 			inputDetail:  request.DetailDetailed,
-			inputPersona: "",
+			inputProfile: "",
 			wantDetail:   request.DetailDetailed,
-			wantPersona:  request.PersonaEmbedded,
+			wantProfile:  "",
 		},
 	}
 
@@ -107,7 +98,7 @@ func TestValidateConfig(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := Config{
 				DetailLevel: tt.inputDetail,
-				Persona:     tt.inputPersona,
+				Profile:     tt.inputProfile,
 			}
 
 			got := validateConfig(cfg)
@@ -115,8 +106,8 @@ func TestValidateConfig(t *testing.T) {
 			if got.DetailLevel != tt.wantDetail {
 				t.Errorf("DetailLevel = %q, want %q", got.DetailLevel, tt.wantDetail)
 			}
-			if got.Persona != tt.wantPersona {
-				t.Errorf("Persona = %q, want %q", got.Persona, tt.wantPersona)
+			if got.Profile != tt.wantProfile {
+				t.Errorf("Profile = %q, want %q", got.Profile, tt.wantProfile)
 			}
 		})
 	}
@@ -163,6 +154,29 @@ func TestValidateConfig(t *testing.T) {
 			}
 		})
 	}
+
+	wrapLineTests := []struct {
+		name   string
+		input  int
+		output int
+	}{
+		{name: "default 72 preserved", input: 72, output: 72},
+		{name: "wrapline 100 preserved", input: 100, output: 100},
+		{name: "below 40 clamped to 40", input: 20, output: 40},
+		{name: "above 200 clamped to 200", input: 300, output: 200},
+		{name: "exactly 40 preserved", input: 40, output: 40},
+		{name: "exactly 200 preserved", input: 200, output: 200},
+	}
+
+	for _, tt := range wrapLineTests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := Config{WrapLine: tt.input}
+			got := validateConfig(cfg)
+			if got.WrapLine != tt.output {
+				t.Errorf("WrapLine = %d, want %d", got.WrapLine, tt.output)
+			}
+		})
+	}
 }
 
 func TestVersionCommand(t *testing.T) {
@@ -196,7 +210,7 @@ func TestRootCommandHelp(t *testing.T) {
 
 	var buf bytes.Buffer
 	rootCmd.SetOut(&buf)
-	rootCmd.SetArgs([]string{"--help"})
+	rootCmd.SetArgs([]string{testHelpFlag})
 
 	err := rootCmd.Execute()
 	if err != nil {
@@ -210,6 +224,9 @@ func TestRootCommandHelp(t *testing.T) {
 	if !strings.Contains(output, "hook") {
 		t.Errorf("help output should list 'hook' subcommand, got %q", output)
 	}
+	if !strings.Contains(output, "profile") {
+		t.Errorf("help output should list 'profile' subcommand, got %q", output)
+	}
 	if !strings.Contains(output, "version") {
 		t.Errorf("help output should list 'version' subcommand, got %q", output)
 	}
@@ -218,6 +235,62 @@ func TestRootCommandHelp(t *testing.T) {
 	}
 	if !strings.Contains(output, "--acp") {
 		t.Errorf("help output should include --acp flag, got %q", output)
+	}
+	if !strings.Contains(output, "--wrapline") {
+		t.Errorf("help output should include --wrapline flag, got %q", output)
+	}
+}
+
+func TestProfileCommandHelp(t *testing.T) {
+	origOut := rootCmd.OutOrStdout()
+	t.Cleanup(func() {
+		rootCmd.SetOut(origOut)
+		rootCmd.SetArgs(nil)
+	})
+
+	var buf bytes.Buffer
+	rootCmd.SetOut(&buf)
+	rootCmd.SetArgs([]string{testProfileCmdName, testHelpFlag})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("profile help command failed: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "list") {
+		t.Errorf("profile help should contain 'list', got %q", output)
+	}
+	if !strings.Contains(output, "save") {
+		t.Errorf("profile help should contain 'save', got %q", output)
+	}
+	if !strings.Contains(output, "remove") {
+		t.Errorf("profile help should contain 'remove', got %q", output)
+	}
+	if !strings.Contains(output, "show") {
+		t.Errorf("profile help should contain 'show', got %q", output)
+	}
+}
+
+func TestProfileListCommand(t *testing.T) {
+	origOut := rootCmd.OutOrStdout()
+	t.Cleanup(func() {
+		rootCmd.SetOut(origOut)
+		rootCmd.SetArgs(nil)
+	})
+
+	var buf bytes.Buffer
+	rootCmd.SetOut(&buf)
+	rootCmd.SetArgs([]string{"profile", "list"})
+
+	err := rootCmd.Execute()
+	if err != nil {
+		t.Fatalf("profile list command failed: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "Cached profiles") && !strings.Contains(output, "No cached profiles") {
+		t.Errorf("profile list output unexpected, got %q", output)
 	}
 }
 
