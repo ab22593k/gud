@@ -10,6 +10,8 @@ import (
 	"strings"
 	"syscall"
 
+	"gud/internal/config"
+	"gud/internal/config/provider"
 	"gud/internal/git"
 	"gud/internal/request"
 
@@ -20,11 +22,46 @@ import (
 // This prevents accidentally dumping hundreds of commits into the prompt and wasting tokens.
 const maxHistory = git.MaxRecentCommits
 
+// loadMergedConfig loads configuration from the JSON file (if it exists),
+// then applies CLI/env overrides on top. The result is validated and returned.
+func loadMergedConfig(cliCfg config.Config) config.Config {
+	fileCfg := loadConfigFile()
+	merged := fileCfg.Merge(cliCfg)
+
+	return merged.Validate()
+}
+
+// loadConfigFile attempts to load configuration from the default JSON path.
+// Returns zero-value Config if the file doesn't exist or can't be read.
+func loadConfigFile() config.Config {
+	path, err := provider.DefaultConfigPath()
+	if err != nil {
+		return config.Config{}
+	}
+
+	p := provider.NewFileProvider(path)
+	cfg, err := p.Load()
+	if err != nil {
+		if os.IsNotExist(err) {
+			slog.Debug("no config file found, using defaults")
+		} else {
+			slog.Debug("failed to load config file", "error", err)
+		}
+
+		return config.Config{}
+	}
+
+	slog.Debug("loaded config file", "path", path)
+
+	return cfg
+}
+
 // runGenerate is the default action: generate a commit message from staged changes.
 func runGenerate(cmd *cobra.Command, _ []string) error {
-	cfg := configFromCmd(cmd)
+	cliCfg := configFromCmd(cmd)
+	cfg := loadMergedConfig(cliCfg)
 
-	if cfg.APIKey == "" && cfg.ACP != ACPProviderOpenCode {
+	if cfg.APIKey == "" && cfg.ACP != config.ACPOpencode {
 		return errors.New("API key is required. Set the GOOGLE_API_KEY environment variable")
 	}
 
@@ -153,7 +190,7 @@ func appendDeletedContext(diff, deleted string) string {
 // empty string if --history is disabled or there are no recent commits.
 // Errors from git are logged at debug level and silently discarded —
 // history is optional context for the AI prompt and should never block generation.
-func buildHistoryContext(ctx context.Context, cfg Config) string {
+func buildHistoryContext(ctx context.Context, cfg config.Config) string {
 	var history string
 	if cfg.History > 0 {
 		var err error
@@ -168,35 +205,4 @@ func buildHistoryContext(ctx context.Context, cfg Config) string {
 	}
 
 	return history
-}
-
-// validateConfig normalizes and validates the shared configuration values.
-func validateConfig(cfg Config) Config {
-	switch cfg.DetailLevel {
-	case request.DetailMinimal, request.DetailStandard, request.DetailDetailed:
-		// valid
-	default:
-		cfg.DetailLevel = request.DetailStandard
-	}
-
-	switch cfg.ACP {
-	case ACPProviderGemini, ACPProviderOpenCode:
-		// valid
-	default:
-		cfg.ACP = ACPProviderGemini
-	}
-
-	if cfg.History < 0 {
-		cfg.History = 0
-	} else if cfg.History > maxHistory {
-		cfg.History = maxHistory
-	}
-
-	if cfg.WrapLine < 40 {
-		cfg.WrapLine = 40
-	} else if cfg.WrapLine > 200 {
-		cfg.WrapLine = 200
-	}
-
-	return cfg
 }

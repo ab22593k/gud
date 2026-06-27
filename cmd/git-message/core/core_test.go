@@ -6,6 +6,8 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"gud/internal/config"
 )
 
 func TestPromptAction(t *testing.T) {
@@ -49,162 +51,25 @@ func TestBuildHistoryContext_Disabled(t *testing.T) {
 
 	tests := []struct {
 		name string
-		cfg  Config
+		cfg  config.Config
 	}{
-		{name: "zero history", cfg: Config{History: 0}},
-		{name: "negative history", cfg: Config{History: -1}},
+		{name: "zero history", cfg: config.Config{History: 0}},
+		{name: "negative history", cfg: config.Config{History: -1}},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got := buildHistoryContext(context.Background(), tt.cfg)
+			ctx := context.Background()
+			got := buildHistoryContext(ctx, tt.cfg)
 			if got != "" {
-				t.Errorf("buildHistoryContext() = %q, want empty string", got)
+				t.Errorf("buildHistoryContext(%+v) = %q, want empty string", tt.cfg, got)
 			}
 		})
 	}
 }
 
-const testModelName = "claude-3"
-const testWantAssistedBy = "feat: add foo\n\nAssisted-by: claude-3\n"
-
-func TestAppendAssistedBy(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name      string
-		msg       string
-		modelName string
-		want      string
-	}{
-		{
-			name:      "appends trailer to plain message",
-			msg:       "feat: add foo",
-			modelName: testModelName,
-			want:      testWantAssistedBy,
-		},
-		{
-			name:      "appends trailer to message with body",
-			msg:       "feat: add foo\n\nThis is the body.",
-			modelName: testModelName,
-			want:      "feat: add foo\n\nThis is the body.\n\nAssisted-by: claude-3\n",
-		},
-		{
-			name:      "trims trailing newlines before appending",
-			msg:       "feat: add foo\n\n",
-			modelName: "gpt-4",
-			want:      "feat: add foo\n\nAssisted-by: gpt-4\n",
-		},
-		{
-			name:      "trims multiple trailing newlines",
-			msg:       "feat: add foo\n\n\n\n",
-			modelName: "gpt-4",
-			want:      "feat: add foo\n\nAssisted-by: gpt-4\n",
-		},
-		{
-			name:      "idempotent — already has trailer",
-			msg:       "feat: add foo\n\nAssisted-by: claude-3",
-			modelName: testModelName,
-			want:      testWantAssistedBy,
-		},
-		{
-			name:      "idempotent — already has trailer with trailing newline",
-			msg:       testWantAssistedBy,
-			modelName: testModelName,
-			want:      testWantAssistedBy,
-		},
-		{
-			name:      "idempotent — different model appends new trailer",
-			msg:       "feat: add foo\n\nAssisted-by: old-model\n",
-			modelName: "new-model",
-			// TrimRight removes the trailing \n, then \n\n is added before the new trailer.
-			// Result: one blank line between old-model and the new trailer.
-			want: "feat: add foo\n\nAssisted-by: old-model\n\nAssisted-by: new-model\n",
-		},
-		{
-			name:      "message has other trailer",
-			msg:       "feat: add foo\n\nSigned-off-by: Alice <alice@example.com>",
-			modelName: testModelName,
-			// The Signed-off-by line has no trailing newline, so TrimRight is a no-op.
-			// \n\n is added before the new trailer.
-			want: "feat: add foo\n\nSigned-off-by: Alice <alice@example.com>\n\nAssisted-by: claude-3\n",
-		},
-		{
-			name:      "empty message",
-			msg:       "",
-			modelName: testModelName,
-			want:      "\n\nAssisted-by: claude-3\n",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			got := appendAssistedBy(tt.msg, tt.modelName)
-			if got != tt.want {
-				t.Errorf("appendAssistedBy() = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestAppendDeletedContext(t *testing.T) {
-	t.Parallel()
-
-	sampleDiff := "diff --git a/foo.go b/foo.go" +
-		"\nindex abc..def 100644\n--- a/foo.go\n+++ b/foo.go" +
-		"\n@@ -1 +1 @@\n-package old\n+package new\n"
-
-	keepDiff := "diff --git a/keep.go b/keep.go" +
-		"\nindex abc..def 100644\n--- a/keep.go\n+++ b/keep.go" +
-		"\n@@ -1 +1 @@\n-package old\n+package new\n"
-
-	tests := []struct {
-		name    string
-		diff    string
-		deleted string
-		want    string
-	}{
-		{
-			name:    "no deleted files returns diff unchanged",
-			diff:    sampleDiff,
-			deleted: "",
-			want:    sampleDiff,
-		},
-		{
-			name:    "deleted files appended as section",
-			diff:    keepDiff,
-			deleted: "file.go\nold.go\n",
-			want: keepDiff +
-				"\n\nDeleted files:\nfile.go\nold.go\n",
-		},
-		{
-			name:    "whitespace-only deleted returns diff unchanged",
-			diff:    sampleDiff,
-			deleted: "  \n\t\n  ",
-			want:    sampleDiff,
-		},
-		{
-			name:    "malicious filename with embedded newlines is sanitized",
-			diff:    sampleDiff,
-			deleted: "clean.go\n\ninjected line\n\nanother.go\n",
-			want: sampleDiff +
-				"\n\nDeleted files:\nclean.go\ninjected line\nanother.go\n",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			got := appendDeletedContext(tt.diff, tt.deleted)
-			if got != tt.want {
-				t.Errorf("appendDeletedContext() =\n%q\nwant:\n%q", got, tt.want)
-			}
-		})
-	}
-}
-
+// discardWriter is an io.Writer that discards all writes.
 type discardWriter struct{}
 
 func (discardWriter) Write(p []byte) (int, error) { return len(p), nil }

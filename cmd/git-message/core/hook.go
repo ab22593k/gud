@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"gud/internal/config"
 	"gud/internal/git"
 	"gud/internal/request"
 
@@ -99,43 +100,17 @@ func runHookUninstall(global bool) error {
 	return nil
 }
 
-// HookConfig holds configuration for the hook mode's commit message generation.
-type HookConfig struct {
-	APIKey      string
-	Model       string
-	Temperature float64
-	DetailLevel request.DetailLevel
-	Hint        string
-	Profile     request.ProfileName
-	ACP         ACPProvider
-	WrapLine    int
-}
-
-// hookConfigFromConfig extracts a HookConfig from the shared CLI Config.
-func hookConfigFromConfig(cfg Config) HookConfig {
-	return HookConfig{
-		APIKey:      cfg.APIKey,
-		Model:       cfg.Model,
-		Temperature: cfg.Temperature,
-		DetailLevel: cfg.DetailLevel,
-		Hint:        cfg.Hint,
-		Profile:     cfg.Profile,
-		ACP:         cfg.ACP,
-		WrapLine:    cfg.WrapLine,
-	}
-}
-
 func runHookMode(cmd *cobra.Command, msgFile string) error {
-	cfg := configFromCmd(cmd)
-	hc := hookConfigFromConfig(cfg)
+	cliCfg := configFromCmd(cmd)
+	cfg := loadMergedConfig(cliCfg)
 
 	ctx := context.Background()
 
-	return runHookModeInternal(ctx, msgFile, hc)
+	return runHookModeInternal(ctx, msgFile, cfg)
 }
 
 // runHookModeInternal generates a commit message and writes it to the message file.
-func runHookModeInternal(ctx context.Context, msgFile string, hc HookConfig) error {
+func runHookModeInternal(ctx context.Context, msgFile string, cfg config.Config) error {
 	diff, err := getStagedDiffOrSkip(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get staged diff: %w", err)
@@ -151,16 +126,16 @@ func runHookModeInternal(ctx context.Context, msgFile string, hc HookConfig) err
 	diff = appendDeletedContext(diff, deleted)
 
 	client, err := request.NewClient(ctx, request.ClientConfig{
-		APIKey:      hc.APIKey,
-		Model:       hc.Model,
-		Temperature: hc.Temperature,
-		ACP:         string(hc.ACP),
+		APIKey:      cfg.APIKey,
+		Model:       cfg.Model,
+		Temperature: cfg.Temperature,
+		ACP:         string(cfg.ACP),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create request client: %w", err)
 	}
 
-	return generateAndWriteMsg(ctx, client, diff, msgFile, hc)
+	return generateAndWriteMsg(ctx, client, diff, msgFile, cfg)
 }
 
 // getStagedDiffOrSkip returns the staged diff, or an empty string if there are no staged changes.
@@ -177,10 +152,10 @@ func getStagedDiffOrSkip(ctx context.Context) (string, error) {
 }
 
 // generateAndWriteMsg generates a commit message and writes it to the message file.
-func generateAndWriteMsg(ctx context.Context, client *request.Client, diff, msgFile string, hc HookConfig) error {
-	profileContent := resolveProfileContent(string(hc.Profile))
-	msg, err := client.GenerateCommitMessageWithContent(ctx, diff, "", hc.DetailLevel, hc.Hint,
-		hc.Profile, profileContent, hc.WrapLine)
+func generateAndWriteMsg(ctx context.Context, client *request.Client, diff, msgFile string, cfg config.Config) error {
+	profileContent := resolveProfileContent(string(cfg.Profile))
+	msg, err := client.GenerateCommitMessageWithContent(ctx, diff, "", request.DetailLevel(cfg.DetailLevel), cfg.Hint,
+		request.ProfileName(cfg.Profile), profileContent, cfg.WrapLine)
 	if err != nil {
 		return fmt.Errorf("failed to generate commit message: %w", err)
 	}

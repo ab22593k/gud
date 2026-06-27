@@ -3,35 +3,12 @@ package core
 import (
 	"os"
 
-	"gud/internal/request"
+	"gud/internal/config"
 
 	"github.com/spf13/cobra"
 )
 
 const version = "0.1.0"
-
-// ACPProvider represents the ACP/A2A provider to use.
-type ACPProvider string
-
-const (
-	// ACPProviderGemini uses Google Gemini via ADK.
-	ACPProviderGemini ACPProvider = "gemini"
-	// ACPProviderOpenCode uses OpenCode.ai via ADK.
-	ACPProviderOpenCode ACPProvider = "opencode"
-)
-
-// Config holds CLI configuration shared across commands.
-type Config struct {
-	DetailLevel request.DetailLevel
-	Profile     request.ProfileName
-	Model       string
-	Temperature float64
-	Hint        string
-	History     int
-	APIKey      string
-	ACP         ACPProvider
-	WrapLine    int
-}
 
 var rootCmd = &cobra.Command{
 	Use:   "message",
@@ -71,18 +48,15 @@ func init() {
 	rootCmd.PersistentFlags().String("model", "", "Gemini model to use (or use GEMINI_MODEL env)")
 	rootCmd.PersistentFlags().Float64("temperature", 1, "Set the generation temperature (0-2, default: 1)")
 	rootCmd.PersistentFlags().Int("wrapline", 72, "Wrap all lines at this character width")
-	rootCmd.PersistentFlags().String("acp", string(ACPProviderGemini),
+	rootCmd.PersistentFlags().String("acp", string(config.ACPGemini),
 		"ACP provider to use (gemini, opencode)")
 
 	rootCmd.AddCommand(profileCmd)
 }
 
 // configFromCmd reads flags from the cobra command and environment variables
-// to construct a normalized Config.
-func configFromCmd(cmd *cobra.Command) Config {
-	// Get* methods can only fail if a flag name is missing at runtime (a
-	// programming error caught at compile-adjacent coverage), so panic
-	// guards make the code self-auditing.
+// to construct a normalized Config. This represents the CLI/env override layer.
+func configFromCmd(cmd *cobra.Command) config.Config {
 	detail := mustGet(cmd, "detail-level", cmd.Flags().GetString)
 	profile := mustGet(cmd, "profile", cmd.Flags().GetString)
 	hint := mustGet(cmd, "hint", cmd.Flags().GetString)
@@ -90,28 +64,25 @@ func configFromCmd(cmd *cobra.Command) Config {
 	model := mustGet(cmd, "model", cmd.Flags().GetString)
 	temp := mustGet(cmd, "temperature", cmd.Flags().GetFloat64)
 	wrapLine := mustGet(cmd, "wrapline", cmd.Flags().GetInt)
-
 	acpString := mustGet(cmd, "acp", cmd.Flags().GetString)
 
-	cfg := Config{
-		DetailLevel: request.DetailLevel(detail),
-		Profile:     request.ProfileName(profile),
+	cfg := config.Config{
+		DetailLevel: config.DetailLevel(detail),
+		Profile:     config.ProfileName(profile),
 		Hint:        hint,
 		History:     history,
 		Model:       model,
 		Temperature: temp,
 		WrapLine:    wrapLine,
 		APIKey:      os.Getenv("GOOGLE_API_KEY"),
-		ACP:         ACPProvider(acpString),
+		ACP:         config.ACPProvider(acpString),
 	}
 	if cfg.Model == "" {
 		cfg.Model = os.Getenv("GEMINI_MODEL")
 	}
-	// Use provider-specific API key
-	if cfg.ACP == ACPProviderOpenCode {
+	if cfg.ACP == config.ACPOpencode {
 		cfg.APIKey = os.Getenv("OPENCODE_API_KEY")
 	}
-	cfg = validateConfig(cfg)
 
 	return cfg
 }

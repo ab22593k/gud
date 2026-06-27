@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"gud/internal/request"
+	"gud/internal/config"
 )
 
 const (
@@ -17,91 +17,91 @@ const (
 func TestValidateConfig(t *testing.T) {
 	tests := []struct {
 		name         string
-		inputDetail  request.DetailLevel
-		inputProfile request.ProfileName
-		wantDetail   request.DetailLevel
-		wantProfile  request.ProfileName
+		inputDetail  config.DetailLevel
+		inputProfile config.ProfileName
+		wantDetail   config.DetailLevel
+		wantProfile  config.ProfileName
 	}{
 		{
 			name:         "valid minimal detail level preserved",
-			inputDetail:  request.DetailMinimal,
+			inputDetail:  config.DetailMinimal,
 			inputProfile: "",
-			wantDetail:   request.DetailMinimal,
+			wantDetail:   config.DetailMinimal,
 			wantProfile:  "",
 		},
 		{
 			name:         "valid standard detail level preserved",
-			inputDetail:  request.DetailStandard,
+			inputDetail:  config.DetailStandard,
 			inputProfile: "",
-			wantDetail:   request.DetailStandard,
+			wantDetail:   config.DetailStandard,
 			wantProfile:  "",
 		},
 		{
 			name:         "valid detailed detail level preserved",
-			inputDetail:  request.DetailDetailed,
+			inputDetail:  config.DetailDetailed,
 			inputProfile: "",
-			wantDetail:   request.DetailDetailed,
+			wantDetail:   config.DetailDetailed,
 			wantProfile:  "",
 		},
 		{
 			name:         "invalid detail level defaults to standard",
 			inputDetail:  "verbose",
 			inputProfile: "",
-			wantDetail:   request.DetailStandard,
+			wantDetail:   config.DetailStandard,
 			wantProfile:  "",
 		},
 		{
 			name:         "empty detail level defaults to standard",
 			inputDetail:  "",
 			inputProfile: "",
-			wantDetail:   request.DetailStandard,
+			wantDetail:   config.DetailStandard,
 			wantProfile:  "",
 		},
 		{
 			name:         "empty profile preserved as empty",
-			inputDetail:  request.DetailStandard,
+			inputDetail:  config.DetailStandard,
 			inputProfile: "",
-			wantDetail:   request.DetailStandard,
+			wantDetail:   config.DetailStandard,
 			wantProfile:  "",
 		},
 		{
 			name:         "unknown profile preserved (cached remote profiles are valid)",
-			inputDetail:  request.DetailStandard,
+			inputDetail:  config.DetailStandard,
 			inputProfile: "astrophysicist",
-			wantDetail:   request.DetailStandard,
+			wantDetail:   config.DetailStandard,
 			wantProfile:  "astrophysicist",
 		},
 		{
 			name:         "both detail invalid profile unknown",
 			inputDetail:  "ultra",
 			inputProfile: testUnknownProfile,
-			wantDetail:   request.DetailStandard,
+			wantDetail:   config.DetailStandard,
 			wantProfile:  testUnknownProfile,
 		},
 		{
 			name:         "minimal detail with cached profile",
-			inputDetail:  request.DetailMinimal,
+			inputDetail:  config.DetailMinimal,
 			inputProfile: "computer-scientist",
-			wantDetail:   request.DetailMinimal,
+			wantDetail:   config.DetailMinimal,
 			wantProfile:  "computer-scientist",
 		},
 		{
 			name:         "detailed detail with empty profile",
-			inputDetail:  request.DetailDetailed,
+			inputDetail:  config.DetailDetailed,
 			inputProfile: "",
-			wantDetail:   request.DetailDetailed,
+			wantDetail:   config.DetailDetailed,
 			wantProfile:  "",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := Config{
+			cfg := config.Config{
 				DetailLevel: tt.inputDetail,
 				Profile:     tt.inputProfile,
 			}
 
-			got := validateConfig(cfg)
+			got := cfg.Validate()
 
 			if got.DetailLevel != tt.wantDetail {
 				t.Errorf("DetailLevel = %q, want %q", got.DetailLevel, tt.wantDetail)
@@ -114,19 +114,19 @@ func TestValidateConfig(t *testing.T) {
 
 	acpTests := []struct {
 		name  string
-		input ACPProvider
-		want  ACPProvider
+		input config.ACPProvider
+		want  config.ACPProvider
 	}{
-		{name: "valid gemini preserved", input: ACPProviderGemini, want: ACPProviderGemini},
-		{name: "valid opencode preserved", input: ACPProviderOpenCode, want: ACPProviderOpenCode},
-		{name: "empty defaults to gemini", input: "", want: ACPProviderGemini},
-		{name: "invalid value defaults to gemini", input: "unknown", want: ACPProviderGemini},
+		{name: "valid gemini preserved", input: config.ACPGemini, want: config.ACPGemini},
+		{name: "valid opencode preserved", input: config.ACPOpencode, want: config.ACPOpencode},
+		{name: "empty defaults to gemini", input: "", want: config.ACPGemini},
+		{name: "invalid value defaults to gemini", input: "unknown", want: config.ACPGemini},
 	}
 
 	for _, tt := range acpTests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := Config{ACP: tt.input}
-			got := validateConfig(cfg)
+			cfg := config.Config{ACP: tt.input}
+			got := cfg.Validate()
 			if got.ACP != tt.want {
 				t.Errorf("ACP = %q, want %q", got.ACP, tt.want)
 			}
@@ -147,8 +147,8 @@ func TestValidateConfig(t *testing.T) {
 
 	for _, tt := range historyTests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := Config{History: tt.inputHist}
-			got := validateConfig(cfg)
+			cfg := config.Config{History: tt.inputHist}
+			got := cfg.Validate()
 			if got.History != tt.wantHist {
 				t.Errorf("History = %d, want %d", got.History, tt.wantHist)
 			}
@@ -170,8 +170,8 @@ func TestValidateConfig(t *testing.T) {
 
 	for _, tt := range wrapLineTests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := Config{WrapLine: tt.input}
-			got := validateConfig(cfg)
+			cfg := config.Config{WrapLine: tt.input}
+			got := cfg.Validate()
 			if got.WrapLine != tt.output {
 				t.Errorf("WrapLine = %d, want %d", got.WrapLine, tt.output)
 			}
