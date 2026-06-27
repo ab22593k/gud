@@ -42,14 +42,15 @@ func NewClient(ctx context.Context, cfg ClientConfig) (*Client, error) {
 	if cfg.APIKey == "" && cfg.ACP != "opencode" {
 		return nil, fmt.Errorf("API key is required")
 	}
-	if cfg.Model == "" {
-		cfg.Model = defaultModel
-	}
 
 	switch cfg.ACP {
 	case "opencode":
 		return newOpenCodeClient(ctx, cfg)
 	default:
+		if cfg.Model == "" {
+			cfg.Model = defaultModel
+		}
+
 		return newGeminiClient(ctx, cfg)
 	}
 }
@@ -81,7 +82,7 @@ func newGeminiClient(ctx context.Context, cfg ClientConfig) (*Client, error) {
 // newOpenCodeClient creates a client using the OpenCode.ai provider.
 func newOpenCodeClient(_ context.Context, cfg ClientConfig) (*Client, error) {
 	modelName := cfg.Model
-	if modelName == "" || modelName == defaultModel {
+	if modelName == "" {
 		modelName = "deepseek-v4-flash"
 	}
 

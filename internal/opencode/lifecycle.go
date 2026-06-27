@@ -64,6 +64,7 @@ func (c *acpClient) sendPrompt(ctx context.Context, req *model.LLMRequest) (*mod
 
 	params := map[string]interface{}{
 		mapKeySessionID: c.sessionID,
+		"model":         req.Model,
 		"prompt": []map[string]interface{}{
 			{contentTypeText: promptText, mapKeyType: contentTypeText},
 		},

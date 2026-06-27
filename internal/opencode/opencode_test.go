@@ -662,6 +662,121 @@ func TestSendPrompt_GoroutineLeak(t *testing.T) {
 	awaitGoroutineCount(t, initial)
 }
 
+// ---------------------------------------------------------------------------
+// Oracle tests: model forwarding to ACP subprocess
+// ---------------------------------------------------------------------------
+
+// pipePair creates a connected pipe pair for intercepting JSON-RPC writes.
+func pipePair(t *testing.T) (*io.PipeWriter, *io.PipeReader) {
+	t.Helper()
+	r, w := io.Pipe()
+	return w, r
+}
+
+// captureACPMessageFromSendPrompt creates a client with piped stdin,
+// calls sendPrompt in a goroutine, and returns the JSON-RPC message
+// written to the pipe. The caller must close stdoutW after the prompt
+// returns to avoid goroutine leaks.
+func captureACPMessageFromSendPrompt(
+	t *testing.T, reqModel string,
+) (*jsonrpcMessage, *io.PipeWriter, context.CancelFunc) {
+	t.Helper()
+
+	c, stdoutW, stdinR := newBlockingClient(t)
+	c.sessionID = "oracle-test-session"
+
+	req := &model.LLMRequest{
+		Model:    reqModel,
+		Contents: genai.Text("test prompt"),
+		Config:   &genai.GenerateContentConfig{},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// Read the JSON-RPC request from the pipe
+	msgCh := make(chan *jsonrpcMessage, 1)
+	go func() {
+		var msg jsonrpcMessage
+		if err := json.NewDecoder(stdinR).Decode(&msg); err != nil {
+			t.Logf("decode stdin: %v", err)
+		}
+		msgCh <- &msg
+	}()
+
+	// sendPrompt writes the request, then blocks waiting for a response.
+	// We cancel the context after capturing the message so it returns.
+	go func() {
+		_, _ = c.sendPrompt(ctx, req)
+	}()
+
+	return <-msgCh, stdoutW, cancel
+}
+
+// Test that req.Model is forwarded faithfully in the session/prompt params.
+// Regression guard: if sendPrompt ever drops req.Model, this test catches it.
+func TestOracle_SendPrompt_ForwardsModel(t *testing.T) {
+	t.Parallel()
+
+	msg, stdoutW, cancel := captureACPMessageFromSendPrompt(t, "test-model-42")
+	defer stdoutW.Close()
+	cancel()
+
+	var params map[string]interface{}
+	if err := json.Unmarshal(msg.Params, &params); err != nil {
+		t.Fatalf("unmarshal params: %v", err)
+	}
+
+	model, ok := params["model"]
+	if !ok {
+		t.Fatal("session/prompt params missing 'model' key — req.Model is not forwarded")
+	}
+	if model != "test-model-42" {
+		t.Errorf("params['model'] = %v, want 'test-model-42'", model)
+	}
+}
+
+// Test that forward slash characters in model paths survive JSON serialization.
+func TestOracle_SendPrompt_ForwardsModelWithSlash(t *testing.T) {
+	t.Parallel()
+
+	msg, stdoutW, cancel := captureACPMessageFromSendPrompt(t, "org/model-name")
+	defer stdoutW.Close()
+	cancel()
+
+	var params map[string]interface{}
+	if err := json.Unmarshal(msg.Params, &params); err != nil {
+		t.Fatalf("unmarshal params: %v", err)
+	}
+	if params["model"] != "org/model-name" {
+		t.Errorf("params['model'] = %v, want 'org/model-name'", params["model"])
+	}
+}
+
+// Test that the model field survives JSON round-trip and appears alongside
+// the sessionId and prompt fields in the same params object.
+func TestOracle_SendPrompt_ModelCoexistsWithOtherParams(t *testing.T) {
+	t.Parallel()
+
+	msg, stdoutW, cancel := captureACPMessageFromSendPrompt(t, "my-model")
+	defer stdoutW.Close()
+	cancel()
+
+	var params map[string]interface{}
+	if err := json.Unmarshal(msg.Params, &params); err != nil {
+		t.Fatalf("unmarshal params: %v", err)
+	}
+
+	if params["sessionId"] != "oracle-test-session" {
+		t.Errorf("params['sessionId'] = %v, want 'oracle-test-session'", params["sessionId"])
+	}
+	if params["model"] != "my-model" {
+		t.Errorf("params['model'] = %v, want 'my-model'", params["model"])
+	}
+	if _, ok := params["prompt"]; !ok {
+		t.Error("params missing 'prompt' key")
+	}
+}
+
 // Test that the config stores the API key correctly.
 func TestConfigStoresAPIKey(t *testing.T) {
 	m := NewModel(Config{
