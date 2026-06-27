@@ -66,6 +66,20 @@ func (m *Model) GenerateContent(
 	}
 }
 
+// CancelPrompt sends a session/cancel notification to abort the current prompt.
+// It is safe to call concurrently with GenerateContent.
+func (m *Model) CancelPrompt() error {
+	m.mu.Lock()
+	client := m.client
+	m.mu.Unlock()
+
+	if client == nil || !client.alive() {
+		return nil
+	}
+
+	return client.cancelPrompt()
+}
+
 // getOrStartClient returns the existing ACP client if still alive, or starts a new one.
 func (m *Model) getOrStartClient(ctx context.Context) (*acpClient, error) {
 	m.mu.Lock()

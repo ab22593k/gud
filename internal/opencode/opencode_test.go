@@ -463,7 +463,8 @@ func TestModel_GenerateContent_ReusesClient(t *testing.T) {
 
 // newBlockingClient creates an acpClient whose decoder blocks on reads.
 // The caller controls when data arrives via the returned write end of the
-// pipe. Drain done when shutting down.
+// pipe. Drain done when shutting down. Note: the decode loop is NOT started
+// — the caller injects messages via stdoutW for manual control.
 func newBlockingClient(t *testing.T) (*acpClient, *io.PipeWriter, *io.PipeReader) {
 	t.Helper()
 
@@ -474,10 +475,11 @@ func newBlockingClient(t *testing.T) (*acpClient, *io.PipeWriter, *io.PipeReader
 	stdinR, stdinW := io.Pipe()
 
 	c := &acpClient{
-		stdin:   stdinW,
-		decoder: json.NewDecoder(stdoutR),
-		nextID:  0,
-		done:    make(chan struct{}),
+		stdin:    stdinW,
+		decoder:  json.NewDecoder(stdoutR),
+		nextID:   0,
+		decodeCh: make(chan decodeResult, 1),
+		done:     make(chan struct{}),
 	}
 
 	return c, stdoutW, stdinR

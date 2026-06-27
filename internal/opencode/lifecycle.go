@@ -3,6 +3,7 @@ package opencode
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -12,7 +13,6 @@ import (
 )
 
 // initialize sends the ACP initialize handshake and verifies the response.
-// It respects context cancellation.
 func (c *acpClient) initialize(ctx context.Context) error {
 	_, err := c.doRequest(ctx, acpMethodInitialize, map[string]interface{}{
 		"protocolVersion":    1,
@@ -31,7 +31,6 @@ func (c *acpClient) initialize(ctx context.Context) error {
 }
 
 // createSession sends session/new and stores the returned session ID.
-// It respects context cancellation.
 func (c *acpClient) createSession(ctx context.Context) error {
 	wd, err := os.Getwd()
 	if err != nil {
@@ -65,8 +64,8 @@ func (c *acpClient) sendPrompt(ctx context.Context, req *model.LLMRequest) (*mod
 	params := map[string]interface{}{
 		mapKeySessionID: c.sessionID,
 		"model":         req.Model,
-		"prompt": []map[string]interface{}{
-			{contentTypeText: promptText, mapKeyType: contentTypeText},
+		"prompt": []map[string]string{
+			{mapKeyType: contentTypeText, contentTypeText: promptText},
 		},
 	}
 
@@ -75,52 +74,43 @@ func (c *acpClient) sendPrompt(ctx context.Context, req *model.LLMRequest) (*mod
 		return nil, err
 	}
 
-	// decodeCh carries each decoded message from the read goroutine.
-	// Buffered with size 1 so the goroutine never blocks on send after
-	// context cancellation.
-	type decodeResult struct {
-		msg jsonrpcMessage
-		err error
-	}
-	decodeCh := make(chan decodeResult, 1)
-
 	var textBuilder strings.Builder
 	for {
-		go func() {
-			var msg jsonrpcMessage
-			err := c.decoder.Decode(&msg)
-			select {
-			case decodeCh <- decodeResult{msg, err}:
-			case <-ctx.Done():
-			}
-		}()
-
-		var r decodeResult
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case r = <-decodeCh:
+		case r, ok := <-c.decodeCh:
+			if !ok {
+				return nil, errors.New("acp client: connection closed")
+			}
 			if r.err != nil {
 				return nil, fmt.Errorf("failed to read prompt response: %w", r.err)
 			}
-		}
 
-		if r.msg.ID == nil {
-			collectAgentMessageChunk(r.msg, &textBuilder)
+			if r.msg.ID == nil {
+				collectAgentMessageChunk(r.msg, &textBuilder)
 
-			continue
-		}
-
-		if *r.msg.ID == id {
-			if r.msg.Error != nil {
-				return nil, fmt.Errorf("session/prompt error %d: %s", r.msg.Error.Code, r.msg.Error.Message)
+				continue
 			}
 
-			content := genai.NewContentFromText(textBuilder.String(), roleModel)
+			if *r.msg.ID == id {
+				if r.msg.Error != nil {
+					return nil, fmt.Errorf("session/prompt error %d: %s", r.msg.Error.Code, r.msg.Error.Message)
+				}
 
-			return &model.LLMResponse{Content: content}, nil
+				content := genai.NewContentFromText(textBuilder.String(), roleModel)
+
+				return &model.LLMResponse{Content: content}, nil
+			}
 		}
 	}
+}
+
+// cancelPrompt sends a session/cancel notification to abort the current prompt.
+func (c *acpClient) cancelPrompt() error {
+	return c.sendNotification(acpMethodSessionCancel, map[string]interface{}{
+		mapKeySessionID: c.sessionID,
+	})
 }
 
 // collectAgentMessageChunk checks if msg is a session/update notification with

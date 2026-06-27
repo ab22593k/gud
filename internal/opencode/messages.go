@@ -16,6 +16,7 @@ const (
 	acpMethodInitialize    = "initialize"
 	acpMethodSessionNew    = "session/new"
 	acpMethodSessionPrompt = "session/prompt"
+	acpMethodSessionCancel = "session/cancel"
 
 	// ACP session update type for streaming text.
 	acpSessionUpdateChunk = "agent_message_chunk"

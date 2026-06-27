@@ -3,6 +3,7 @@ package opencode
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -19,8 +20,16 @@ type acpClient struct {
 	decoder   *json.Decoder
 	nextID    int
 	sessionID string
+	decodeCh  chan decodeResult
 	done      chan struct{} // closed by Wait() goroutine when process exits
 	closeOnce sync.Once
+}
+
+// decodeResult carries a decoded JSON-RPC message or error from the
+// client's background decode loop.
+type decodeResult struct {
+	msg jsonrpcMessage
+	err error
 }
 
 // startACPClient spawns `opencode acp`, initializes the ACP connection,
@@ -43,8 +52,6 @@ func startACPClient(ctx context.Context, cfg Config) (*acpClient, error) {
 
 	cmd.Stderr = os.Stderr
 
-	// Use the user's existing opencode configuration for auth.
-	// Only pass OPENCODE_API_KEY if explicitly provided to override.
 	cmd.Env = os.Environ()
 	if cfg.APIKey != "" {
 		cmd.Env = append(cmd.Env, "OPENCODE_API_KEY="+cfg.APIKey)
@@ -58,20 +65,25 @@ func startACPClient(ctx context.Context, cfg Config) (*acpClient, error) {
 	}
 
 	c := &acpClient{
-		cmd:     cmd,
-		stdin:   stdin,
-		decoder: json.NewDecoder(stdout),
-		done:    make(chan struct{}),
+		cmd:      cmd,
+		stdin:    stdin,
+		decoder:  json.NewDecoder(stdout),
+		decodeCh: make(chan decodeResult, 1),
+		done:     make(chan struct{}),
 	}
 
-	// Monitor process exit in a goroutine so alive() works correctly
-	// even when the process crashes or exits unexpectedly.
+	// Monitor process exit in a goroutine so alive() works correctly.
 	go func() {
 		if err := cmd.Wait(); err != nil {
 			slog.Debug("opencode acp exited with error", "error", err)
 		}
 		close(c.done)
 	}()
+
+	// Start a single background decode goroutine. It runs for the entire
+	// lifetime of this client, eliminating goroutine leaks on context
+	// cancellation.
+	go c.decodeLoop()
 
 	if err := c.initialize(ctx); err != nil {
 		c.close()
@@ -85,6 +97,26 @@ func startACPClient(ctx context.Context, cfg Config) (*acpClient, error) {
 	}
 
 	return c, nil
+}
+
+// decodeLoop runs in a background goroutine, continuously decoding
+// JSON-RPC messages from stdout and forwarding them to decodeCh.
+// It exits when Decode fails (pipe closed) or c.done is signalled.
+func (c *acpClient) decodeLoop() {
+	defer close(c.decodeCh)
+
+	for {
+		var msg jsonrpcMessage
+		err := c.decoder.Decode(&msg)
+		select {
+		case c.decodeCh <- decodeResult{msg, err}:
+		case <-c.done:
+			return
+		}
+		if err != nil {
+			return
+		}
+	}
 }
 
 // alive reports whether the subprocess is still running.
@@ -106,7 +138,7 @@ func (c *acpClient) close() {
 		if c.cmd != nil && c.cmd.Process != nil {
 			_ = c.cmd.Process.Kill()
 		}
-		// Wait for the goroutine to finish, preventing zombie processes.
+		// Wait for the Wait goroutine to finish, preventing zombies.
 		<-c.done
 	})
 }
@@ -131,49 +163,50 @@ func (c *acpClient) sendRequest(method string, params interface{}) (int, error) 
 	return id, nil
 }
 
-// readResponse reads JSON-RPC messages from stdout until a response with the
-// expected ID arrives. Notifications (messages without an ID) are silently
-// skipped. It respects context cancellation.
-func (c *acpClient) readResponse(ctx context.Context, expectedID int) (json.RawMessage, error) {
-	type decodeResult struct {
-		msg jsonrpcMessage
-		err error
+// sendNotification writes a JSON-RPC notification (no ID, no response expected).
+func (c *acpClient) sendNotification(method string, params interface{}) error {
+	msg := jsonrpcMessage{
+		Jsonrpc: jsonrpcVersion,
+		Method:  method,
+		Params:  mustMarshal(params),
 	}
-	decodeCh := make(chan decodeResult, 1)
+	if err := json.NewEncoder(c.stdin).Encode(msg); err != nil {
+		return fmt.Errorf("failed to send %s notification: %w", method, err)
+	}
 
+	return nil
+}
+
+// readResponse reads JSON-RPC messages from the decode loop channel until a
+// response with the expected ID arrives. Notifications (messages without an
+// ID) are silently skipped. It respects context cancellation.
+func (c *acpClient) readResponse(ctx context.Context, expectedID int) (json.RawMessage, error) {
 	for {
-		go func() {
-			var msg jsonrpcMessage
-			err := c.decoder.Decode(&msg)
-			select {
-			case decodeCh <- decodeResult{msg, err}:
-			case <-ctx.Done():
-			}
-		}()
-
-		var r decodeResult
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case r = <-decodeCh:
+		case r, ok := <-c.decodeCh:
+			if !ok {
+				return nil, errors.New("acp client: connection closed")
+			}
 			if r.err != nil {
 				return nil, fmt.Errorf("failed to read response: %w", r.err)
 			}
-		}
 
-		if r.msg.ID == nil {
-			continue
-		}
+			if r.msg.ID == nil {
+				continue
+			}
 
-		if *r.msg.ID != expectedID {
-			continue
-		}
+			if *r.msg.ID != expectedID {
+				continue
+			}
 
-		if r.msg.Error != nil {
-			return nil, fmt.Errorf("RPC error %d: %s", r.msg.Error.Code, r.msg.Error.Message)
-		}
+			if r.msg.Error != nil {
+				return nil, fmt.Errorf("RPC error %d: %s", r.msg.Error.Code, r.msg.Error.Message)
+			}
 
-		return r.msg.Result, nil
+			return r.msg.Result, nil
+		}
 	}
 }
 
