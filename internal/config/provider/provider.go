@@ -23,6 +23,11 @@ func NewFileProvider(path string) *FileProvider {
 	return &FileProvider{path: path}
 }
 
+// Path returns the file path this provider reads and writes.
+func (p *FileProvider) Path() string {
+	return p.path
+}
+
 // DefaultConfigPath returns the default config file path
 // (~/.config/gud/config.json), creating the parent directory if needed.
 func DefaultConfigPath() (string, error) {

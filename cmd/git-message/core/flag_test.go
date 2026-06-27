@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"gud/internal/config"
+	"gud/internal/config/mediator"
 	"gud/internal/config/provider"
 )
 
@@ -181,102 +182,8 @@ func TestValidateConfig(t *testing.T) {
 	}
 }
 
-func TestConfigFromEnv(t *testing.T) {
-	//nolint:gosec // Tests use fake credentials, never real secrets.
-	const testAPIKey = "test-env-api-key"
-	const testModel = "test-env-model"
-
-	t.Setenv("GUD_DETAIL_LEVEL", "minimal")
-	t.Setenv("GUD_PROFILE", "env-profile")
-	t.Setenv("GUD_MODEL", testModel)
-	t.Setenv("GUD_TEMPERATURE", "0.42")
-	t.Setenv("GUD_HINT", "env-hint")
-	t.Setenv("GUD_HISTORY", "7")
-	t.Setenv("GUD_API_KEY", testAPIKey)
-	t.Setenv("GUD_WRAPLINE", "100")
-
-	cfg := configFromEnv()
-
-	if cfg.DetailLevel != config.DetailMinimal {
-		t.Errorf("DetailLevel = %q, want %q", cfg.DetailLevel, config.DetailMinimal)
-	}
-	if cfg.Profile != config.ProfileName("env-profile") {
-		t.Errorf("Profile = %q", cfg.Profile)
-	}
-	if cfg.Model != testModel {
-		t.Errorf("Model = %q", cfg.Model)
-	}
-	if cfg.Temperature != 0.42 {
-		t.Errorf("Temperature = %v", cfg.Temperature)
-	}
-	if cfg.Hint != "env-hint" {
-		t.Errorf("Hint = %q", cfg.Hint)
-	}
-	if cfg.History != 7 {
-		t.Errorf("History = %d", cfg.History)
-	}
-	if cfg.APIKey != testAPIKey {
-		t.Errorf("APIKey = %q", cfg.APIKey)
-	}
-	if cfg.WrapLine != 100 {
-		t.Errorf("WrapLine = %d", cfg.WrapLine)
-	}
-}
-
-func TestConfigFromEnvAliases(t *testing.T) {
-	// OPENCODE_API_KEY should be picked up when GUD_API_KEY is unset
-	t.Setenv("OPENCODE_API_KEY", "opencode-key")
-
-	cfg := configFromEnv()
-
-	if cfg.APIKey != "opencode-key" {
-		t.Errorf("APIKey via OPENCODE_API_KEY = %q, want %q", cfg.APIKey, "opencode-key")
-	}
-
-	// GUD_API_KEY should take precedence over OPENCODE_API_KEY
-	t.Setenv("GUD_API_KEY", "gud-prefers")
-
-	cfg = configFromEnv()
-
-	if cfg.APIKey != "gud-prefers" {
-		t.Errorf("APIKey via GUD_API_KEY = %q, want %q", cfg.APIKey, "gud-prefers")
-	}
-}
-
-func TestConfigFromEnvUnset(t *testing.T) {
-	// No env vars set — all fields should be zero-valued
-	cfg := configFromEnv()
-
-	if cfg.DetailLevel != "" {
-		t.Errorf("DetailLevel = %q, want empty", cfg.DetailLevel)
-	}
-	if cfg.Profile != "" {
-		t.Errorf("Profile = %q, want empty", cfg.Profile)
-	}
-	if cfg.Model != "" {
-		t.Errorf("Model = %q, want empty", cfg.Model)
-	}
-	if cfg.Temperature != 0 {
-		t.Errorf("Temperature = %v, want 0", cfg.Temperature)
-	}
-	if cfg.Hint != "" {
-		t.Errorf("Hint = %q, want empty", cfg.Hint)
-	}
-	if cfg.History != 0 {
-		t.Errorf("History = %d, want 0", cfg.History)
-	}
-	if cfg.APIKey != "" {
-		t.Errorf("APIKey = %q, want empty", cfg.APIKey)
-	}
-	if cfg.WrapLine != 0 {
-		t.Errorf("WrapLine = %d, want 0", cfg.WrapLine)
-	}
-}
-
-func TestConfigPriorityChain(t *testing.T) {
-	// Setup: XDG config file (fourth priority)
+func TestMediatorPriorityChain(t *testing.T) {
 	xdgDir := t.TempDir()
-	t.Setenv("HOME", xdgDir)
 	xdgCfgPath := filepath.Join(xdgDir, ".config", "gud", "config.json")
 	if err := os.MkdirAll(filepath.Dir(xdgCfgPath), 0750); err != nil {
 		t.Fatalf("mkdir XDG: %v", err)
@@ -290,7 +197,6 @@ func TestConfigPriorityChain(t *testing.T) {
 		t.Fatalf("save XDG config: %v", err)
 	}
 
-	// Setup: CWD config file (third priority)
 	cwdDir := t.TempDir()
 	cwdP := provider.NewFileProvider(filepath.Join(cwdDir, "gud.json"))
 	if err := cwdP.Save(config.Config{
@@ -301,90 +207,54 @@ func TestConfigPriorityChain(t *testing.T) {
 		t.Fatalf("save CWD config: %v", err)
 	}
 
-	// Setup: env config (second highest)
 	t.Setenv("GUD_TEMPERATURE", "0.5")
 	t.Setenv("GUD_MODEL", "env-model")
 	t.Setenv("GUD_HISTORY", "3")
 
-	// Setup: CLI config (highest priority)
 	cliCfg := config.Config{
 		Temperature: 0.99,
 		WrapLine:    120,
 	}
 
-	// Manually layer the priority chain (can't easily change CWD in tests)
-	result := config.DefaultConfig()
-	result = result.Merge(loadConfigFile()) // XDG
-	result = result.Merge(loadConfigFrom(
-		filepath.Join(cwdDir, "gud.json"))) // CWD
-	result = result.Merge(configFromEnv()) // env
-	result = result.Merge(cliCfg)          // CLI
-	result = result.Validate()
-
-	// CLI overrides all
-	if result.Temperature != 0.99 {
-		t.Errorf("Temperature (CLI) = %v, want 0.99", result.Temperature)
-	}
-	if result.WrapLine != 120 {
-		t.Errorf("WrapLine (CLI) = %d, want 120", result.WrapLine)
-	}
-
-	// Env overrides files but not CLI
-	if result.Model != "env-model" {
-		t.Errorf("Model (env) = %q, want env-model", result.Model)
-	}
-	if result.History != 3 {
-		t.Errorf("History (env) = %d, want 3", result.History)
-	}
-
-	// CWD overrides XDG but not env/CLI
-	if result.APIKey != "cwd-key" {
-		t.Errorf("APIKey (CWD) = %q, want cwd-key", result.APIKey)
-	}
-
-	// XDG fills in when nothing else overrides
-	if result.DetailLevel != config.DetailDetailed {
-		t.Errorf("DetailLevel (XDG) = %q, want detailed", result.DetailLevel)
-	}
-}
-
-func TestLoadCWDConfig(t *testing.T) {
-	origDir, err := os.Getwd()
+	m := &mediator.Mediator{XDGProvider: xdgP, CWDProvider: cwdP}
+	cfg, err := m.Load(cliCfg)
 	if err != nil {
-		t.Fatalf("Getwd: %v", err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(origDir) })
-
-	cfgDir := t.TempDir()
-	if err := os.Chdir(cfgDir); err != nil {
-		t.Fatalf("Chdir: %v", err)
+		t.Fatalf("Load: %v", err)
 	}
 
-	// No file yet — should return zero value
-	cfg := loadCWDConfig()
-	if cfg.Model != "" {
-		t.Errorf("no CWD config: Model = %q, want empty", cfg.Model)
+	if cfg.Temperature != 0.99 {
+		t.Errorf("Temperature (CLI) = %v, want 0.99", cfg.Temperature)
+	}
+	if cfg.WrapLine != 120 {
+		t.Errorf("WrapLine (CLI) = %d, want 120", cfg.WrapLine)
 	}
 
-	// Create gud.json in CWD
-	p := provider.NewFileProvider(filepath.Join(cfgDir, "gud.json"))
-	saved := config.Config{Model: "cwd-test", History: 7}
-	if err := p.Save(saved); err != nil {
-		t.Fatalf("save: %v", err)
+	if cfg.Model != "env-model" {
+		t.Errorf("Model (env) = %q, want env-model", cfg.Model)
+	}
+	if cfg.History != 3 {
+		t.Errorf("History (env) = %d, want 3", cfg.History)
 	}
 
-	cfg = loadCWDConfig()
-	if cfg.Model != "cwd-test" {
-		t.Errorf("CWD config: Model = %q, want cwd-test", cfg.Model)
+	if cfg.APIKey != "cwd-key" {
+		t.Errorf("APIKey (CWD) = %q, want cwd-key", cfg.APIKey)
 	}
-	if cfg.History != 7 {
-		t.Errorf("CWD config: History = %d, want 7", cfg.History)
+
+	if cfg.DetailLevel != config.DetailDetailed {
+		t.Errorf("DetailLevel (XDG) = %q, want detailed", cfg.DetailLevel)
 	}
 }
 
-func TestConfigPriorityOnlyDefaults(t *testing.T) {
-	// With no file, no env, no CLI — should get DefaultConfig
-	cfg := loadMergedConfig(config.Config{})
+func TestMediatorOnlyDefaults(t *testing.T) {
+	td := t.TempDir()
+	m := &mediator.Mediator{
+		XDGProvider: provider.NewFileProvider(filepath.Join(td, "missing.json")),
+		CWDProvider: provider.NewFileProvider(filepath.Join(td, "also-missing.json")),
+	}
+	cfg, err := m.Load(config.Config{})
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
 
 	defaults := config.DefaultConfig()
 	validated := defaults.Validate()
@@ -394,7 +264,12 @@ func TestConfigPriorityOnlyDefaults(t *testing.T) {
 	}
 }
 
-func TestConfigPriorityOnlyCLI(t *testing.T) {
+func TestMediatorOnlyCLI(t *testing.T) {
+	td := t.TempDir()
+	m := &mediator.Mediator{
+		XDGProvider: provider.NewFileProvider(filepath.Join(td, "missing.json")),
+		CWDProvider: provider.NewFileProvider(filepath.Join(td, "also-missing.json")),
+	}
 	cliCfg := config.Config{
 		DetailLevel: config.DetailMinimal,
 		Model:       "cli-model",
@@ -402,7 +277,10 @@ func TestConfigPriorityOnlyCLI(t *testing.T) {
 		WrapLine:    50,
 	}
 
-	cfg := loadMergedConfig(cliCfg)
+	cfg, err := m.Load(cliCfg)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
 
 	if cfg.DetailLevel != config.DetailMinimal {
 		t.Errorf("DetailLevel = %q, want minimal", cfg.DetailLevel)

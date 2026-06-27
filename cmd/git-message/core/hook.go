@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"gud/internal/config"
+	"gud/internal/config/mediator"
 	"gud/internal/git"
 	"gud/internal/request"
 
@@ -102,7 +103,16 @@ func runHookUninstall(global bool) error {
 
 func runHookMode(cmd *cobra.Command, msgFile string) error {
 	cliCfg := configFromCmd(cmd)
-	cfg := loadMergedConfig(cliCfg)
+
+	m, err := mediator.New()
+	if err != nil {
+		return fmt.Errorf("config mediator: %w", err)
+	}
+
+	cfg, err := m.Load(cliCfg)
+	if err != nil {
+		return fmt.Errorf("config: %w", err)
+	}
 
 	ctx := context.Background()
 
