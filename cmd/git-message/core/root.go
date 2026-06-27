@@ -2,6 +2,7 @@ package core
 
 import (
 	"os"
+	"strconv"
 
 	"gud/internal/config"
 
@@ -52,8 +53,8 @@ func init() {
 	rootCmd.AddCommand(profileCmd)
 }
 
-// configFromCmd reads flags from the cobra command and environment variables
-// to construct a normalized Config. This represents the CLI/env override layer.
+// configFromCmd reads flags from the cobra command to build the CLI override layer.
+// It does NOT read environment variables — that is handled by configFromEnv.
 func configFromCmd(cmd *cobra.Command) config.Config {
 	detail := mustGet(cmd, "detail-level", cmd.Flags().GetString)
 	profile := mustGet(cmd, "profile", cmd.Flags().GetString)
@@ -63,7 +64,7 @@ func configFromCmd(cmd *cobra.Command) config.Config {
 	temp := mustGet(cmd, "temperature", cmd.Flags().GetFloat64)
 	wrapLine := mustGet(cmd, "wrapline", cmd.Flags().GetInt)
 
-	cfg := config.Config{
+	return config.Config{
 		DetailLevel: config.DetailLevel(detail),
 		Profile:     config.ProfileName(profile),
 		Hint:        hint,
@@ -71,12 +72,64 @@ func configFromCmd(cmd *cobra.Command) config.Config {
 		Model:       model,
 		Temperature: temp,
 		WrapLine:    wrapLine,
-		APIKey:      os.Getenv("OPENCODE_API_KEY"),
 		ACP:         config.ACPOpencode,
 	}
-	if cfg.Model == "" {
-		cfg.Model = os.Getenv("GEMINI_MODEL")
+}
+
+// configFromEnv reads configuration from GUD_* environment variables.
+// It returns only the fields that are explicitly set, leaving others
+// as zero values so Merge() applies the correct priority.
+//
+// Recognised variables:
+//
+//	GUD_DETAIL_LEVEL  GUD_PROFILE  GUD_MODEL   GUD_TEMPERATURE
+//	GUD_HINT          GUD_HISTORY  GUD_API_KEY GUD_WRAPLINE
+//	OPENCODE_API_KEY                  (alias for GUD_API_KEY)
+//	GEMINI_MODEL                      (alias for GUD_MODEL)
+func configFromEnv() config.Config {
+	cfg := config.Config{
+		APIKey:  firstSet("GUD_API_KEY", "OPENCODE_API_KEY"),
+		Model:   firstSet("GUD_MODEL", "GEMINI_MODEL"),
+		Profile: config.ProfileName(firstSet("GUD_PROFILE")),
+		Hint:    os.Getenv("GUD_HINT"),
+	}
+
+	v := os.Getenv("GUD_DETAIL_LEVEL")
+	if v != "" {
+		cfg.DetailLevel = config.DetailLevel(v)
+	}
+
+	v = os.Getenv("GUD_TEMPERATURE")
+	if v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			cfg.Temperature = f
+		}
+	}
+
+	v = os.Getenv("GUD_HISTORY")
+	if v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			cfg.History = n
+		}
+	}
+
+	v = os.Getenv("GUD_WRAPLINE")
+	if v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			cfg.WrapLine = n
+		}
 	}
 
 	return cfg
+}
+
+// firstSet returns the first non-empty environment variable from the given keys.
+func firstSet(keys ...string) string {
+	for _, k := range keys {
+		if v := os.Getenv(k); v != "" {
+			return v
+		}
+	}
+
+	return ""
 }

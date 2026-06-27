@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 
@@ -22,16 +23,26 @@ import (
 // This prevents accidentally dumping hundreds of commits into the prompt and wasting tokens.
 const maxHistory = git.MaxRecentCommits
 
-// loadMergedConfig loads configuration from the JSON file (if it exists),
-// then applies CLI/env overrides on top. The result is validated and returned.
+// Config priority (highest to lowest):
+//
+//  1. CLI flags (configFromCmd)
+//  2. Environment variables (configFromEnv)
+//  3. CWD config file (./gud.json)
+//  4. XDG config file (~/.config/gud/config.json)
+//  5. Sensible defaults (DefaultConfig)
+//
+// loadMergedConfig layers all sources with the above priority, then validates.
 func loadMergedConfig(cliCfg config.Config) config.Config {
-	fileCfg := loadConfigFile()
-	merged := fileCfg.Merge(cliCfg)
+	result := config.DefaultConfig()
+	result = result.Merge(loadConfigFile()) // XDG config
+	result = result.Merge(loadCWDConfig())  // CWD config
+	result = result.Merge(configFromEnv())  // env vars
+	result = result.Merge(cliCfg)           // CLI flags
 
-	return merged.Validate()
+	return result.Validate()
 }
 
-// loadConfigFile attempts to load configuration from the default JSON path.
+// loadConfigFile attempts to load configuration from the XDG JSON path.
 // Returns zero-value Config if the file doesn't exist or can't be read.
 func loadConfigFile() config.Config {
 	path, err := provider.DefaultConfigPath()
@@ -39,13 +50,28 @@ func loadConfigFile() config.Config {
 		return config.Config{}
 	}
 
+	return loadConfigFrom(path)
+}
+
+// loadCWDConfig attempts to load configuration from ./gud.json in the
+// current working directory. Returns zero-value Config if not found.
+func loadCWDConfig() config.Config {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return config.Config{}
+	}
+
+	return loadConfigFrom(filepath.Join(cwd, "gud.json"))
+}
+
+// loadConfigFrom reads a config JSON file at the given path.
+// Returns zero-value Config (silently) if the file doesn't exist.
+func loadConfigFrom(path string) config.Config {
 	p := provider.NewFileProvider(path)
 	cfg, err := p.Load()
 	if err != nil {
-		if os.IsNotExist(err) {
-			slog.Debug("no config file found, using defaults")
-		} else {
-			slog.Debug("failed to load config file", "error", err)
+		if !os.IsNotExist(err) {
+			slog.Debug("failed to load config file", "path", path, "error", err)
 		}
 
 		return config.Config{}
