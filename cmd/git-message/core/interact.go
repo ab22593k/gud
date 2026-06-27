@@ -11,7 +11,6 @@ import (
 	"strconv"
 	"strings"
 
-	"gud/internal/config"
 	"gud/internal/git"
 	"gud/internal/request"
 
@@ -26,12 +25,14 @@ const (
 )
 
 // interactiveCommit runs the generate → review → commit loop.
-func interactiveCommit(ctx context.Context, cmd *cobra.Command, client *request.Client,
-	diff, promptContext string, cfg config.Config) error {
+func interactiveCommit(ctx context.Context, cmd *cobra.Command, app *AppContext,
+	diff, promptContext string) error {
 	scanner := bufio.NewScanner(cmd.InOrStdin())
 	out := cmd.OutOrStdout()
 
 	for {
+		cfg := app.Config()
+		client := app.Client()
 		profileContent := resolveProfileContent(string(cfg.Profile))
 		msg, err := showProgress("Rolling in, obscuring the landscape of the codebase...", func() (string, error) {
 			return client.GenerateCommitMessageWithContent(ctx, diff, promptContext, request.DetailLevel(cfg.DetailLevel),

@@ -51,19 +51,19 @@ func TestBuildHistoryContext_Disabled(t *testing.T) {
 
 	tests := []struct {
 		name string
-		cfg  config.Config
+		app  *AppContext
 	}{
-		{name: "zero history", cfg: config.Config{History: 0}},
-		{name: "negative history", cfg: config.Config{History: -1}},
+		{name: "zero history", app: &AppContext{cfg: config.Config{History: 0}}},
+		{name: "negative history", app: &AppContext{cfg: config.Config{History: -1}}},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			ctx := context.Background()
-			got := buildHistoryContext(ctx, tt.cfg)
+			got := buildHistoryContext(ctx, tt.app)
 			if got != "" {
-				t.Errorf("buildHistoryContext(%+v) = %q, want empty string", tt.cfg, got)
+				t.Errorf("buildHistoryContext(%+v) = %q, want empty string", tt.app.Config(), got)
 			}
 		})
 	}

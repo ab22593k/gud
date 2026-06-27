@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"gud/internal/config"
-	"gud/internal/config/mediator"
 	"gud/internal/git"
 	"gud/internal/request"
 
@@ -102,25 +100,18 @@ func runHookUninstall(global bool) error {
 }
 
 func runHookMode(cmd *cobra.Command, msgFile string) error {
-	cliCfg := configFromCmd(cmd)
-
-	m, err := mediator.New()
+	app, err := NewAppContext(cmd)
 	if err != nil {
-		return fmt.Errorf("config mediator: %w", err)
-	}
-
-	cfg, err := m.Load(cliCfg)
-	if err != nil {
-		return fmt.Errorf("config: %w", err)
+		return err
 	}
 
 	ctx := context.Background()
 
-	return runHookModeInternal(ctx, msgFile, cfg)
+	return runHookModeInternal(ctx, msgFile, app)
 }
 
 // runHookModeInternal generates a commit message and writes it to the message file.
-func runHookModeInternal(ctx context.Context, msgFile string, cfg config.Config) error {
+func runHookModeInternal(ctx context.Context, msgFile string, app *AppContext) error {
 	diff, err := getStagedDiffOrSkip(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get staged diff: %w", err)
@@ -135,17 +126,11 @@ func runHookModeInternal(ctx context.Context, msgFile string, cfg config.Config)
 	}
 	diff = appendDeletedContext(diff, deleted)
 
-	client, err := request.NewClient(ctx, request.ClientConfig{
-		APIKey:      cfg.APIKey,
-		Model:       cfg.Model,
-		Temperature: cfg.Temperature,
-		ACP:         string(cfg.ACP),
-	})
-	if err != nil {
-		return fmt.Errorf("failed to create request client: %w", err)
+	if err := app.InitClient(ctx); err != nil {
+		return err
 	}
 
-	return generateAndWriteMsg(ctx, client, diff, msgFile, cfg)
+	return generateAndWriteMsg(ctx, app, diff, msgFile)
 }
 
 // getStagedDiffOrSkip returns the staged diff, or an empty string if there are no staged changes.
@@ -162,15 +147,18 @@ func getStagedDiffOrSkip(ctx context.Context) (string, error) {
 }
 
 // generateAndWriteMsg generates a commit message and writes it to the message file.
-func generateAndWriteMsg(ctx context.Context, client *request.Client, diff, msgFile string, cfg config.Config) error {
+func generateAndWriteMsg(ctx context.Context, app *AppContext, diff, msgFile string) error {
+	cfg := app.Config()
 	profileContent := resolveProfileContent(string(cfg.Profile))
-	msg, err := client.GenerateCommitMessageWithContent(ctx, diff, "", request.DetailLevel(cfg.DetailLevel), cfg.Hint,
-		request.ProfileName(cfg.Profile), profileContent, cfg.WrapLine)
+	msg, err := app.Client().GenerateCommitMessageWithContent(
+		ctx, diff, "", request.DetailLevel(cfg.DetailLevel),
+		cfg.Hint, request.ProfileName(cfg.Profile), profileContent, cfg.WrapLine,
+	)
 	if err != nil {
 		return fmt.Errorf("failed to generate commit message: %w", err)
 	}
 
-	msg = appendAssistedBy(msg, client.ModelName())
+	msg = appendAssistedBy(msg, app.Client().ModelName())
 
 	if err := os.WriteFile(msgFile, []byte(msg), 0600); err != nil {
 		return fmt.Errorf("failed to write message file: %w", err)

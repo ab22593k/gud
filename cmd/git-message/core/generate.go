@@ -10,10 +10,7 @@ import (
 	"strings"
 	"syscall"
 
-	"gud/internal/config"
-	"gud/internal/config/mediator"
 	"gud/internal/git"
-	"gud/internal/request"
 
 	"github.com/spf13/cobra"
 )
@@ -24,26 +21,15 @@ const maxHistory = git.MaxRecentCommits
 
 // runGenerate is the default action: generate a commit message from staged changes.
 func runGenerate(cmd *cobra.Command, _ []string) error {
-	cliCfg := configFromCmd(cmd)
-
-	m, err := mediator.New()
+	app, err := NewAppContext(cmd)
 	if err != nil {
-		return fmt.Errorf("config mediator: %w", err)
-	}
-
-	cfg, err := m.Load(cliCfg)
-	if err != nil {
-		return fmt.Errorf("config: %w", err)
-	}
-
-	if cfg.APIKey == "" {
-		slog.Debug("no API key configured; opencode provider does not require one")
+		return err
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	if err := requireProfile(string(cfg.Profile)); err != nil {
+	if err := app.InitClient(ctx); err != nil {
 		return err
 	}
 
@@ -52,19 +38,9 @@ func runGenerate(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	promptContext := buildHistoryContext(ctx, cfg)
+	promptContext := buildHistoryContext(ctx, app)
 
-	client, err := request.NewClient(ctx, request.ClientConfig{
-		APIKey:      cfg.APIKey,
-		Model:       cfg.Model,
-		Temperature: cfg.Temperature,
-		ACP:         string(cfg.ACP),
-	})
-	if err != nil {
-		return fmt.Errorf("failed to create request client: %w", err)
-	}
-
-	return interactiveCommit(ctx, cmd, client, diff, promptContext, cfg)
+	return interactiveCommit(ctx, cmd, app, diff, promptContext)
 }
 
 // resolveProfileContent returns the AGENTS.md content for a cached profile.
@@ -165,11 +141,11 @@ func appendDeletedContext(diff, deleted string) string {
 // empty string if --history is disabled or there are no recent commits.
 // Errors from git are logged at debug level and silently discarded —
 // history is optional context for the AI prompt and should never block generation.
-func buildHistoryContext(ctx context.Context, cfg config.Config) string {
+func buildHistoryContext(ctx context.Context, app *AppContext) string {
 	var history string
-	if cfg.History > 0 {
+	if app.Config().History > 0 {
 		var err error
-		history, err = git.GetRecentCommits(ctx, cfg.History)
+		history, err = git.GetRecentCommits(ctx, app.Config().History)
 		if err != nil {
 			slog.Debug("failed to get recent commits, proceeding without history", "error", err)
 			history = ""
