@@ -61,7 +61,7 @@ func TestFromEntity(t *testing.T) {
 		Hint:        "explain physics",
 		History:     3,
 		APIKey:      "sk-123",
-		ACP:         config.ACPGemini,
+		ACP:         config.ACPOpencode,
 		WrapLine:    72,
 	}
 
@@ -88,7 +88,7 @@ func TestFromEntity(t *testing.T) {
 	if dto.APIKey != "sk-123" {
 		t.Errorf("APIKey = %q", dto.APIKey)
 	}
-	if dto.ACP != "gemini" {
+	if dto.ACP != "opencode" {
 		t.Errorf("ACP = %q", dto.ACP)
 	}
 	if dto.WrapLine != 72 {

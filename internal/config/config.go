@@ -7,7 +7,6 @@ package config
 type ACPProvider string
 
 const (
-	ACPGemini   ACPProvider = "gemini"
 	ACPOpencode ACPProvider = "opencode"
 )
 
@@ -57,11 +56,11 @@ func (c Config) Validate() Config {
 	}
 
 	switch c.ACP {
-	case ACPGemini, ACPOpencode:
+	case ACPOpencode:
 	case "":
-		c.ACP = ACPGemini
+		c.ACP = ACPOpencode
 	default:
-		c.ACP = ACPGemini
+		c.ACP = ACPOpencode
 	}
 
 	if c.History < 0 {
@@ -120,7 +119,7 @@ func (c Config) Merge(override Config) Config {
 func DefaultConfig() Config {
 	return Config{
 		DetailLevel: DetailStandard,
-		ACP:         ACPGemini,
+		ACP:         ACPOpencode,
 		WrapLine:    72,
 	}
 }

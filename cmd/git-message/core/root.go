@@ -14,7 +14,7 @@ var rootCmd = &cobra.Command{
 	Use:   "message",
 	Short: "Spontaneously combust commit message",
 	Long: `Tool that generates meaningful git commit messages
-using AI (Gemini or OpenCode.ai), based on your staged changes.
+using AI, based on your staged changes.
 
 It supports multiple profiles and detail levels to match your project's style.`,
 	SilenceUsage:  true,
@@ -48,8 +48,6 @@ func init() {
 	rootCmd.PersistentFlags().String("model", "", "Gemini model to use (or use GEMINI_MODEL env)")
 	rootCmd.PersistentFlags().Float64("temperature", 1, "Set the generation temperature (0-2, default: 1)")
 	rootCmd.PersistentFlags().Int("wrapline", 72, "Wrap all lines at this character width")
-	rootCmd.PersistentFlags().String("acp", string(config.ACPGemini),
-		"ACP provider to use (gemini, opencode)")
 
 	rootCmd.AddCommand(profileCmd)
 }
@@ -64,7 +62,6 @@ func configFromCmd(cmd *cobra.Command) config.Config {
 	model := mustGet(cmd, "model", cmd.Flags().GetString)
 	temp := mustGet(cmd, "temperature", cmd.Flags().GetFloat64)
 	wrapLine := mustGet(cmd, "wrapline", cmd.Flags().GetInt)
-	acpString := mustGet(cmd, "acp", cmd.Flags().GetString)
 
 	cfg := config.Config{
 		DetailLevel: config.DetailLevel(detail),
@@ -74,14 +71,11 @@ func configFromCmd(cmd *cobra.Command) config.Config {
 		Model:       model,
 		Temperature: temp,
 		WrapLine:    wrapLine,
-		APIKey:      os.Getenv("GOOGLE_API_KEY"),
-		ACP:         config.ACPProvider(acpString),
+		APIKey:      os.Getenv("OPENCODE_API_KEY"),
+		ACP:         config.ACPOpencode,
 	}
 	if cfg.Model == "" {
 		cfg.Model = os.Getenv("GEMINI_MODEL")
-	}
-	if cfg.ACP == config.ACPOpencode {
-		cfg.APIKey = os.Getenv("OPENCODE_API_KEY")
 	}
 
 	return cfg

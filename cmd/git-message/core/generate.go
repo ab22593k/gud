@@ -61,8 +61,8 @@ func runGenerate(cmd *cobra.Command, _ []string) error {
 	cliCfg := configFromCmd(cmd)
 	cfg := loadMergedConfig(cliCfg)
 
-	if cfg.APIKey == "" && cfg.ACP != config.ACPOpencode {
-		return errors.New("API key is required. Set the GOOGLE_API_KEY environment variable")
+	if cfg.APIKey == "" {
+		slog.Debug("no API key configured; opencode provider does not require one")
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

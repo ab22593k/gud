@@ -117,10 +117,9 @@ func TestValidateConfig(t *testing.T) {
 		input config.ACPProvider
 		want  config.ACPProvider
 	}{
-		{name: "valid gemini preserved", input: config.ACPGemini, want: config.ACPGemini},
 		{name: "valid opencode preserved", input: config.ACPOpencode, want: config.ACPOpencode},
-		{name: "empty defaults to gemini", input: "", want: config.ACPGemini},
-		{name: "invalid value defaults to gemini", input: "unknown", want: config.ACPGemini},
+		{name: "empty defaults to opencode", input: "", want: config.ACPOpencode},
+		{name: "invalid value defaults to opencode", input: "unknown", want: config.ACPOpencode},
 	}
 
 	for _, tt := range acpTests {
@@ -232,9 +231,6 @@ func TestRootCommandHelp(t *testing.T) {
 	}
 	if !strings.Contains(output, "--history") {
 		t.Errorf("help output should include --history flag, got %q", output)
-	}
-	if !strings.Contains(output, "--acp") {
-		t.Errorf("help output should include --acp flag, got %q", output)
 	}
 	if !strings.Contains(output, "--wrapline") {
 		t.Errorf("help output should include --wrapline flag, got %q", output)

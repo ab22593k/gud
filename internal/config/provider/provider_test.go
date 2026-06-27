@@ -95,7 +95,7 @@ func TestSaveAndLoadPartialConfig(t *testing.T) {
 	// Only set a few fields — simulates a partial config file
 	original := config.Config{
 		Model:    "gemini-3.1-flash-lite",
-		ACP:      config.ACPGemini,
+		ACP:      config.ACPOpencode,
 		APIKey:   "sk-partial",
 		WrapLine: 100,
 	}
