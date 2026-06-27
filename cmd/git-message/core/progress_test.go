@@ -58,13 +58,13 @@ func TestShowProgress_CompletesImmediately(t *testing.T) {
 	t.Parallel()
 
 	got, err := showProgress("Fast...", func() (string, error) {
-		return "done", nil
+		return testDoneStr, nil
 	})
 	if err != nil {
 		t.Errorf("showProgress() returned error: %v", err)
 	}
-	if got != "done" {
-		t.Errorf("showProgress() = %q, want %q", got, "done")
+	if got != testDoneStr {
+		t.Errorf("showProgress() = %q, want %q", got, testDoneStr)
 	}
 }
 

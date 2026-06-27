@@ -16,6 +16,12 @@ const (
 	testUnknownProfile = "unknown"
 	testHelpFlag       = "--help"
 	testProfileCmdName = "profile"
+	testVersionCmdName = "version"
+	testListCmdName    = "list"
+	testHookCmdName    = "hook"
+	testAstrophysicist = "astrophysicist"
+	testModelName      = "deepseek-v4-flash"
+	testDoneStr        = "done"
 )
 
 func TestValidateConfig(t *testing.T) {
@@ -71,9 +77,9 @@ func TestValidateConfig(t *testing.T) {
 		{
 			name:         "unknown profile preserved (cached remote profiles are valid)",
 			inputDetail:  config.DetailStandard,
-			inputProfile: "astrophysicist",
+			inputProfile: testAstrophysicist,
 			wantDetail:   config.DetailStandard,
-			wantProfile:  "astrophysicist",
+			wantProfile:  testAstrophysicist,
 		},
 		{
 			name:         "both detail invalid profile unknown",
@@ -305,7 +311,7 @@ func TestVersionCommand(t *testing.T) {
 
 	var buf bytes.Buffer
 	rootCmd.SetOut(&buf)
-	rootCmd.SetArgs([]string{"version"})
+	rootCmd.SetArgs([]string{testVersionCmdName})
 
 	err := rootCmd.Execute()
 	if err != nil {
@@ -395,7 +401,7 @@ func TestProfileListCommand(t *testing.T) {
 
 	var buf bytes.Buffer
 	rootCmd.SetOut(&buf)
-	rootCmd.SetArgs([]string{"profile", "list"})
+	rootCmd.SetArgs([]string{testProfileCmdName, testListCmdName})
 
 	err := rootCmd.Execute()
 	if err != nil {
@@ -417,7 +423,7 @@ func TestHookCommandHelp(t *testing.T) {
 
 	var buf bytes.Buffer
 	rootCmd.SetOut(&buf)
-	rootCmd.SetArgs([]string{"hook", "--help"})
+	rootCmd.SetArgs([]string{testHookCmdName, testHelpFlag})
 
 	err := rootCmd.Execute()
 	if err != nil {

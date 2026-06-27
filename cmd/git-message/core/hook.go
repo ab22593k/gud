@@ -13,8 +13,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const hookCmdName = "hook"
+
 var hookCmd = &cobra.Command{
-	Use:   "hook",
+	Use:   hookCmdName,
 	Short: "Manage git hooks for automatic commit message generation",
 	Long: `Manage git hooks that automatically generate commit messages
 when you run 'git commit'.

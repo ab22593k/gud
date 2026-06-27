@@ -36,8 +36,10 @@ Use 'gud profile save <slug>' to download and cache a profile.
 Use 'gud message --profile <slug>' to generate a message with that profile.`,
 }
 
+const profileListCmdName = "list"
+
 var profileListCmd = &cobra.Command{
-	Use:   "list",
+	Use:   profileListCmdName,
 	Short: "List available profiles",
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		initProfileManager()
