@@ -19,7 +19,7 @@ func TestConfigFromEnv(t *testing.T) {
 	t.Setenv("GUD_TEMPERATURE", "0.42")
 	t.Setenv("GUD_HINT", "env-hint")
 	t.Setenv("GUD_HISTORY", "7")
-	t.Setenv("GUD_API_KEY", testAPIKey)
+	t.Setenv("GOOGLE_API_KEY", testAPIKey)
 	t.Setenv("GUD_WRAPLINE", "100")
 
 	cfg := configFromEnv()
@@ -50,25 +50,8 @@ func TestConfigFromEnv(t *testing.T) {
 	}
 }
 
-func TestConfigFromEnvAliases(t *testing.T) {
-	t.Setenv("OPENCODE_API_KEY", "opencode-key")
-
-	cfg := configFromEnv()
-
-	if cfg.APIKey != "opencode-key" {
-		t.Errorf("APIKey via OPENCODE_API_KEY = %q, want %q", cfg.APIKey, "opencode-key")
-	}
-
-	t.Setenv("GUD_API_KEY", "gud-prefers")
-
-	cfg = configFromEnv()
-
-	if cfg.APIKey != "gud-prefers" {
-		t.Errorf("APIKey via GUD_API_KEY = %q, want %q", cfg.APIKey, "gud-prefers")
-	}
-}
-
 func TestConfigFromEnvUnset(t *testing.T) {
+	t.Setenv("GOOGLE_API_KEY", "")
 	cfg := configFromEnv()
 
 	if cfg.DetailLevel != "" {
@@ -122,6 +105,7 @@ func TestMediatorLoad(t *testing.T) {
 	t.Setenv("GUD_TEMPERATURE", "0.5")
 	t.Setenv("GUD_MODEL", "env-model")
 	t.Setenv("GUD_HISTORY", "3")
+	t.Setenv("GOOGLE_API_KEY", "")
 
 	cliCfg := config.Config{
 		Temperature: 0.99,
@@ -162,6 +146,7 @@ func TestMediatorLoad(t *testing.T) {
 }
 
 func TestMediatorOnlyDefaults(t *testing.T) {
+	t.Setenv("GOOGLE_API_KEY", "")
 	xdgDir := t.TempDir()
 	xdgP := provider.NewFileProvider(filepath.Join(xdgDir, "missing.json"))
 	cwdP := provider.NewFileProvider(filepath.Join(xdgDir, "also-missing.json"))
@@ -221,7 +206,7 @@ func TestValidateStrictUnresolvedPlaceholder(t *testing.T) {
 		{
 			name: "dollar brace placeholder in API key",
 			//nolint:gosec // Test verifies placeholder detection; value is not a real credential.
-			cfg:     config.Config{APIKey: "${GUD_API_KEY}"},
+			cfg:     config.Config{APIKey: "${GOOGLE_API_KEY}"},
 			wantErr: "api_key contains unresolved placeholder",
 		},
 		{

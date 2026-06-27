@@ -4,5 +4,4 @@ use (
 	.
 	./internal/git
 	./internal/request
-	./internal/opencode
 )

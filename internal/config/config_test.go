@@ -11,9 +11,6 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.DetailLevel != DetailStandard {
 		t.Errorf("DefaultConfig().DetailLevel = %q, want %q", cfg.DetailLevel, DetailStandard)
 	}
-	if cfg.ACP != ACPOpencode {
-		t.Errorf("DefaultConfig().ACP = %q, want %q", cfg.ACP, ACPOpencode)
-	}
 	if cfg.WrapLine != 72 {
 		t.Errorf("DefaultConfig().WrapLine = %d, want 72", cfg.WrapLine)
 	}
@@ -38,28 +35,6 @@ func TestValidateDetailLevel(t *testing.T) {
 			got := cfg.Validate()
 			if got.DetailLevel != tt.want {
 				t.Errorf("Validate().DetailLevel = %q, want %q", got.DetailLevel, tt.want)
-			}
-		})
-	}
-}
-
-func TestValidateACP(t *testing.T) {
-	tests := []struct {
-		name  string
-		input ACPProvider
-		want  ACPProvider
-	}{
-		{name: "opencode preserved", input: ACPOpencode, want: ACPOpencode},
-		{name: "empty defaults to opencode", input: "", want: ACPOpencode},
-		{name: "invalid defaults to opencode", input: "anthropic", want: ACPOpencode},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg := Config{ACP: tt.input}
-			got := cfg.Validate()
-			if got.ACP != tt.want {
-				t.Errorf("Validate().ACP = %q, want %q", got.ACP, tt.want)
 			}
 		})
 	}
@@ -120,14 +95,12 @@ func TestMerge(t *testing.T) {
 		Model:       "gemini-3.1-flash-lite",
 		Temperature: 1.0,
 		History:     5,
-		ACP:         ACPOpencode,
 		WrapLine:    72,
 	}
 
 	override := Config{
 		Model:       "gemini-3.1-pro",
 		Temperature: 0.5,
-		ACP:         ACPOpencode,
 	}
 
 	merged := base.Merge(override)
@@ -144,9 +117,6 @@ func TestMerge(t *testing.T) {
 	if merged.History != 5 {
 		t.Errorf("Merge preserved History = %d, want 5", merged.History)
 	}
-	if merged.ACP != ACPOpencode {
-		t.Errorf("Merge overrode ACP = %q, want %q", merged.ACP, ACPOpencode)
-	}
 	if merged.WrapLine != 72 {
 		t.Errorf("Merge preserved WrapLine = %d, want 72", merged.WrapLine)
 	}
@@ -156,7 +126,6 @@ func TestMergeEmptyOverride(t *testing.T) {
 	base := Config{
 		DetailLevel: DetailDetailed,
 		Model:       "gemini-3.1-flash-lite",
-		ACP:         ACPOpencode,
 	}
 
 	merged := base.Merge(Config{})
@@ -166,9 +135,6 @@ func TestMergeEmptyOverride(t *testing.T) {
 	}
 	if merged.Model != "gemini-3.1-flash-lite" {
 		t.Errorf("Merge empty preserved Model = %q", merged.Model)
-	}
-	if merged.ACP != ACPOpencode {
-		t.Errorf("Merge empty preserved ACP = %q", merged.ACP)
 	}
 }
 

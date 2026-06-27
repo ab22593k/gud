@@ -69,6 +69,5 @@ func configFromCmd(cmd *cobra.Command) config.Config {
 		Model:       model,
 		Temperature: temp,
 		WrapLine:    wrapLine,
-		ACP:         config.ACPOpencode,
 	}
 }

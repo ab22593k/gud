@@ -3,7 +3,6 @@ package core
 import (
 	"context"
 	"fmt"
-	"log/slog"
 
 	"gud/internal/config"
 	"gud/internal/config/mediator"
@@ -36,10 +35,6 @@ func NewAppContext(cmd *cobra.Command) (*AppContext, error) {
 		return nil, fmt.Errorf("config: %w", err)
 	}
 
-	if cfg.APIKey == "" {
-		slog.Debug("no API key configured; opencode provider does not require one")
-	}
-
 	if err := requireProfile(string(cfg.Profile)); err != nil {
 		return nil, err
 	}
@@ -64,7 +59,6 @@ func (a *AppContext) InitClient(ctx context.Context) error {
 		APIKey:      a.cfg.APIKey,
 		Model:       a.cfg.Model,
 		Temperature: a.cfg.Temperature,
-		ACP:         string(a.cfg.ACP),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create request client: %w", err)

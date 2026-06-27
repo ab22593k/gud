@@ -17,7 +17,6 @@ func TestToEntity(t *testing.T) {
 		Hint:        "focus on security",
 		History:     10,
 		APIKey:      "sk-test",
-		ACP:         "opencode",
 		WrapLine:    100,
 	}
 
@@ -44,9 +43,6 @@ func TestToEntity(t *testing.T) {
 	if entity.APIKey != "sk-test" {
 		t.Errorf("APIKey = %q", entity.APIKey)
 	}
-	if string(entity.ACP) != "opencode" {
-		t.Errorf("ACP = %q", entity.ACP)
-	}
 	if entity.WrapLine != 100 {
 		t.Errorf("WrapLine = %d", entity.WrapLine)
 	}
@@ -61,7 +57,6 @@ func TestFromEntity(t *testing.T) {
 		Hint:        "explain physics",
 		History:     3,
 		APIKey:      "sk-123",
-		ACP:         config.ACPOpencode,
 		WrapLine:    72,
 	}
 
@@ -88,9 +83,6 @@ func TestFromEntity(t *testing.T) {
 	if dto.APIKey != "sk-123" {
 		t.Errorf("APIKey = %q", dto.APIKey)
 	}
-	if dto.ACP != "opencode" {
-		t.Errorf("ACP = %q", dto.ACP)
-	}
 	if dto.WrapLine != 72 {
 		t.Errorf("WrapLine = %d", dto.WrapLine)
 	}
@@ -105,7 +97,6 @@ func TestRoundTrip(t *testing.T) {
 		Hint:        "mention reaction mechanisms",
 		History:     8,
 		APIKey:      "sk-roundtrip",
-		ACP:         config.ACPOpencode,
 		WrapLine:    80,
 	}
 
@@ -124,7 +115,6 @@ func TestJSONRoundTrip(t *testing.T) {
 		Model:       "gemini-3.1-flash-lite",
 		Temperature: 0.8,
 		History:     5,
-		ACP:         "gemini",
 		WrapLine:    72,
 	}
 
@@ -159,7 +149,6 @@ func TestJSONRoundTrip(t *testing.T) {
 func TestJSONFieldNames(t *testing.T) {
 	dto := ConfigDTO{
 		DetailLevel: "minimal",
-		ACP:         "gemini",
 		APIKey:      "sk-test",
 		WrapLine:    72,
 	}
@@ -175,7 +164,7 @@ func TestJSONFieldNames(t *testing.T) {
 		t.Fatalf("json.Unmarshal to map failed: %v", err)
 	}
 
-	expectedKeys := []string{"detail_level", "acp", "api_key", "wrapline"}
+	expectedKeys := []string{"detail_level", "api_key", "wrapline"}
 	for _, key := range expectedKeys {
 		if _, exists := raw[key]; !exists {
 			t.Errorf("JSON key %q not found in %v", key, raw)
@@ -187,12 +176,8 @@ func TestEmptyDTO(t *testing.T) {
 	dto := ConfigDTO{}
 	entity := dto.ToEntity()
 
-	// All fields should be zero-valued
 	if entity.DetailLevel != "" {
 		t.Errorf("empty DTO: DetailLevel = %q", entity.DetailLevel)
-	}
-	if entity.ACP != "" {
-		t.Errorf("empty DTO: ACP = %q", entity.ACP)
 	}
 	if entity.WrapLine != 0 {
 		t.Errorf("empty DTO: WrapLine = %d", entity.WrapLine)

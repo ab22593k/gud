@@ -137,7 +137,7 @@ func validateStrict(cfg config.Config) error {
 
 	if isKnownPlaceholder(cfg.APIKey) {
 		return fmt.Errorf(
-			"config: %s contains placeholder value %q; replace with a real API key or set via GUD_API_KEY",
+			"config: %s contains placeholder value %q; replace with a real API key or set via GOOGLE_API_KEY",
 			fieldAPIKey, cfg.APIKey,
 		)
 	}
@@ -170,12 +170,10 @@ func isKnownPlaceholder(s string) bool {
 // Recognised variables:
 //
 //	GUD_DETAIL_LEVEL  GUD_PROFILE  GUD_MODEL   GUD_TEMPERATURE
-//	GUD_HINT          GUD_HISTORY  GUD_API_KEY GUD_WRAPLINE
-//	OPENCODE_API_KEY                  (alias for GUD_API_KEY)
-//	GEMINI_MODEL                      (alias for GUD_MODEL)
+//	GUD_HINT          GUD_HISTORY  GOOGLE_API_KEY GUD_WRAPLINE
 func configFromEnv() config.Config {
 	cfg := config.Config{
-		APIKey:  firstSet("GUD_API_KEY", "OPENCODE_API_KEY"),
+		APIKey:  firstSet("GOOGLE_API_KEY"),
 		Model:   firstSet("GUD_MODEL", "GEMINI_MODEL"),
 		Profile: config.ProfileName(firstSet("GUD_PROFILE")),
 		Hint:    os.Getenv("GUD_HINT"),

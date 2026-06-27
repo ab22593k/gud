@@ -40,7 +40,6 @@ func TestSaveAndLoad(t *testing.T) {
 		Hint:        "focus on catalysis",
 		History:     10,
 		APIKey:      "sk-test-key",
-		ACP:         config.ACPOpencode,
 		WrapLine:    80,
 	}
 
@@ -95,7 +94,6 @@ func TestSaveAndLoadPartialConfig(t *testing.T) {
 	// Only set a few fields — simulates a partial config file
 	original := config.Config{
 		Model:    "gemini-3.1-flash-lite",
-		ACP:      config.ACPOpencode,
 		APIKey:   "sk-partial",
 		WrapLine: 100,
 	}

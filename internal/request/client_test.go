@@ -45,8 +45,8 @@ func TestNewClient(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "valid API key with gemini provider",
-			cfg:     ClientConfig{APIKey: "test-api-key", Model: "gemini-2.5-pro", ACP: "gemini"},
+			name:    "valid API key with model",
+			cfg:     ClientConfig{APIKey: "test-api-key", Model: "gemini-2.5-pro"},
 			wantErr: false,
 		},
 	}
@@ -190,17 +190,17 @@ func TestSanitizeOutput(t *testing.T) {
 
 // captureRequestLLM is a mock that captures the LLMRequest for inspection.
 type captureRequestLLM struct {
-    name    string
-    captured *model.LLMRequest
+	name     string
+	captured *model.LLMRequest
 }
 
 func (m *captureRequestLLM) Name() string { return m.name }
 
 func (m *captureRequestLLM) GenerateContent(_ context.Context, req *model.LLMRequest, _ bool) iter.Seq2[*model.LLMResponse, error] {
-    m.captured = req
-    return func(yield func(*model.LLMResponse, error) bool) {
-        yield(&model.LLMResponse{Content: genai.NewContentFromText("fix: address issue", "model")}, nil)
-    }
+	m.captured = req
+	return func(yield func(*model.LLMResponse, error) bool) {
+		yield(&model.LLMResponse{Content: genai.NewContentFromText("fix: address issue", "model")}, nil)
+	}
 }
 
 // TestOracle_Comparable_ModelInRequestMatchesClientModel verifies that the
@@ -208,86 +208,86 @@ func (m *captureRequestLLM) GenerateContent(_ context.Context, req *model.LLMReq
 // to the underlying LLM. A mismatch would mean the API call uses a different
 // model than what appears in the Assisted-by trailer.
 func TestOracle_Comparable_ModelInRequestMatchesClientModel(t *testing.T) {
-    t.Parallel()
+	t.Parallel()
 
-    capture := &captureRequestLLM{name: "fake-llm"}
-    client := NewClientWithGenerator(capture, "gemini-2.5-pro", 0.7)
+	capture := &captureRequestLLM{name: "fake-llm"}
+	client := NewClientWithGenerator(capture, "gemini-2.5-pro", 0.7)
 
-    _, err := client.GenerateCommitMessage(context.Background(),
-        "diff --git a/main.go b/main.go", "",
-        DetailStandard, "", "")
-    if err != nil {
-        t.Fatalf("GenerateCommitMessage: %v", err)
-    }
+	_, err := client.GenerateCommitMessage(context.Background(),
+		"diff --git a/main.go b/main.go", "",
+		DetailStandard, "", "")
+	if err != nil {
+		t.Fatalf("GenerateCommitMessage: %v", err)
+	}
 
-    if capture.captured == nil {
-        t.Fatal("LLM was never called")
-    }
-    if capture.captured.Model != "gemini-2.5-pro" {
-        t.Errorf("req.Model = %q, want %q (must match Client.model for Consistent trailer)", capture.captured.Model, "gemini-2.5-pro")
-    }
+	if capture.captured == nil {
+		t.Fatal("LLM was never called")
+	}
+	if capture.captured.Model != "gemini-2.5-pro" {
+		t.Errorf("req.Model = %q, want %q (must match Client.model for Consistent trailer)", capture.captured.Model, "gemini-2.5-pro")
+	}
 }
 
 // TestOracle_Comparable_ModelNameMatchesConfigured verifies that ModelName()
 // returns the same value used for the API call, closing the provenance loop:
 // config → Client.model → req.Model → ModelName() → Assisted-by trailer.
 func TestOracle_Comparable_ModelNameMatchesConfigured(t *testing.T) {
-    t.Parallel()
+	t.Parallel()
 
-    capture := &captureRequestLLM{name: "fake-llm"}
-    client := NewClientWithGenerator(capture, "gemini-2.5-pro", 0.7)
+	capture := &captureRequestLLM{name: "fake-llm"}
+	client := NewClientWithGenerator(capture, "gemini-2.5-pro", 0.7)
 
-    _, err := client.GenerateCommitMessage(context.Background(),
-        "diff --git a/main.go b/main.go", "",
-        DetailStandard, "", "")
-    if err != nil {
-        t.Fatalf("GenerateCommitMessage: %v", err)
-    }
+	_, err := client.GenerateCommitMessage(context.Background(),
+		"diff --git a/main.go b/main.go", "",
+		DetailStandard, "", "")
+	if err != nil {
+		t.Fatalf("GenerateCommitMessage: %v", err)
+	}
 
-    // The model name used in the API call must equal what ModelName() returns.
-    if client.ModelName() != capture.captured.Model {
-        t.Errorf("ModelName() = %q, req.Model = %q — they MUST agree (Assisted-by trailer would be wrong)", client.ModelName(), capture.captured.Model)
-    }
+	// The model name used in the API call must equal what ModelName() returns.
+	if client.ModelName() != capture.captured.Model {
+		t.Errorf("ModelName() = %q, req.Model = %q — they MUST agree (Assisted-by trailer would be wrong)", client.ModelName(), capture.captured.Model)
+	}
 }
 
 // TestOracle_Claims_DefaultModelIsUsedWhenEmpty verifies that an empty model
 // string in config defaults to the project constant, and that the default is
 // consistently applied to both the API call and the trailer.
 func TestOracle_Claims_DefaultModelIsUsedWhenEmpty(t *testing.T) {
-    t.Parallel()
+	t.Parallel()
 
-    capture := &captureRequestLLM{name: "fake-llm"}
-    client := NewClientWithGenerator(capture, "", 0)
+	capture := &captureRequestLLM{name: "fake-llm"}
+	client := NewClientWithGenerator(capture, "", 0)
 
-    _, err := client.GenerateCommitMessage(context.Background(),
-        "diff --git a/main.go b/main.go", "",
-        DetailStandard, "", "")
-    if err != nil {
-        t.Fatalf("GenerateCommitMessage: %v", err)
-    }
+	_, err := client.GenerateCommitMessage(context.Background(),
+		"diff --git a/main.go b/main.go", "",
+		DetailStandard, "", "")
+	if err != nil {
+		t.Fatalf("GenerateCommitMessage: %v", err)
+	}
 
-    if client.ModelName() != defaultModel {
-        t.Errorf("ModelName() = %q, want %q (default)", client.ModelName(), defaultModel)
-    }
-    if capture.captured.Model != defaultModel {
-        t.Errorf("req.Model = %q, want %q (default)", capture.captured.Model, defaultModel)
-    }
+	if client.ModelName() != defaultModel {
+		t.Errorf("ModelName() = %q, want %q (default)", client.ModelName(), defaultModel)
+	}
+	if capture.captured.Model != defaultModel {
+		t.Errorf("req.Model = %q, want %q (default)", capture.captured.Model, defaultModel)
+	}
 }
 
 func TestClient_GenerateCommitMessage(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name        string
-		diff        string
-		context     string
-		detailLevel DetailLevel
-		hint        string
-		profile     ProfileName
-		mockContent string
-		mockError   string
+		name          string
+		diff          string
+		context       string
+		detailLevel   DetailLevel
+		hint          string
+		profile       ProfileName
+		mockContent   string
+		mockError     string
 		mockRespError string
-		wantErr     bool
-		validateMsg func(t *testing.T, msg string)
+		wantErr       bool
+		validateMsg   func(t *testing.T, msg string)
 	}{
 		{
 			name:        "empty diff returns error",
@@ -344,14 +344,14 @@ func TestClient_GenerateCommitMessage(t *testing.T) {
 			wantErr:     true,
 		},
 		{
-			name:        "response error message returns error",
-			diff:        "diff --git a/main.go b/main.go",
-			context:     "",
-			detailLevel: DetailStandard,
-			hint:        "",
-			profile:     "",
+			name:          "response error message returns error",
+			diff:          "diff --git a/main.go b/main.go",
+			context:       "",
+			detailLevel:   DetailStandard,
+			hint:          "",
+			profile:       "",
 			mockRespError: "API quota exceeded",
-			wantErr:     true,
+			wantErr:       true,
 		},
 		{
 			diff:        "diff --git a/main.go b/main.go",
@@ -370,19 +370,19 @@ func TestClient_GenerateCommitMessage(t *testing.T) {
 			mock := &mockLLM{
 				generateContentFunc: func(ctx context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {
 					return func(yield func(*model.LLMResponse, error) bool) {
-					if tt.mockError != "" {
-						yield(nil, errors.New(tt.mockError))
-						return
-					}
-					if tt.mockRespError != "" {
+						if tt.mockError != "" {
+							yield(nil, errors.New(tt.mockError))
+							return
+						}
+						if tt.mockRespError != "" {
+							yield(&model.LLMResponse{
+								ErrorMessage: tt.mockRespError,
+							}, nil)
+							return
+						}
 						yield(&model.LLMResponse{
-							ErrorMessage: tt.mockRespError,
+							Content: genai.NewContentFromText(tt.mockContent, "model"),
 						}, nil)
-						return
-					}
-					yield(&model.LLMResponse{
-						Content: genai.NewContentFromText(tt.mockContent, "model"),
-					}, nil)
 					}
 				},
 			}

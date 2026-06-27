@@ -3,13 +3,6 @@
 // concerns. Use the dto sub-package for JSON interchange.
 package config
 
-// ACPProvider represents the AI provider backend.
-type ACPProvider string
-
-const (
-	ACPOpencode ACPProvider = "opencode"
-)
-
 // DetailLevel controls the verbosity of generated commit messages.
 type DetailLevel string
 
@@ -34,7 +27,6 @@ type Config struct {
 	Hint        string
 	History     int
 	APIKey      string
-	ACP         ACPProvider
 	WrapLine    int
 }
 
@@ -53,14 +45,6 @@ func (c Config) Validate() Config {
 		c.DetailLevel = DetailStandard
 	default:
 		c.DetailLevel = DetailStandard
-	}
-
-	switch c.ACP {
-	case ACPOpencode:
-	case "":
-		c.ACP = ACPOpencode
-	default:
-		c.ACP = ACPOpencode
 	}
 
 	if c.History < 0 {
@@ -105,9 +89,6 @@ func (c Config) Merge(override Config) Config {
 	if override.APIKey != "" {
 		merged.APIKey = override.APIKey
 	}
-	if override.ACP != "" {
-		merged.ACP = override.ACP
-	}
 	if override.WrapLine != 0 {
 		merged.WrapLine = override.WrapLine
 	}
@@ -119,7 +100,6 @@ func (c Config) Merge(override Config) Config {
 func DefaultConfig() Config {
 	return Config{
 		DetailLevel: DetailStandard,
-		ACP:         ACPOpencode,
 		WrapLine:    72,
 	}
 }

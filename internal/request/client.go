@@ -6,8 +6,6 @@ import (
 	"log/slog"
 	"strings"
 
-	"gud/internal/opencode"
-
 	"google.golang.org/adk/model"
 	"google.golang.org/adk/model/gemini"
 	"google.golang.org/genai"
@@ -23,7 +21,6 @@ type ClientConfig struct {
 	APIKey      string
 	Model       string
 	Temperature float64
-	ACP         string // "gemini" or "opencode"
 }
 
 // Client wraps an ADK model.LLM for generating commit messages.
@@ -39,20 +36,14 @@ const defaultModel = "gemini-3.1-flash-lite"
 // The caller is responsible for providing a context that can carry timeouts
 // and cancellation.
 func NewClient(ctx context.Context, cfg ClientConfig) (*Client, error) {
-	if cfg.APIKey == "" && cfg.ACP != "opencode" {
+	if cfg.APIKey == "" {
 		return nil, fmt.Errorf("API key is required")
 	}
-
-	switch cfg.ACP {
-	case "opencode":
-		return newOpenCodeClient(ctx, cfg)
-	default:
-		if cfg.Model == "" {
-			cfg.Model = defaultModel
-		}
-
-		return newGeminiClient(ctx, cfg)
+	if cfg.Model == "" {
+		cfg.Model = defaultModel
 	}
+
+	return newGeminiClient(ctx, cfg)
 }
 
 // newGeminiClient creates a client using the ADK Gemini model.
@@ -79,33 +70,6 @@ func newGeminiClient(ctx context.Context, cfg ClientConfig) (*Client, error) {
 	}, nil
 }
 
-// newOpenCodeClient creates a client using the OpenCode.ai provider.
-func newOpenCodeClient(_ context.Context, cfg ClientConfig) (*Client, error) {
-	modelName := cfg.Model
-	if modelName == "" {
-		modelName = "deepseek-v4-flash"
-	}
-
-	openCodeModel := opencode.NewModel(opencode.Config{
-		APIKey: cfg.APIKey,
-		Model:  modelName,
-	})
-
-	var temp *float32
-	if cfg.Temperature != 0 {
-		t := float32(cfg.Temperature)
-		temp = &t
-	}
-
-	slog.Debug("created opencode client", "model", modelName, "temperature", cfg.Temperature)
-
-	return &Client{
-		modelImpl:   openCodeModel,
-		model:       modelName,
-		temperature: temp,
-	}, nil
-}
-
 // ModelName returns the model name used by this client.
 func (c *Client) ModelName() string {
 	return c.model
@@ -128,13 +92,12 @@ func NewClientWithGenerator(llm model.LLM, modelName string, temperature float64
 	}
 }
 
-// GenerateCommitMessage generates a commit message based on the provided diff, commit context, detail level, hint, and profile.
+// GenerateCommitMessage generates a commit message based on the provided diff.
 func (c *Client) GenerateCommitMessage(ctx context.Context, diff, commitContext string, detailLevel DetailLevel, hint string, profile ProfileName) (string, error) {
 	return c.GenerateCommitMessageWithContent(ctx, diff, commitContext, detailLevel, hint, profile, "", defaultWrapLine)
 }
 
 // GenerateCommitMessageWithContent generates a commit message with an optional custom system prompt content.
-// If systemContent is non-empty, it overrides the profile's built-in system prompt.
 func (c *Client) GenerateCommitMessageWithContent(ctx context.Context, diff, commitContext string, detailLevel DetailLevel, hint string, profile ProfileName, systemContent string, wrapLine int) (string, error) {
 	if diff == "" {
 		return "", fmt.Errorf("diff is required")
@@ -204,49 +167,34 @@ func extractText(content *genai.Content) (string, error) {
 	return sanitizeOutput(sb.String()), nil
 }
 
-// sanitizeOutput cleans AI-generated text by stripping markdown code fences,
-// common preamble text, and trailing AI commentary. It also trims whitespace.
-// The goal is to enforce plain-text output suitable for direct use (e.g., git commit messages).
+// sanitizeOutput cleans AI-generated text.
 func sanitizeOutput(text string) string {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return text
 	}
 
-	// Step 1: Extract content from markdown code fences if the whole response is wrapped
 	text = extractFromCodeFences(text)
-
-	// Step 2: Strip common preamble lines ("Here is your commit message:", etc.)
 	text = stripPreamble(text)
-
-	// Step 3: Truncate at common trailing delimiters
 	text = stripAfterDelimiter(text)
 
-	// Step 4: Final trim
 	return strings.TrimSpace(text)
 }
 
-// extractFromCodeFences checks if the text is wrapped in markdown code fences
-// (triple backticks) and extracts the content from inside.
 func extractFromCodeFences(text string) string {
 	lines := strings.Split(text, "\n")
 
-	// Check if first line is a code fence opener (``` or ```language)
 	if len(lines) > 1 && strings.HasPrefix(strings.TrimSpace(lines[0]), "```") {
-		// Find closing fence
 		for i := len(lines) - 1; i > 0; i-- {
 			if strings.TrimSpace(lines[i]) == "```" {
 				return strings.Join(lines[1:i], "\n")
 			}
 		}
-		// No closing fence found; remove the opening fence line
 		return strings.Join(lines[1:], "\n")
 	}
 
-	// Check for inline backtick wrapping (single backticks around whole message)
 	if strings.HasPrefix(text, "`") && strings.HasSuffix(text, "`") {
 		inner := text[1 : len(text)-1]
-		// Only strip if there's no unclosed backtick inside
 		if !strings.Contains(inner, "`") {
 			return inner
 		}
@@ -255,10 +203,7 @@ func extractFromCodeFences(text string) string {
 	return text
 }
 
-// stripPreamble iteratively removes common introductory lines that models add
-// before the actual output. It handles both single-line and multi-line preamble.
 func stripPreamble(text string) string {
-	// Known preamble patterns (case-insensitive)
 	preamblePrefixes := []string{
 		"here is your commit message",
 		"here's the commit message",
@@ -298,14 +243,11 @@ func stripPreamble(text string) string {
 	return text
 }
 
-// stripAfterDelimiter removes trailing AI commentary by truncating at common
-// delimiter patterns that separate the output from meta-commentary.
 func stripAfterDelimiter(text string) string {
 	lines := strings.Split(text, "\n")
 
 	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		// Common delimiter patterns: ---  ___  ***
 		if trimmed == "---" || trimmed == "___" || trimmed == "***" {
 			return strings.TrimSpace(strings.Join(lines[:i], "\n"))
 		}

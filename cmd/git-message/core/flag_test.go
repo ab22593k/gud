@@ -122,26 +122,6 @@ func TestValidateConfig(t *testing.T) {
 		})
 	}
 
-	acpTests := []struct {
-		name  string
-		input config.ACPProvider
-		want  config.ACPProvider
-	}{
-		{name: "valid opencode preserved", input: config.ACPOpencode, want: config.ACPOpencode},
-		{name: "empty defaults to opencode", input: "", want: config.ACPOpencode},
-		{name: "invalid value defaults to opencode", input: "unknown", want: config.ACPOpencode},
-	}
-
-	for _, tt := range acpTests {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg := config.Config{ACP: tt.input}
-			got := cfg.Validate()
-			if got.ACP != tt.want {
-				t.Errorf("ACP = %q, want %q", got.ACP, tt.want)
-			}
-		})
-	}
-
 	historyTests := []struct {
 		name      string
 		inputHist int
@@ -216,6 +196,7 @@ func TestMediatorPriorityChain(t *testing.T) {
 	t.Setenv("GUD_TEMPERATURE", "0.5")
 	t.Setenv("GUD_MODEL", "env-model")
 	t.Setenv("GUD_HISTORY", "3")
+	t.Setenv("GOOGLE_API_KEY", "")
 
 	cliCfg := config.Config{
 		Temperature: 0.99,
@@ -252,6 +233,7 @@ func TestMediatorPriorityChain(t *testing.T) {
 }
 
 func TestMediatorOnlyDefaults(t *testing.T) {
+	t.Setenv("GOOGLE_API_KEY", "")
 	td := t.TempDir()
 	m := &mediator.Mediator{
 		XDGProvider: provider.NewFileProvider(filepath.Join(td, "missing.json")),
