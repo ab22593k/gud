@@ -34,6 +34,9 @@ func runGenerate(cmd *cobra.Command, _ []string) error {
 		slog.Debug("helixdb init failed, proceeding without", "error", err)
 	}
 
+	// Stop HelixDB container on return if we auto-started it.
+	defer app.StopHelixDB(ctx)
+
 	if err := app.InitClient(ctx); err != nil {
 		return err
 	}

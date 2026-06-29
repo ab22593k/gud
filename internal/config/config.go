@@ -20,16 +20,18 @@ type ProfileName string
 // Zero values represent "not set" and are treated as undefined, allowing
 // layered overrides (file → env → CLI flags).
 type Config struct {
-	DetailLevel    DetailLevel
-	Profile        ProfileName
-	Model          string
-	Temperature    float64
-	Hint           string
-	History        int
-	APIKey         string
-	WrapLine       int
-	HelixDBEnabled bool
-	HelixDBURL     string
+	DetailLevel          DetailLevel
+	Profile              ProfileName
+	Model                string
+	Temperature          float64
+	Hint                 string
+	History              int
+	APIKey               string
+	WrapLine             int
+	HelixDBEnabled       bool
+	HelixDBURL           string
+	HelixDBAutoManage    bool
+	HelixDBContainerName string
 }
 
 const (
@@ -99,6 +101,12 @@ func (c Config) Merge(override Config) Config {
 	}
 	if override.HelixDBURL != "" {
 		merged.HelixDBURL = override.HelixDBURL
+	}
+	if override.HelixDBAutoManage {
+		merged.HelixDBAutoManage = true
+	}
+	if override.HelixDBContainerName != "" {
+		merged.HelixDBContainerName = override.HelixDBContainerName
 	}
 
 	return merged

@@ -171,7 +171,7 @@ func isKnownPlaceholder(s string) bool {
 //
 //	GUD_DETAIL_LEVEL  GUD_PROFILE  GUD_MODEL   GUD_TEMPERATURE
 //	GUD_HINT          GUD_HISTORY  GOOGLE_API_KEY GUD_WRAPLINE
-//	GUD_HELIXDB_ENABLED  GUD_HELIXDB_URL
+//	GUD_HELIXDB_ENABLED  GUD_HELIXDB_URL  GUD_HELIXDB_AUTO_MANAGE  GUD_HELIXDB_CONTAINER_NAME
 func configFromEnv() config.Config {
 	cfg := config.Config{
 		APIKey:  firstSet("GOOGLE_API_KEY"),
@@ -214,6 +214,16 @@ func configFromEnv() config.Config {
 	v = os.Getenv("GUD_HELIXDB_URL")
 	if v != "" {
 		cfg.HelixDBURL = v
+	}
+
+	v = os.Getenv("GUD_HELIXDB_AUTO_MANAGE")
+	if v != "" {
+		cfg.HelixDBAutoManage = v == "1" || v == "true" || v == "yes"
+	}
+
+	v = os.Getenv("GUD_HELIXDB_CONTAINER_NAME")
+	if v != "" {
+		cfg.HelixDBContainerName = v
 	}
 
 	return cfg

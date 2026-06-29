@@ -45,6 +45,8 @@ func interactiveCommit(ctx context.Context, cmd *cobra.Command, app *AppContext,
 			return fmt.Errorf("failed to generate commit message: %w", err)
 		}
 
+		msg = appendAssistedBy(msg, client.ModelName())
+
 		_, _ = fmt.Fprintln(out, "")
 		_, _ = fmt.Fprintln(out, msg)
 		_, _ = fmt.Fprintln(out, "")
@@ -52,7 +54,6 @@ func interactiveCommit(ctx context.Context, cmd *cobra.Command, app *AppContext,
 		action := promptAction(scanner, out)
 		switch action {
 		case actionCommit:
-			msg = appendAssistedBy(msg, client.ModelName())
 			hash, err := git.Commit(ctx, msg)
 			if err != nil {
 				return err

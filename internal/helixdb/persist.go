@@ -23,7 +23,7 @@ func BuildPersistCommitQuery(data CommitData) helix.Request {
 				helix.Prop("repo_path", data.RepoPath),
 			}))
 		b.VarAs("mod_"+safeVarName(f.Path),
-			helix.G().AddE("MODIFIES", helix.NodeVar("commit"), helix.Props{
+			helix.G().N(helix.NodeVar("commit")).AddE("MODIFIES", helix.NodeVar("file_"+safeVarName(f.Path)), helix.Props{
 				helix.Prop("change_type", f.ChangeType),
 				helix.Prop("lines_added", f.LinesAdded),
 				helix.Prop("lines_deleted", f.LinesDeleted),

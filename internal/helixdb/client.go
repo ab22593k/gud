@@ -82,7 +82,7 @@ func (db *DB) IsAvailable(ctx context.Context) bool {
 	healthCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(healthCtx, http.MethodGet, db.baseURL+"/v1/health", nil)
+	req, err := http.NewRequestWithContext(healthCtx, http.MethodGet, db.baseURL+"/health", nil)
 	if err != nil {
 		return false
 	}
@@ -125,7 +125,7 @@ func (db *DB) EnsureSchema(ctx context.Context) error {
 
 	for _, idx := range indexes {
 		req := helix.WriteQuery("schema_migration").VarAs("_", idx).Returning()
-		if err := db.client.Exec(ctx, req, nil, helix.WarmOnly()); err != nil {
+		if err := db.client.Exec(ctx, req, nil); err != nil {
 			return fmt.Errorf("schema migration: %w", err)
 		}
 	}

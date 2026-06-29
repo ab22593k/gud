@@ -149,7 +149,15 @@ func getStagedDiffOrSkip(ctx context.Context) (string, error) {
 }
 
 // generateAndWriteMsg generates a commit message and writes it to the message file.
+// If the file already contains meaningful content (non-comment lines), it is
+// left untouched — this prevents a prepare-commit-msg hook from overwriting a
+// message provided by an interactive git-message commit or git commit -m.
 func generateAndWriteMsg(ctx context.Context, app *AppContext, diff, msgFile string) error {
+	existing, err := os.ReadFile(msgFile)
+	if err == nil && hasMeaningfulContent(string(existing)) {
+		return nil
+	}
+
 	cfg := app.Config()
 	profileContent := resolveProfileContent(string(cfg.Profile))
 	msg, err := app.Client().GenerateCommitMessageWithContent(
@@ -167,6 +175,20 @@ func generateAndWriteMsg(ctx context.Context, app *AppContext, diff, msgFile str
 	}
 
 	return nil
+}
+
+// hasMeaningfulContent reports whether text contains any line that is not a
+// git comment line (starting with #). The default COMMIT_EDITMSG template
+// consists entirely of comments, so this distinguishes "user supplied a
+// message" from "git created an empty template".
+func hasMeaningfulContent(text string) bool {
+	for _, line := range strings.Split(text, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed != "" && !strings.HasPrefix(trimmed, "#") {
+			return true
+		}
+	}
+	return false
 }
 
 func init() {
