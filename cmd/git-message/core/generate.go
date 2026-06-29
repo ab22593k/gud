@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	"gud/internal/git"
+	"gud/internal/helixdb"
 
 	"github.com/spf13/cobra"
 )
@@ -29,6 +30,10 @@ func runGenerate(cmd *cobra.Command, _ []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	if err := app.InitHelixDB(ctx); err != nil {
+		slog.Debug("helixdb init failed, proceeding without", "error", err)
+	}
+
 	if err := app.InitClient(ctx); err != nil {
 		return err
 	}
@@ -38,9 +43,12 @@ func runGenerate(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	promptContext := buildHistoryContext(ctx, app)
+	units := git.ExtractCodeUnits(diff)
 
-	return interactiveCommit(ctx, cmd, app, diff, promptContext)
+	promptContext := buildHistoryContext(ctx, app)
+	promptContext = maybeAppendHelixDBContext(ctx, app, diff, units, promptContext)
+
+	return interactiveCommit(ctx, cmd, app, diff, promptContext, units)
 }
 
 // resolveProfileContent returns the AGENTS.md content for a cached profile.
@@ -135,6 +143,51 @@ func appendDeletedContext(diff, deleted string) string {
 	b.WriteString("\n")
 
 	return b.String()
+}
+
+// maybeAppendHelixDBContext queries HelixDB for semantically relevant context
+// based on the current diff and appends it to the prompt context string.
+// Errors are logged and silently discarded — HelixDB context is optional.
+func maybeAppendHelixDBContext(ctx context.Context, app *AppContext, diff string, units []git.CodeUnit, existingContext string) string {
+	db := app.HelixDB()
+	if db == nil || !db.Enabled() || !db.IsAvailable(ctx) {
+		return existingContext
+	}
+
+	if len(units) == 0 {
+		return existingContext
+	}
+
+	filePaths := make([]string, 0, len(units))
+	for _, u := range units {
+		filePaths = append(filePaths, u.FilePath)
+	}
+
+	repoPath, err := git.GetRepoRoot(ctx)
+	if err != nil || repoPath == "" {
+		slog.Debug("helixdb: failed to get repo root", "error", err)
+		return existingContext
+	}
+
+	branch := ""
+	query := helixdb.BuildContextQuery(repoPath, branch, filePaths, diff)
+	var resp map[string]any
+	if err := db.Exec(ctx, query, &resp); err != nil {
+		slog.Debug("helixdb context query failed", "error", err)
+		return existingContext
+	}
+
+	records := helixdb.ParseContextResults(resp)
+	if len(records) == 0 {
+		return existingContext
+	}
+
+	ctxStr := helixdb.FormatContextRecords(records)
+	if existingContext != "" {
+		return existingContext + "\n\n" + ctxStr
+	}
+
+	return ctxStr
 }
 
 // buildHistoryContext returns a formatted string of recent commit history, or

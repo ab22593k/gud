@@ -46,8 +46,11 @@ func init() {
 	rootCmd.PersistentFlags().String("model", "", "Gemini model to use (or use GEMINI_MODEL env)")
 	rootCmd.PersistentFlags().Float64("temperature", 1, "Set the generation temperature (0-2, default: 1)")
 	rootCmd.PersistentFlags().Int("wrapline", 72, "Wrap all lines at this character width")
+	rootCmd.PersistentFlags().Bool("helixdb-enabled", false, "Enable HelixDB memory and analytics")
+	rootCmd.PersistentFlags().String("helixdb-url", "http://localhost:6969", "HelixDB server URL")
 
 	rootCmd.AddCommand(profileCmd)
+	rootCmd.AddCommand(statsCmd)
 }
 
 // configFromCmd reads flags from the cobra command to build the CLI override layer.
@@ -60,14 +63,18 @@ func configFromCmd(cmd *cobra.Command) config.Config {
 	model := mustGet(cmd, "model", cmd.Flags().GetString)
 	temp := mustGet(cmd, "temperature", cmd.Flags().GetFloat64)
 	wrapLine := mustGet(cmd, "wrapline", cmd.Flags().GetInt)
+	helixDBEnabled := mustGet(cmd, "helixdb-enabled", cmd.Flags().GetBool)
+	helixDBURL := mustGet(cmd, "helixdb-url", cmd.Flags().GetString)
 
 	return config.Config{
-		DetailLevel: config.DetailLevel(detail),
-		Profile:     config.ProfileName(profile),
-		Hint:        hint,
-		History:     history,
-		Model:       model,
-		Temperature: temp,
-		WrapLine:    wrapLine,
+		DetailLevel:    config.DetailLevel(detail),
+		Profile:        config.ProfileName(profile),
+		Hint:           hint,
+		History:        history,
+		Model:          model,
+		Temperature:    temp,
+		WrapLine:       wrapLine,
+		HelixDBEnabled: helixDBEnabled,
+		HelixDBURL:     helixDBURL,
 	}
 }

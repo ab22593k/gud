@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"strings"
 )
 
 // MaxRecentCommits is the maximum number of recent commits GetRecentCommits can
@@ -28,7 +29,8 @@ func GetStagedDeletedFiles(ctx context.Context) (string, error) {
 }
 
 // Commit runs git commit with the given message piped via stdin.
-func Commit(ctx context.Context, message string) error {
+// It returns the commit hash (abbreviated) on success.
+func Commit(ctx context.Context, message string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", "commit", "-F", "-")
 	cmd.Stdin = bytes.NewBufferString(message)
 	var out bytes.Buffer
@@ -36,10 +38,58 @@ func Commit(ctx context.Context, message string) error {
 	cmd.Stderr = &out
 
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("git commit failed: %w\n%s", err, out.String())
+		return "", fmt.Errorf("git commit failed: %w\n%s", err, out.String())
 	}
 
-	return nil
+	return getHEADHash(ctx)
+}
+
+// GetAuthor returns the git user name in "Name <email>" format.
+// On error, it returns an empty string — callers should handle gracefully.
+func GetAuthor(ctx context.Context) string {
+	name, err := runGitConfig(ctx, "user.name")
+	if err != nil {
+		return ""
+	}
+	email, err := runGitConfig(ctx, "user.email")
+	if err != nil {
+		return strings.TrimSpace(name)
+	}
+
+	return strings.TrimSpace(name) + " <" + strings.TrimSpace(email) + ">"
+}
+
+// runGitConfig runs git config --get <key> and returns the value.
+func runGitConfig(ctx context.Context, key string) (string, error) {
+	cmd := exec.CommandContext(ctx, "git", "config", "--get", key)
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+
+	return string(out), nil
+}
+
+// GetRepoRoot returns the absolute path to the git repository root.
+func GetRepoRoot(ctx context.Context) (string, error) {
+	cmd := exec.CommandContext(ctx, "git", "rev-parse", "--show-toplevel")
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("get repo root: %w", err)
+	}
+
+	return strings.TrimSpace(string(out)), nil
+}
+
+// getHEADHash returns the abbreviated hash of HEAD.
+func getHEADHash(ctx context.Context) (string, error) {
+	cmd := exec.CommandContext(ctx, "git", "rev-parse", "--short", "HEAD")
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("get head hash: %w", err)
+	}
+
+	return strings.TrimSpace(string(out)), nil
 }
 
 // GetRecentCommits returns the last n commit summaries (one-line format).

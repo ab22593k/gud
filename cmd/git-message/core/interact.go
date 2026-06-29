@@ -5,13 +5,16 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"gud/internal/git"
+	"gud/internal/helixdb"
 	"gud/internal/request"
 
 	"github.com/spf13/cobra"
@@ -26,7 +29,7 @@ const (
 
 // interactiveCommit runs the generate → review → commit loop.
 func interactiveCommit(ctx context.Context, cmd *cobra.Command, app *AppContext,
-	diff, promptContext string) error {
+	diff, promptContext string, units []git.CodeUnit) error {
 	scanner := bufio.NewScanner(cmd.InOrStdin())
 	out := cmd.OutOrStdout()
 
@@ -50,10 +53,12 @@ func interactiveCommit(ctx context.Context, cmd *cobra.Command, app *AppContext,
 		switch action {
 		case actionCommit:
 			msg = appendAssistedBy(msg, client.ModelName())
-			if err := git.Commit(ctx, msg); err != nil {
+			hash, err := git.Commit(ctx, msg)
+			if err != nil {
 				return err
 			}
 			_, _ = fmt.Fprintln(out, "Committed successfully.")
+			persistToHelixDB(ctx, app, diff, hash, msg, units)
 
 			return nil
 
@@ -63,10 +68,12 @@ func interactiveCommit(ctx context.Context, cmd *cobra.Command, app *AppContext,
 				return fmt.Errorf("failed to edit message: %w", err)
 			}
 			edited = appendAssistedBy(edited, client.ModelName())
-			if err := git.Commit(ctx, edited); err != nil {
+			hash, err := git.Commit(ctx, edited)
+			if err != nil {
 				return err
 			}
 			_, _ = fmt.Fprintln(out, "Committed successfully.")
+			persistToHelixDB(ctx, app, diff, hash, edited, units)
 
 			return nil
 
@@ -161,4 +168,55 @@ func editMessage(msg string) (string, error) {
 	}
 
 	return strings.TrimSpace(string(edited)), nil
+}
+
+// persistToHelixDB persists the commit data to HelixDB after a successful commit.
+// Errors are logged and silently discarded — HelixDB persistence is fire-and-forget.
+func persistToHelixDB(ctx context.Context, app *AppContext, diff, hash, message string, units []git.CodeUnit) {
+	db := app.HelixDB()
+	if db == nil || !db.Enabled() || !db.IsAvailable(ctx) {
+		return
+	}
+
+	repoPath, err := git.GetRepoRoot(ctx)
+	if err != nil || repoPath == "" {
+		slog.Debug("helixdb: failed to get repo root for persistence", "error", err)
+		return
+	}
+
+	author := git.GetAuthor(ctx)
+
+	var fileChanges []helixdb.FileChange
+	for _, u := range units {
+		existing := false
+		for i := range fileChanges {
+			if fileChanges[i].Path == u.FilePath {
+				existing = true
+				break
+			}
+		}
+		if !existing {
+			fileChanges = append(fileChanges, helixdb.FileChange{
+				Path:       u.FilePath,
+				ChangeType: u.ChangeType,
+			})
+		}
+	}
+
+	commit := helixdb.CommitData{
+		SHA:            hash,
+		RepoPath:       repoPath,
+		Message:        message,
+		DiffText:       diff,
+		Author:         author,
+		Timestamp:      time.Now(),
+		Files:          fileChanges,
+		IsGudGenerated: true,
+	}
+
+	query := helixdb.BuildPersistCommitQuery(commit)
+	var resp map[string]any
+	if err := db.Exec(ctx, query, &resp); err != nil {
+		slog.Debug("helixdb: failed to persist commit", "error", err)
+	}
 }

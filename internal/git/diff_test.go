@@ -135,7 +135,7 @@ func TestCommit(t *testing.T) {
 	defer func() { _ = os.Chdir(origDir) }()
 
 	ctx := context.Background()
-	if err := Commit(ctx, "feat: initial commit\n\nAdd main package."); err != nil {
+	if _, err := Commit(ctx, "feat: initial commit\n\nAdd main package."); err != nil {
 		t.Fatalf("Commit() unexpected error: %v", err)
 	}
 
@@ -182,7 +182,7 @@ func TestCommit_EmptyMessage(t *testing.T) {
 	defer func() { _ = os.Chdir(origDir) }()
 
 	ctx := context.Background()
-	err := Commit(ctx, "")
+	_, err := Commit(ctx, "")
 	if err == nil {
 		t.Fatal("Commit() with empty message should return error")
 	}
@@ -239,7 +239,7 @@ func TestGetStagedDeletedFiles_WithDeletion(t *testing.T) {
 	ctx := context.Background()
 
 	// First commit both files
-	if err := Commit(ctx, "initial commit\n\nAdd file.go and keep.go."); err != nil {
+	if _, err := Commit(ctx, "initial commit\n\nAdd file.go and keep.go."); err != nil {
 		t.Fatalf("initial Commit() failed: %v", err)
 	}
 
@@ -323,7 +323,7 @@ func TestGetStagedDiff_ExcludesRenames(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := Commit(ctx, "initial commit\n\nAdd old.go."); err != nil {
+	if _, err := Commit(ctx, "initial commit\n\nAdd old.go."); err != nil {
 		t.Fatalf("initial Commit() failed: %v", err)
 	}
 
