@@ -153,6 +153,7 @@ func getStagedDiffOrSkip(ctx context.Context) (string, error) {
 // left untouched — this prevents a prepare-commit-msg hook from overwriting a
 // message provided by an interactive git-message commit or git commit -m.
 func generateAndWriteMsg(ctx context.Context, app *AppContext, diff, msgFile string) error {
+	msgFile = filepath.Clean(msgFile)
 	existing, err := os.ReadFile(msgFile)
 	if err == nil && hasMeaningfulContent(string(existing)) {
 		return nil
@@ -170,7 +171,7 @@ func generateAndWriteMsg(ctx context.Context, app *AppContext, diff, msgFile str
 
 	msg = appendAssistedBy(msg, app.Client().ModelName())
 
-	if err := os.WriteFile(msgFile, []byte(msg), 0600); err != nil {
+	if err := os.WriteFile(filepath.Clean(msgFile), []byte(msg), 0600); err != nil {
 		return fmt.Errorf("failed to write message file: %w", err)
 	}
 
@@ -188,6 +189,7 @@ func hasMeaningfulContent(text string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 

@@ -105,9 +105,10 @@ func (m *ContainerManager) Stop(ctx context.Context) error {
 }
 
 // containerStatus returns the container state: "running", "exited", "paused", or "".
+// Uses `docker ps -a` to detect containers in any state, not just running ones.
 func (m *ContainerManager) containerStatus(ctx context.Context) string {
-	cmd := exec.CommandContext(ctx, "docker", "ps",
-		"--filter", "name="+m.containerName,
+	cmd := exec.CommandContext(ctx, "docker", "ps", "-a",
+		"--filter", "name=^/"+m.containerName+"$",
 		"--format", "{{.Status}}")
 	out, err := cmd.Output()
 	if err != nil {

@@ -150,42 +150,70 @@ func appendDeletedContext(diff, deleted string) string {
 
 // maybeAppendHelixDBContext queries HelixDB for semantically relevant context
 // based on the current diff and appends it to the prompt context string.
+// Uses BM25 text search and entity-aware recall via MENTIONS edges.
 // Errors are logged and silently discarded — HelixDB context is optional.
-func maybeAppendHelixDBContext(ctx context.Context, app *AppContext, diff string, units []git.CodeUnit, existingContext string) string {
+func maybeAppendHelixDBContext(
+	ctx context.Context, app *AppContext, diff string,
+	units []git.CodeUnit, existingContext string,
+) string {
 	db := app.HelixDB()
 	if db == nil || !db.Enabled() || !db.IsAvailable(ctx) {
 		return existingContext
 	}
 
-	if len(units) == 0 {
+	repoPath, err := git.GetRepoRoot(ctx)
+	if err != nil || repoPath == "" {
+		slog.Debug("helixdb: failed to get repo root", "error", err)
+
 		return existingContext
 	}
 
 	filePaths := make([]string, 0, len(units))
+	codeElemKeys := make([]string, 0, len(units))
 	for _, u := range units {
 		filePaths = append(filePaths, u.FilePath)
+		codeElemKeys = append(codeElemKeys, fmt.Sprintf("%s:%s:%s", repoPath, u.FilePath, u.Name))
 	}
 
-	repoPath, err := git.GetRepoRoot(ctx)
-	if err != nil || repoPath == "" {
-		slog.Debug("helixdb: failed to get repo root", "error", err)
-		return existingContext
-	}
+	var allRecords []helixdb.CommitRecord
 
+	// 1. BM25 context query using diff text and file name signals.
 	branch := ""
 	query := helixdb.BuildContextQuery(repoPath, branch, filePaths, diff)
 	var resp map[string]any
 	if err := db.Exec(ctx, query, &resp); err != nil {
-		slog.Debug("helixdb context query failed", "error", err)
+		slog.Debug("helixdb bm25 context query failed", "error", err)
+	} else {
+		allRecords = helixdb.ParseContextResults(resp)
+	}
+
+	// 2. Entity-aware recall: find commits mentioning the same code elements.
+	if len(codeElemKeys) > 0 {
+		entityQ := helixdb.BuildEntityContextQuery(repoPath, codeElemKeys, 3)
+		var entityResp map[string]any
+		if err := db.Exec(ctx, entityQ, &entityResp); err != nil {
+			slog.Debug("helixdb entity context query failed", "error", err)
+		} else {
+			entityRecords := helixdb.ParseContextResults(entityResp)
+			allRecords = append(allRecords, entityRecords...)
+		}
+	}
+
+	// Deduplicate by SHA.
+	seen := make(map[string]bool)
+	var deduped []helixdb.CommitRecord
+	for _, r := range allRecords {
+		if !seen[r.SHA] {
+			seen[r.SHA] = true
+			deduped = append(deduped, r)
+		}
+	}
+
+	if len(deduped) == 0 {
 		return existingContext
 	}
 
-	records := helixdb.ParseContextResults(resp)
-	if len(records) == 0 {
-		return existingContext
-	}
-
-	ctxStr := helixdb.FormatContextRecords(records)
+	ctxStr := helixdb.FormatContextRecords(deduped)
 	if existingContext != "" {
 		return existingContext + "\n\n" + ctxStr
 	}

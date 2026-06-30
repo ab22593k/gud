@@ -83,6 +83,86 @@ func TestBuildPersistCommitQuery_WithCodeUnits(t *testing.T) {
 	}
 }
 
+func TestBuildPersistMemoryQuery_Valid(t *testing.T) {
+	now := time.Date(2026, 6, 29, 10, 0, 0, 0, time.UTC)
+	data := MemoryData{
+		MemoryID:  "mem001",
+		Content:   "User prefers Go for backend services",
+		TenantID:  "tenant-acme",
+		UserID:    "user-alice",
+		Kind:      MemoryPreference,
+		Salience:  0.85,
+		IsLatest:  true,
+		Embedding: []float32{0.1, 0.2, 0.3, 0.4},
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	q := BuildPersistMemoryQuery(data)
+	if q == nil {
+		t.Fatal("expected non-nil query")
+	}
+	err := q.Validate()
+	if err != nil {
+		t.Errorf("query validation failed: %v", err)
+	}
+}
+
+func TestBuildCategorizeMemoryQuery_Valid(t *testing.T) {
+	q := BuildCategorizeMemoryQuery("mem001", "tenant-acme", "tenant-acme:feat")
+	if q == nil {
+		t.Fatal("expected non-nil query")
+	}
+	err := q.Validate()
+	if err != nil {
+		t.Errorf("query validation failed: %v", err)
+	}
+}
+
+func TestBuildMentionEntityQuery_Valid(t *testing.T) {
+	q := BuildMentionEntityQuery("mem001", "tenant-acme", "tenant-acme:ParseInput")
+	if q == nil {
+		t.Fatal("expected non-nil query")
+	}
+	err := q.Validate()
+	if err != nil {
+		t.Errorf("query validation failed: %v", err)
+	}
+}
+
+func TestBuildUpdateMemoryQuery_Valid(t *testing.T) {
+	now := time.Date(2026, 6, 29, 10, 0, 0, 0, time.UTC)
+	newData := MemoryData{
+		MemoryID:  "mem002",
+		Content:   "User prefers Go for backend services (updated)",
+		UserID:    "user-alice",
+		Kind:      MemoryPreference,
+		Salience:  0.9,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	q := BuildUpdateMemoryQuery("mem001", "tenant-acme", newData)
+	if q == nil {
+		t.Fatal("expected non-nil query")
+	}
+	err := q.Validate()
+	if err != nil {
+		t.Errorf("query validation failed: %v", err)
+	}
+}
+
+func TestBuildSoftDeleteMemoryQuery_Valid(t *testing.T) {
+	q := BuildSoftDeleteMemoryQuery("mem001", "tenant-acme")
+	if q == nil {
+		t.Fatal("expected non-nil query")
+	}
+	err := q.Validate()
+	if err != nil {
+		t.Errorf("query validation failed: %v", err)
+	}
+}
+
 func TestFormatDiffStat_Empty(t *testing.T) {
 	result := FormatDiffStat(nil)
 	if result != "" {

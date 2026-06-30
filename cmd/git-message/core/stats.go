@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"gud/internal/git"
@@ -75,7 +76,7 @@ func initStatsApp(cmd *cobra.Command) (*AppContext, context.Context, error) {
 		return nil, nil, fmt.Errorf("helixdb: %w", err)
 	}
 	if !app.HelixDB().Enabled() {
-		return nil, nil, fmt.Errorf("HelixDB is not enabled. Use --helixdb-enabled or set GUD_HELIXDB_ENABLED=true")
+		return nil, nil, errors.New("HelixDB is not enabled. Use --helixdb-enabled or set GUD_HELIXDB_ENABLED=true")
 	}
 
 	return app, ctx, nil
@@ -84,8 +85,9 @@ func initStatsApp(cmd *cobra.Command) (*AppContext, context.Context, error) {
 func repoPathOrError(ctx context.Context) (string, error) {
 	repoPath, err := git.GetRepoRoot(ctx)
 	if err != nil || repoPath == "" {
-		return "", fmt.Errorf("not a git repository or unable to determine repo root")
+		return "", errors.New("not a git repository or unable to determine repo root")
 	}
+
 	return repoPath, nil
 }
 
@@ -190,14 +192,4 @@ func runStatsTrends(cmd *cobra.Command, _ []string) error {
 	_, _ = fmt.Fprint(cmd.OutOrStdout(), helixdb.FormatTrends(trends))
 
 	return nil
-}
-
-// getRepoRoot is a convenience wrapper for backward compatibility.
-// Prefer calling git.GetRepoRoot directly in new code.
-func getRepoRoot(ctx context.Context) string {
-	r, err := git.GetRepoRoot(ctx)
-	if err != nil {
-		return "."
-	}
-	return r
 }

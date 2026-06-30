@@ -47,8 +47,75 @@ func TestBuildContextQuery_NoFiles(t *testing.T) {
 	}
 }
 
+func TestBuildHybridContextQuery_Valid(t *testing.T) {
+	q := BuildHybridContextQuery("/home/user/repo",
+		[]float32{0.1, 0.2, 0.3, 0.4},
+		"diff --git a/main.go b/main.go",
+		[]string{"main.go"},
+		5,
+	)
+	if q == nil {
+		t.Fatal("expected non-nil query")
+	}
+	err := q.Validate()
+	if err != nil {
+		t.Errorf("query validation failed: %v", err)
+	}
+}
+
+func TestBuildHybridContextQuery_NoVector(t *testing.T) {
+	q := BuildHybridContextQuery("/home/user/repo",
+		nil,
+		"diff --git a/main.go b/main.go",
+		nil,
+		5,
+	)
+	if q == nil {
+		t.Fatal("expected non-nil query")
+	}
+	err := q.Validate()
+	if err != nil {
+		t.Errorf("query validation failed: %v", err)
+	}
+}
+
+func TestBuildEntityContextQuery_Valid(t *testing.T) {
+	q := BuildEntityContextQuery("/repo",
+		[]string{"/repo:main.go:ParseInput"},
+		5,
+	)
+	if q == nil {
+		t.Fatal("expected non-nil query")
+	}
+	err := q.Validate()
+	if err != nil {
+		t.Errorf("query validation failed: %v", err)
+	}
+}
+
+func TestBuildMemoryContextQuery_Valid(t *testing.T) {
+	q := BuildMemoryContextQuery("tenant-acme", "user-alice", "prefers Go", 10)
+	if q == nil {
+		t.Fatal("expected non-nil query")
+	}
+	err := q.Validate()
+	if err != nil {
+		t.Errorf("query validation failed: %v", err)
+	}
+}
+
+func TestBuildCategoryMemoriesQuery_Valid(t *testing.T) {
+	q := BuildCategoryMemoriesQuery("tenant-acme:feat", "tenant-acme", 10)
+	if q == nil {
+		t.Fatal("expected non-nil query")
+	}
+	err := q.Validate()
+	if err != nil {
+		t.Errorf("query validation failed: %v", err)
+	}
+}
+
 func TestParseContextResults_EmptyResponse(t *testing.T) {
-	// Simulate the HelixDB response for a ReadBatch: map with query name as key.
 	resp := map[string]any{}
 	records := ParseContextResults(resp)
 	if len(records) != 0 {
@@ -92,6 +159,21 @@ func TestParseContextResults_TwoSources(t *testing.T) {
 	records := ParseContextResults(resp)
 	if len(records) != 2 {
 		t.Fatalf("expected 2 records, got %d", len(records))
+	}
+}
+
+func TestParseContextResults_WithVector(t *testing.T) {
+	resp := map[string]any{
+		"by_vector": []any{
+			map[string]any{"$id": float64(1), "id": "vec1", "message": "vec result", "author": "", "timestamp": float64(0), "repo_path": "", "branch": ""},
+		},
+	}
+	records := ParseContextResults(resp)
+	if len(records) != 1 {
+		t.Fatalf("expected 1 record, got %d", len(records))
+	}
+	if records[0].SHA != "vec1" {
+		t.Errorf("expected SHA vec1, got %q", records[0].SHA)
 	}
 }
 

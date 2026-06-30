@@ -3,8 +3,6 @@ package core
 import (
 	"fmt"
 
-	"gud/internal/helixdb"
-
 	"github.com/spf13/cobra"
 )
 
@@ -48,6 +46,7 @@ func runHelixStop(cmd *cobra.Command, _ []string) error {
 	container := app.ContainerManager()
 	if !container.IsRunning(cmd.Context()) {
 		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "HelixDB container is not running.")
+
 		return nil
 	}
 
@@ -67,8 +66,8 @@ func runHelixStatus(cmd *cobra.Command, _ []string) error {
 
 	container := app.ContainerManager()
 	if container.IsRunning(cmd.Context()) {
-		_, _ = fmt.Fprintln(cmd.OutOrStdout(),
-			fmt.Sprintf("HelixDB container %q is running.", container.ContainerName()))
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(),
+			"HelixDB container %q is running.\n", container.ContainerName())
 		_, _ = fmt.Fprintln(cmd.OutOrStdout(),
 			"URL: http://localhost:6969")
 	} else {
@@ -76,15 +75,6 @@ func runHelixStatus(cmd *cobra.Command, _ []string) error {
 	}
 
 	return nil
-}
-
-// containerManagerFromConfig creates a ContainerManager from the app config.
-func containerManagerFromConfig(cfg ConfigGetter) *helixdb.ContainerManager {
-	if cfg == nil {
-		return helixdb.NewContainerManager("", "6969")
-	}
-	c := cfg.Config()
-	return helixdb.NewContainerManager(c.HelixDBContainerName, extractPort(c.HelixDBURL))
 }
 
 // extractPort extracts the port from a URL like "http://localhost:6969".
@@ -98,5 +88,6 @@ func extractPort(url string) string {
 			return url[i+1:]
 		}
 	}
+
 	return "6969"
 }

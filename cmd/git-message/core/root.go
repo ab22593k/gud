@@ -49,7 +49,8 @@ func init() {
 	rootCmd.PersistentFlags().Bool("helixdb-enabled", false, "Enable HelixDB memory and analytics")
 	rootCmd.PersistentFlags().String("helixdb-url", "http://localhost:6969", "HelixDB server URL")
 	rootCmd.PersistentFlags().Bool("helixdb-auto-manage", false, "Auto-start and stop HelixDB Docker container")
-	rootCmd.PersistentFlags().String("helixdb-container-name", "gud-helixdb", "Docker container name for auto-managed HelixDB")
+	rootCmd.PersistentFlags().String("helixdb-container-name",
+		"gud-helixdb", "Docker container name for auto-managed HelixDB")
 
 	rootCmd.AddCommand(profileCmd)
 	rootCmd.AddCommand(statsCmd)

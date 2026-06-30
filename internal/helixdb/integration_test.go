@@ -202,6 +202,8 @@ func TestIntegration_Trends(t *testing.T) {
 	t.Logf("trends:\n%s", output)
 }
 
+const containerMgrTestPort = "16970"
+
 func TestIntegration_ContainerManager(t *testing.T) {
 	if os.Getenv("RUN_HELIXDB_INTEGRATION") == "" {
 		t.Skip("set RUN_HELIXDB_INTEGRATION=1 to run")
@@ -209,14 +211,14 @@ func TestIntegration_ContainerManager(t *testing.T) {
 
 	ctx := context.Background()
 
-	mgr := NewContainerManager("gud-helixdb-int-mgr", testPort)
+	mgr := NewContainerManager("gud-helixdb-int-mgr", containerMgrTestPort)
 
 	// EnsureRunning should start a new container.
 	url, err := mgr.EnsureRunning(ctx)
 	if err != nil {
 		t.Fatalf("EnsureRunning failed: %v", err)
 	}
-	if url != "http://localhost:"+testPort {
+	if url != "http://localhost:"+containerMgrTestPort {
 		t.Errorf("expected url http://localhost:%s, got %s", testPort, url)
 	}
 	if !mgr.StartedByUs() {

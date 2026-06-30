@@ -25,7 +25,7 @@ func NewHelixUnavailableError(cause error) error {
 type Options struct {
 	BaseURL string
 	APIKey  string
-	Enabled bool // false = degraded mode, skip all HelixDB operations
+	Enabled bool
 }
 
 // DB wraps a helix.Client with lifecycle management and degraded-mode support.
@@ -37,8 +37,7 @@ type DB struct {
 }
 
 // NewDB creates a new DB wrapper. If opts.Enabled is false, the client is nil
-// and all operations return ErrHelixUnavailable. If opts.BaseURL is empty,
-// defaults to "http://localhost:6969".
+// and all operations return ErrHelixUnavailable.
 func NewDB(opts Options) *DB {
 	baseURL := opts.BaseURL
 	if baseURL == "" {
@@ -94,8 +93,7 @@ func (db *DB) IsAvailable(ctx context.Context) bool {
 	return resp.StatusCode == http.StatusOK
 }
 
-// Exec runs a HelixDB query. Returns ErrHelixUnavailable if the client is nil
-// or disabled.
+// Exec runs a HelixDB query.
 func (db *DB) Exec(ctx context.Context, req helix.Request, out any, opts ...helix.ExecOption) error {
 	if !db.enabled || db.client == nil {
 		return ErrHelixUnavailable
@@ -105,22 +103,49 @@ func (db *DB) Exec(ctx context.Context, req helix.Request, out any, opts ...heli
 
 // EnsureSchema creates indexes and ensures the graph schema exists.
 // This is idempotent and safe to call on every startup.
+// Uses tenant-partitioned indexes where applicable for multi-repo isolation.
 func (db *DB) EnsureSchema(ctx context.Context) error {
 	if !db.enabled || db.client == nil {
 		return ErrHelixUnavailable
 	}
 
 	indexes := []*helix.Traversal{
-		helix.G().CreateTextIndexNodes("Commit", "message"),
-		helix.G().CreateTextIndexNodes("Commit", "diff_text"),
-		helix.G().CreateTextIndexNodes("File", "path"),
-		helix.G().CreateTextIndexNodes("CodeElement", "signature"),
+		// Tenant-partitioned text indexes for the Commit label.
+		helix.G().CreateTextIndexNodes("Commit", "message", DefaultTenantProperty),
+		helix.G().CreateTextIndexNodes("Commit", "diff_text", DefaultTenantProperty),
+		helix.G().CreateTextIndexNodes("File", "path", DefaultTenantProperty),
+		helix.G().CreateTextIndexNodes("CodeElement", "signature", DefaultTenantProperty),
+		helix.G().CreateTextIndexNodes("CodeElement", "name", DefaultTenantProperty),
+		helix.G().CreateTextIndexNodes("Memory", "content", DefaultTenantProperty),
+
+		// Tenant-partitioned vector index for Commit embeddings.
+		helix.G().CreateVectorIndexNodes("Commit", "embedding", DefaultTenantProperty),
+		helix.G().CreateVectorIndexNodes("Memory", "embedding", DefaultTenantProperty),
+
+		// Commit equality indexes.
 		helix.G().CreateIndexIfNotExists(helix.NodeEqualityIndex("Commit", "id")),
 		helix.G().CreateIndexIfNotExists(helix.NodeEqualityIndex("Commit", "repo_path")),
 		helix.G().CreateIndexIfNotExists(helix.NodeRangeIndex("Commit", "timestamp")),
+
+		// Tenant-scoped equality indexes.
 		helix.G().CreateIndexIfNotExists(helix.NodeEqualityIndex("Author", "email")),
 		helix.G().CreateIndexIfNotExists(helix.NodeEqualityIndex("Repo", "path")),
 		helix.G().CreateIndexIfNotExists(helix.NodeEqualityIndex("File", "path")),
+
+		// CodeElement indexes for entity-aware queries.
+		helix.G().CreateIndexIfNotExists(helix.NodeEqualityIndex("CodeElement", "elementKey")),
+		helix.G().CreateIndexIfNotExists(helix.NodeEqualityIndex("CodeElement", "name")),
+
+		// Memory indexes for the general memory model.
+		helix.G().CreateIndexIfNotExists(helix.NodeEqualityIndex("Memory", "memoryId")),
+		helix.G().CreateIndexIfNotExists(helix.NodeEqualityIndex("Memory", "userId")),
+		helix.G().CreateIndexIfNotExists(helix.NodeRangeIndex("Memory", "createdAt")),
+		helix.G().CreateIndexIfNotExists(helix.NodeRangeIndex("Memory", "salience")),
+
+		// Category and Entity indexes.
+		helix.G().CreateIndexIfNotExists(helix.NodeEqualityIndex("Category", "categoryKey")),
+		helix.G().CreateIndexIfNotExists(helix.NodeEqualityIndex("Entity", "entityKey")),
+		helix.G().CreateIndexIfNotExists(helix.NodeEqualityIndex("Entity", "name")),
 	}
 
 	for _, idx := range indexes {
