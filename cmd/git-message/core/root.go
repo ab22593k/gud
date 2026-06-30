@@ -46,15 +46,8 @@ func init() {
 	rootCmd.PersistentFlags().String("model", "", "Gemini model to use (or use GEMINI_MODEL env)")
 	rootCmd.PersistentFlags().Float64("temperature", 1, "Set the generation temperature (0-2, default: 1)")
 	rootCmd.PersistentFlags().Int("wrapline", 72, "Wrap all lines at this character width")
-	rootCmd.PersistentFlags().Bool("helixdb-enabled", false, "Enable HelixDB memory and analytics")
-	rootCmd.PersistentFlags().String("helixdb-url", "http://localhost:6969", "HelixDB server URL")
-	rootCmd.PersistentFlags().Bool("helixdb-auto-manage", false, "Auto-start and stop HelixDB Docker container")
-	rootCmd.PersistentFlags().String("helixdb-container-name",
-		"gud-helixdb", "Docker container name for auto-managed HelixDB")
 
 	rootCmd.AddCommand(profileCmd)
-	rootCmd.AddCommand(statsCmd)
-	rootCmd.AddCommand(helixCmd)
 }
 
 // configFromCmd reads flags from the cobra command to build the CLI override layer.
@@ -67,22 +60,14 @@ func configFromCmd(cmd *cobra.Command) config.Config {
 	model := mustGet(cmd, "model", cmd.Flags().GetString)
 	temp := mustGet(cmd, "temperature", cmd.Flags().GetFloat64)
 	wrapLine := mustGet(cmd, "wrapline", cmd.Flags().GetInt)
-	helixDBEnabled := mustGet(cmd, "helixdb-enabled", cmd.Flags().GetBool)
-	helixDBURL := mustGet(cmd, "helixdb-url", cmd.Flags().GetString)
-	helixDBAutoManage := mustGet(cmd, "helixdb-auto-manage", cmd.Flags().GetBool)
-	helixDBContainerName := mustGet(cmd, "helixdb-container-name", cmd.Flags().GetString)
 
 	return config.Config{
-		DetailLevel:          config.DetailLevel(detail),
-		Profile:              config.ProfileName(profile),
-		Hint:                 hint,
-		History:              history,
-		Model:                model,
-		Temperature:          temp,
-		WrapLine:             wrapLine,
-		HelixDBEnabled:       helixDBEnabled,
-		HelixDBURL:           helixDBURL,
-		HelixDBAutoManage:    helixDBAutoManage,
-		HelixDBContainerName: helixDBContainerName,
+		DetailLevel: config.DetailLevel(detail),
+		Profile:     config.ProfileName(profile),
+		Hint:        hint,
+		History:     history,
+		Model:       model,
+		Temperature: temp,
+		WrapLine:    wrapLine,
 	}
 }

@@ -135,6 +135,19 @@ func (a *AppContext) InitHelixDB(ctx context.Context) error {
 	return nil
 }
 
+// extractPort extracts the port from a URL like "http://localhost:6969".
+func extractPort(url string) string {
+	if url == "" {
+		return "6969"
+	}
+	for i := len(url) - 1; i >= 0; i-- {
+		if url[i] == ':' {
+			return url[i+1:]
+		}
+	}
+	return "6969"
+}
+
 // StopHelixDB stops the managed container if it was started by this session.
 func (a *AppContext) StopHelixDB(ctx context.Context) {
 	if a.containerMgr.StartedByUs() {

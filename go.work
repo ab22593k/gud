@@ -3,6 +3,6 @@ go 1.26.3
 use (
 	.
 	./internal/git
-	./internal/helixdb
+	./internal/mem
 	./internal/request
 )
