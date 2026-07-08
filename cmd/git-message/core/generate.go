@@ -49,7 +49,7 @@ func runGenerate(cmd *cobra.Command, _ []string) error {
 	units := git.ExtractCodeUnits(diff)
 
 	promptContext := buildHistoryContext(ctx, app)
-	promptContext = maybeAppendHelixDBContext(ctx, app, diff, units, promptContext)
+	promptContext = maybeAppendMEMContext(ctx, app, diff, units, promptContext)
 
 	return interactiveCommit(ctx, cmd, app, diff, promptContext, units)
 }
@@ -148,11 +148,11 @@ func appendDeletedContext(diff, deleted string) string {
 	return b.String()
 }
 
-// maybeAppendHelixDBContext queries HelixDB for semantically relevant context
+// maybeAppendMEMContext queries HelixDB for semantically relevant context
 // based on the current diff and appends it to the prompt context string.
 // Uses BM25 text search and entity-aware recall via MENTIONS edges.
 // Errors are logged and silently discarded — HelixDB context is optional.
-func maybeAppendHelixDBContext(
+func maybeAppendMEMContext(
 	ctx context.Context, app *AppContext, diff string,
 	units []git.CodeUnit, existingContext string,
 ) string {

@@ -150,6 +150,7 @@ func extractPort(rawURL string) string {
 	if port := u.Port(); port != "" {
 		return port
 	}
+
 	return defaultPort
 }
 
