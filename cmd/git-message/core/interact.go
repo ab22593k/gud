@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"gud/internal/git"
-	"gud/internal/helixdb"
+	"gud/internal/mem"
 	"gud/internal/request"
 
 	"github.com/spf13/cobra"
@@ -188,7 +188,7 @@ func persistToHelixDB(ctx context.Context, app *AppContext, diff, hash, message 
 
 	author := git.GetAuthor(ctx)
 
-	var fileChanges []helixdb.FileChange
+	var fileChanges []mem.FileChange
 	for _, u := range units {
 		existing := false
 		for i := range fileChanges {
@@ -199,14 +199,14 @@ func persistToHelixDB(ctx context.Context, app *AppContext, diff, hash, message 
 			}
 		}
 		if !existing {
-			fileChanges = append(fileChanges, helixdb.FileChange{
+			fileChanges = append(fileChanges, mem.FileChange{
 				Path:       u.FilePath,
 				ChangeType: u.ChangeType,
 			})
 		}
 	}
 
-	commit := helixdb.CommitData{
+	commit := mem.CommitData{
 		SHA:            hash,
 		RepoPath:       repoPath,
 		Message:        message,
@@ -217,7 +217,7 @@ func persistToHelixDB(ctx context.Context, app *AppContext, diff, hash, message 
 		IsGudGenerated: true,
 	}
 
-	query := helixdb.BuildPersistCommitQuery(commit)
+	query := mem.BuildPersistCommitQuery(commit)
 	var resp map[string]any
 	if err := db.Exec(ctx, query, &resp); err != nil {
 		slog.Debug("helixdb: failed to persist commit", "error", err)

@@ -1,4 +1,4 @@
-package helixdb
+package mem
 
 import (
 	"time"

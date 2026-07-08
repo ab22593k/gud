@@ -1,4 +1,4 @@
-package helixdb
+package mem
 
 func contains(s, substr string) bool {
 	for i := 0; i <= len(s)-len(substr); i++ {

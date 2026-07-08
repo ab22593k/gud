@@ -4,10 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/url"
 
 	"gud/internal/config"
 	"gud/internal/config/mediator"
-	"gud/internal/helixdb"
+	"gud/internal/mem"
 	"gud/internal/request"
 
 	"github.com/spf13/cobra"
@@ -23,8 +24,8 @@ type ConfigGetter interface {
 type AppContext struct {
 	cfg          config.Config
 	client       *request.Client
-	helixDB      *helixdb.DB
-	containerMgr *helixdb.ContainerManager
+	helixDB      *mem.DB
+	containerMgr *mem.ContainerManager
 }
 
 // NewAppContext loads and merges configuration from all sources (CLI flags,
@@ -50,7 +51,7 @@ func NewAppContext(cmd *cobra.Command) (*AppContext, error) {
 
 	return &AppContext{
 		cfg: cfg,
-		containerMgr: helixdb.NewContainerManager(
+		containerMgr: mem.NewContainerManager(
 			cfg.HelixDBContainerName,
 			extractPort(cfg.HelixDBURL),
 		),
@@ -68,12 +69,12 @@ func (a *AppContext) Client() *request.Client {
 }
 
 // HelixDB returns the HelixDB connection, or nil if not initialized.
-func (a *AppContext) HelixDB() *helixdb.DB {
+func (a *AppContext) HelixDB() *mem.DB {
 	return a.helixDB
 }
 
 // ContainerManager returns the Docker container manager.
-func (a *AppContext) ContainerManager() *helixdb.ContainerManager {
+func (a *AppContext) ContainerManager() *mem.ContainerManager {
 	return a.containerMgr
 }
 
@@ -115,7 +116,7 @@ func (a *AppContext) InitHelixDB(ctx context.Context) error {
 		a.cfg.HelixDBURL = url
 	}
 
-	db := helixdb.NewDB(helixdb.Options{
+	db := mem.NewDB(mem.Options{
 		BaseURL: a.cfg.HelixDBURL,
 		Enabled: a.cfg.HelixDBEnabled,
 	})
@@ -135,17 +136,21 @@ func (a *AppContext) InitHelixDB(ctx context.Context) error {
 	return nil
 }
 
-// extractPort extracts the port from a URL like "http://localhost:6969".
-func extractPort(url string) string {
-	if url == "" {
-		return "6969"
+// extractPort returns the port from a URL like "http://localhost:6969".
+// It falls back to "6969" when the URL is empty or has no explicit port.
+func extractPort(rawURL string) string {
+	const defaultPort = "6969"
+	if rawURL == "" {
+		return defaultPort
 	}
-	for i := len(url) - 1; i >= 0; i-- {
-		if url[i] == ':' {
-			return url[i+1:]
-		}
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return defaultPort
 	}
-	return "6969"
+	if port := u.Port(); port != "" {
+		return port
+	}
+	return defaultPort
 }
 
 // StopHelixDB stops the managed container if it was started by this session.

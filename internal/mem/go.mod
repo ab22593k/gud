@@ -1,4 +1,4 @@
-module gud/internal/helixdb
+module gud/internal/mem
 
 go 1.26.3
 

@@ -11,7 +11,7 @@ import (
 	"syscall"
 
 	"gud/internal/git"
-	"gud/internal/helixdb"
+	"gud/internal/mem"
 
 	"github.com/spf13/cobra"
 )
@@ -175,33 +175,33 @@ func maybeAppendHelixDBContext(
 		codeElemKeys = append(codeElemKeys, fmt.Sprintf("%s:%s:%s", repoPath, u.FilePath, u.Name))
 	}
 
-	var allRecords []helixdb.CommitRecord
+	var allRecords []mem.CommitRecord
 
 	// 1. BM25 context query using diff text and file name signals.
 	branch := ""
-	query := helixdb.BuildContextQuery(repoPath, branch, filePaths, diff)
+	query := mem.BuildContextQuery(repoPath, branch, filePaths, diff)
 	var resp map[string]any
 	if err := db.Exec(ctx, query, &resp); err != nil {
 		slog.Debug("helixdb bm25 context query failed", "error", err)
 	} else {
-		allRecords = helixdb.ParseContextResults(resp)
+		allRecords = mem.ParseContextResults(resp)
 	}
 
 	// 2. Entity-aware recall: find commits mentioning the same code elements.
 	if len(codeElemKeys) > 0 {
-		entityQ := helixdb.BuildEntityContextQuery(repoPath, codeElemKeys, 3)
+		entityQ := mem.BuildEntityContextQuery(repoPath, codeElemKeys, 3)
 		var entityResp map[string]any
 		if err := db.Exec(ctx, entityQ, &entityResp); err != nil {
 			slog.Debug("helixdb entity context query failed", "error", err)
 		} else {
-			entityRecords := helixdb.ParseContextResults(entityResp)
+			entityRecords := mem.ParseContextResults(entityResp)
 			allRecords = append(allRecords, entityRecords...)
 		}
 	}
 
 	// Deduplicate by SHA.
 	seen := make(map[string]bool)
-	var deduped []helixdb.CommitRecord
+	var deduped []mem.CommitRecord
 	for _, r := range allRecords {
 		if !seen[r.SHA] {
 			seen[r.SHA] = true
@@ -213,7 +213,7 @@ func maybeAppendHelixDBContext(
 		return existingContext
 	}
 
-	ctxStr := helixdb.FormatContextRecords(deduped)
+	ctxStr := mem.FormatContextRecords(deduped)
 	if existingContext != "" {
 		return existingContext + "\n\n" + ctxStr
 	}
