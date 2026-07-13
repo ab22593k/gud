@@ -164,7 +164,7 @@ func TestEntityData_ToProps(t *testing.T) {
 }
 
 func TestCommitRecord_FromHelixNode(t *testing.T) {
-	node := map[string]any{
+	node := Node{data: map[string]any{
 		"$id":       float64(42),
 		"id":        "abc123",
 		"message":   "fix: handle nil pointer",
@@ -172,7 +172,7 @@ func TestCommitRecord_FromHelixNode(t *testing.T) {
 		"timestamp": float64(1719648000000),
 		"repo_path": "/repo",
 		"branch":    "main",
-	}
+	}}
 
 	record := CommitRecordFromHelixData(node)
 

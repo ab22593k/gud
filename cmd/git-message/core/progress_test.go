@@ -2,6 +2,7 @@ package core
 
 import (
 	"errors"
+	"io"
 	"os"
 	"strings"
 	"testing"
@@ -13,7 +14,7 @@ func TestShowProgress_ReturnsValue(t *testing.T) {
 	msg := "Loading..."
 	expected := "hello world"
 
-	got, err := showProgress(msg, func() (string, error) {
+	got, err := showProgress(t.Context(), msg, func() (string, error) {
 		return expected, nil
 	})
 	if err != nil {
@@ -29,7 +30,7 @@ func TestShowProgress_ReturnsError(t *testing.T) {
 
 	expectedErr := errors.New("something went wrong")
 
-	_, err := showProgress("Working...", func() (string, error) {
+	_, err := showProgress(t.Context(), "Working...", func() (string, error) {
 		return "", expectedErr
 	})
 	if err == nil {
@@ -43,7 +44,7 @@ func TestShowProgress_ReturnsError(t *testing.T) {
 func TestShowProgress_WithIntType(t *testing.T) {
 	t.Parallel()
 
-	got, err := showProgress("Counting...", func() (int, error) {
+	got, err := showProgress(t.Context(), "Counting...", func() (int, error) {
 		return 42, nil
 	})
 	if err != nil {
@@ -57,7 +58,7 @@ func TestShowProgress_WithIntType(t *testing.T) {
 func TestShowProgress_CompletesImmediately(t *testing.T) {
 	t.Parallel()
 
-	got, err := showProgress("Fast...", func() (string, error) {
+	got, err := showProgress(t.Context(), "Fast...", func() (string, error) {
 		return testDoneStr, nil
 	})
 	if err != nil {
@@ -81,14 +82,13 @@ func TestShowProgress_WritesToStderr(t *testing.T) {
 	done := make(chan struct{})
 	var captured string
 	go func() {
-		buf := make([]byte, 4096)
-		n, _ := r.Read(buf)
-		captured = string(buf[:n])
+		data, _ := io.ReadAll(r)
+		captured = string(data)
 		close(done)
 	}()
 
 	msg := "test message"
-	_, fnErr := showProgress(msg, func() (string, error) {
+	_, fnErr := showProgress(t.Context(), msg, func() (string, error) {
 		return "ok", nil
 	})
 

@@ -87,12 +87,12 @@ func TestIntegration_PersistAndQueryCommit(t *testing.T) {
 	t.Log("commit persisted successfully")
 
 	summaryQ := BuildRepoSummaryQuery(commit.RepoPath)
-	var summaryResp map[string]any
-	if err := db.Exec(ctx, summaryQ, &summaryResp); err != nil {
+	var rawSummaryResp map[string]any
+	if err := db.Exec(ctx, summaryQ, &rawSummaryResp); err != nil {
 		t.Fatalf("repo summary query failed: %v", err)
 	}
 
-	stats := ParseRepoSummary(summaryResp)
+	stats := ParseRepoSummary(NewResponse(rawSummaryResp))
 	if stats.TotalCommits < 1 {
 		t.Errorf("expected at least 1 commit, got %d", stats.TotalCommits)
 	}
@@ -134,12 +134,12 @@ func TestIntegration_AuthorStats(t *testing.T) {
 	}
 
 	q := BuildAuthorStatsQuery("/test/repo")
-	var resp map[string]any
-	if err := db.Exec(ctx, q, &resp); err != nil {
+	var rawResp map[string]any
+	if err := db.Exec(ctx, q, &rawResp); err != nil {
 		t.Fatalf("author stats query failed: %v", err)
 	}
 
-	stats := ParseAuthorStats(resp)
+	stats := ParseAuthorStats(NewResponse(rawResp))
 	if len(stats) < 2 {
 		t.Errorf("expected at least 2 authors, got %d", len(stats))
 	}
@@ -184,12 +184,12 @@ func TestIntegration_Trends(t *testing.T) {
 	}
 
 	q := BuildTrendsQuery("/test/repo")
-	var resp map[string]any
-	if err := db.Exec(ctx, q, &resp); err != nil {
+	var rawResp map[string]any
+	if err := db.Exec(ctx, q, &rawResp); err != nil {
 		t.Fatalf("trends query failed: %v", err)
 	}
 
-	trends := ParseTrends(resp)
+	trends := ParseTrends(NewResponse(rawResp))
 	if len(trends) == 0 {
 		t.Fatal("expected at least 1 trend point")
 	}

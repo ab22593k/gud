@@ -89,36 +89,28 @@ type CommitRecord struct {
 	DiffStat  string
 }
 
-// CommitRecordFromHelixData converts a HelixDB node data map into a CommitRecord.
-func CommitRecordFromHelixData(data map[string]any) CommitRecord {
-	r := CommitRecord{}
-	if id, ok := data["$id"].(float64); ok {
-		r.HelixID = uint64(id)
+// CommitRecordFromHelixData converts a HelixDB query result Node into a CommitRecord.
+func CommitRecordFromHelixData(node Node) CommitRecord {
+	return CommitRecord{
+		HelixID:  node.Uint64("$id"),
+		SHA:      firstNonEmpty(node.String("sha"), node.String("id")),
+		Message:  node.String("message"),
+		Author:   node.String("author"),
+		Timestamp: time.UnixMilli(int64(node.Float64("timestamp"))),
+		RepoPath: node.String("repo_path"),
+		Branch:   node.String("branch"),
+		DiffStat: node.String("diff_stat"),
 	}
-	if sha, ok := data["sha"].(string); ok {
-		r.SHA = sha
-	} else if sha, ok := data["id"].(string); ok {
-		r.SHA = sha
+}
+
+// firstNonEmpty returns the first non-empty string from the given values.
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if v != "" {
+			return v
+		}
 	}
-	if msg, ok := data["message"].(string); ok {
-		r.Message = msg
-	}
-	if author, ok := data["author"].(string); ok {
-		r.Author = author
-	}
-	if ts, ok := data["timestamp"].(float64); ok {
-		r.Timestamp = time.UnixMilli(int64(ts))
-	}
-	if rp, ok := data["repo_path"].(string); ok {
-		r.RepoPath = rp
-	}
-	if branch, ok := data["branch"].(string); ok {
-		r.Branch = branch
-	}
-	if ds, ok := data["diff_stat"].(string); ok {
-		r.DiffStat = ds
-	}
-	return r
+	return ""
 }
 
 // BuildCommitNodeQuery constructs a HelixDB traversal that fetches Commit nodes

@@ -180,21 +180,21 @@ func maybeAppendMEMContext(
 	// 1. BM25 context query using diff text and file name signals.
 	branch := ""
 	query := mem.BuildContextQuery(repoPath, branch, filePaths, diff)
-	var resp map[string]any
-	if err := db.Exec(ctx, query, &resp); err != nil {
+	var rawResp map[string]any
+	if err := db.Exec(ctx, query, &rawResp); err != nil {
 		slog.Debug("helixdb bm25 context query failed", "error", err)
 	} else {
-		allRecords = mem.ParseContextResults(resp)
+		allRecords = mem.ParseContextResults(mem.NewResponse(rawResp))
 	}
 
 	// 2. Entity-aware recall: find commits mentioning the same code elements.
 	if len(codeElemKeys) > 0 {
 		entityQ := mem.BuildEntityContextQuery(repoPath, codeElemKeys, 3)
-		var entityResp map[string]any
-		if err := db.Exec(ctx, entityQ, &entityResp); err != nil {
+		var rawEntityResp map[string]any
+		if err := db.Exec(ctx, entityQ, &rawEntityResp); err != nil {
 			slog.Debug("helixdb entity context query failed", "error", err)
 		} else {
-			entityRecords := mem.ParseContextResults(entityResp)
+			entityRecords := mem.ParseContextResults(mem.NewResponse(rawEntityResp))
 			allRecords = append(allRecords, entityRecords...)
 		}
 	}

@@ -149,20 +149,15 @@ func BuildEntityContextQuery(tenantID string, codeElementKeys []string, limit in
 	return b.Returning("commits")
 }
 
-// ParseContextResults extracts CommitRecords from a HelixDB ReadBatch response.
-// Handles both flat arrays (e.g. TextSearch/VectorSearch results) and
-// {"properties": [...]} wrapped results (e.g. plain ValueMap traversals).
-func ParseContextResults(resp map[string]any) []CommitRecord {
+// ParseContextResults extracts CommitRecords from a HelixDB query response.
+// Iterates over common result keys (by_diff, by_message, by_vector, commits)
+// and deduplicates by SHA.
+func ParseContextResults(resp *Response) []CommitRecord {
 	seen := make(map[string]bool)
 	var records []CommitRecord
 
 	for _, key := range []string{"by_diff", "by_message", "by_vector", "commits"} {
-		items := extractResultItems(resp[key])
-		for _, item := range items {
-			node, ok := item.(map[string]any)
-			if !ok {
-				continue
-			}
+		for _, node := range resp.Nodes(key) {
 			record := CommitRecordFromHelixData(node)
 			if record.SHA != "" && !seen[record.SHA] {
 				seen[record.SHA] = true

@@ -598,7 +598,7 @@ func TestOracle_Aspirations_SpinnerNoGoroutineLeak(t *testing.T) {
 	// showProgress starts a goroutine. Ensure it completes.
 	before := testing.AllocsPerRun(1, func() {
 		// use discardWriter so output goes nowhere
-		result, err := showProgress("test", func() (string, error) {
+		result, err := showProgress(t.Context(), "test", func() (string, error) {
 			return testDoneStr, nil
 		})
 		if err != nil {

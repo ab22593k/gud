@@ -37,7 +37,7 @@ func interactiveCommit(ctx context.Context, cmd *cobra.Command, app *AppContext,
 		cfg := app.Config()
 		client := app.Client()
 		profileContent := resolveProfileContent(string(cfg.Profile))
-		msg, err := showProgress("Rolling in, obscuring the landscape of the codebase...", func() (string, error) {
+		msg, err := showProgress(ctx, "Rolling in, obscuring the landscape of the codebase...", func() (string, error) {
 			return client.GenerateCommitMessageWithContent(ctx, diff, promptContext, request.DetailLevel(cfg.DetailLevel),
 				cfg.Hint, request.ProfileName(cfg.Profile), profileContent, cfg.WrapLine)
 		})
@@ -218,8 +218,8 @@ func persistToHelixDB(ctx context.Context, app *AppContext, diff, hash, message 
 	}
 
 	query := mem.BuildPersistCommitQuery(commit)
-	var resp map[string]any
-	if err := db.Exec(ctx, query, &resp); err != nil {
+	var rawResp map[string]any
+	if err := db.Exec(ctx, query, &rawResp); err != nil {
 		slog.Debug("helixdb: failed to persist commit", "error", err)
 	}
 }

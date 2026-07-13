@@ -116,7 +116,7 @@ func TestBuildCategoryMemoriesQuery_Valid(t *testing.T) {
 }
 
 func TestParseContextResults_EmptyResponse(t *testing.T) {
-	resp := map[string]any{}
+	resp := NewResponse(map[string]any{})
 	records := ParseContextResults(resp)
 	if len(records) != 0 {
 		t.Errorf("expected 0 records, got %d", len(records))
@@ -124,7 +124,7 @@ func TestParseContextResults_EmptyResponse(t *testing.T) {
 }
 
 func TestParseContextResults_ValidResponse(t *testing.T) {
-	resp := map[string]any{
+	resp := NewResponse(map[string]any{
 		"by_diff": []any{
 			map[string]any{
 				"$id":       float64(1),
@@ -137,7 +137,7 @@ func TestParseContextResults_ValidResponse(t *testing.T) {
 				"diff_stat": "1 file changed",
 			},
 		},
-	}
+	})
 	records := ParseContextResults(resp)
 	if len(records) != 1 {
 		t.Fatalf("expected 1 record, got %d", len(records))
@@ -148,14 +148,14 @@ func TestParseContextResults_ValidResponse(t *testing.T) {
 }
 
 func TestParseContextResults_TwoSources(t *testing.T) {
-	resp := map[string]any{
+	resp := NewResponse(map[string]any{
 		"by_diff": []any{
 			map[string]any{"$id": float64(1), "id": "a", "message": "a msg", "author": "", "timestamp": float64(0), "repo_path": "", "branch": ""},
 		},
 		"by_message": []any{
 			map[string]any{"$id": float64(2), "id": "b", "message": "b msg", "author": "", "timestamp": float64(0), "repo_path": "", "branch": ""},
 		},
-	}
+	})
 	records := ParseContextResults(resp)
 	if len(records) != 2 {
 		t.Fatalf("expected 2 records, got %d", len(records))
@@ -163,11 +163,11 @@ func TestParseContextResults_TwoSources(t *testing.T) {
 }
 
 func TestParseContextResults_WithVector(t *testing.T) {
-	resp := map[string]any{
+	resp := NewResponse(map[string]any{
 		"by_vector": []any{
 			map[string]any{"$id": float64(1), "id": "vec1", "message": "vec result", "author": "", "timestamp": float64(0), "repo_path": "", "branch": ""},
 		},
-	}
+	})
 	records := ParseContextResults(resp)
 	if len(records) != 1 {
 		t.Fatalf("expected 1 record, got %d", len(records))

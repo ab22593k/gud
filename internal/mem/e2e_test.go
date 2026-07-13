@@ -85,11 +85,11 @@ func TestIntegration_BM25ContextQueryByDiff(t *testing.T) {
 	// Search by login-related diff — should find bm25-a.
 	q := BuildContextQuery(testTenant, "main", nil,
 		"func Login(w http.ResponseWriter")
-	var resp map[string]any
-	if err := db.Exec(ctx, q, &resp); err != nil {
+	var rawResp map[string]any
+	if err := db.Exec(ctx, q, &rawResp); err != nil {
 		t.Fatalf("BuildContextQuery failed: %v", err)
 	}
-	records := ParseContextResults(resp)
+	records := ParseContextResults(NewResponse(rawResp))
 	if !findSHAInResults(records, "bm25-a") {
 		t.Errorf("expected bm25-a in BM25 diff results, got %d records", len(records))
 	}
@@ -134,11 +134,11 @@ func TestIntegration_BM25ContextQueryByFiles(t *testing.T) {
 
 	// Search by file name — should find the commit via message BM25.
 	q2 := BuildContextQuery(testTenant, "main", []string{"auth/login.go"}, "")
-	var resp map[string]any
-	if err := db.Exec(ctx, q2, &resp); err != nil {
+	var rawResp map[string]any
+	if err := db.Exec(ctx, q2, &rawResp); err != nil {
 		t.Fatalf("BuildContextQuery failed: %v", err)
 	}
-	records := ParseContextResults(resp)
+	records := ParseContextResults(NewResponse(rawResp))
 	if !findSHAInResults(records, commitSHA) {
 		t.Errorf("expected %s in BM25 file results, got %d records", commitSHA, len(records))
 	}
@@ -184,11 +184,11 @@ func TestIntegration_EntityAwareRecall(t *testing.T) {
 
 	// Query by code element key.
 	q2 := BuildEntityContextQuery(testTenant, []string{elementKey}, 10)
-	var resp map[string]any
-	if err := db.Exec(ctx, q2, &resp); err != nil {
+	var rawResp map[string]any
+	if err := db.Exec(ctx, q2, &rawResp); err != nil {
 		t.Fatalf("BuildEntityContextQuery failed: %v", err)
 	}
-	records := ParseContextResults(resp)
+	records := ParseContextResults(NewResponse(rawResp))
 	if !findSHAInResults(records, commitSHA) {
 		t.Errorf("expected %s in entity context results, got %d records", commitSHA, len(records))
 	}
@@ -420,11 +420,11 @@ func TestIntegration_TenantIsolation(t *testing.T) {
 
 	// Query context for tenant A — should NOT find tenant B's commit.
 	q := BuildContextQuery(tenantA, "main", nil, "TENANT_A_SPECIFIC_FEATURE_XYZ")
-	var resp map[string]any
-	if err := db.Exec(ctx, q, &resp); err != nil {
+	var rawResp map[string]any
+	if err := db.Exec(ctx, q, &rawResp); err != nil {
 		t.Fatalf("BuildContextQuery for tenant A failed: %v", err)
 	}
-	records := ParseContextResults(resp)
+	records := ParseContextResults(NewResponse(rawResp))
 	if findSHAInResults(records, shaB) {
 		t.Errorf("tenant B commit leaked into tenant A results")
 	}
@@ -471,12 +471,12 @@ func TestIntegration_VectorSearch(t *testing.T) {
 	// Search with a similar vector (slightly different seed).
 	queryVec := createTestVector(43)
 	q := BuildHybridContextQuery(testTenant, queryVec, "", nil, 10)
-	var resp map[string]any
-	if err := db.Exec(ctx, q, &resp); err != nil {
+	var rawResp map[string]any
+	if err := db.Exec(ctx, q, &rawResp); err != nil {
 		t.Fatalf("BuildHybridContextQuery failed: %v", err)
 	}
 
-	vecRaw, ok := resp["by_vector"]
+	vecRaw, ok := rawResp["by_vector"]
 	if !ok {
 		t.Fatal("expected 'by_vector' in response")
 	}
@@ -548,12 +548,12 @@ func TestIntegration_TopFilesStats(t *testing.T) {
 
 	// Top files query.
 	q := BuildTopFilesQuery(testTenant, 10)
-	var resp map[string]any
-	if err := db.Exec(ctx, q, &resp); err != nil {
+	var rawResp map[string]any
+	if err := db.Exec(ctx, q, &rawResp); err != nil {
 		t.Fatalf("BuildTopFilesQuery failed: %v", err)
 	}
 
-	stats := ParseTopFiles(resp)
+	stats := ParseTopFiles(NewResponse(rawResp))
 	output := FormatTopFiles(stats)
 	t.Logf("top files output:\n%s", output)
 
@@ -721,11 +721,11 @@ func TestIntegration_BM25ContextQueryNoResults(t *testing.T) {
 
 	// Search for something that doesn't match.
 	q := BuildContextQuery(testTenant, "main", nil, "ZZZZ_THIS_DOES_NOT_MATCH_ZZZZ")
-	var resp map[string]any
-	if err := db.Exec(ctx, q, &resp); err != nil {
+	var rawResp map[string]any
+	if err := db.Exec(ctx, q, &rawResp); err != nil {
 		t.Fatalf("BuildContextQuery failed: %v", err)
 	}
-	records := ParseContextResults(resp)
+	records := ParseContextResults(NewResponse(rawResp))
 	if len(records) != 0 {
 		t.Errorf("expected 0 results for non-matching query, got %d", len(records))
 	}

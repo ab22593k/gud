@@ -99,51 +99,19 @@ func BuildTrendsQuery(repoPath string) helix.Request {
 	return b.Returning("commits")
 }
 
-// extractProperties extracts the "properties" array from a response key.
-// HelixDB returns ValueMap results as {"key": {"properties": [...]}}.
-func extractProperties(resp map[string]any, key string) []map[string]any {
-	obj, ok := resp[key].(map[string]any)
-	if !ok {
-		return nil
-	}
-	raw, ok := obj["properties"].([]any)
-	if !ok {
-		return nil
-	}
-	result := make([]map[string]any, 0, len(raw))
-	for _, item := range raw {
-		if m, ok := item.(map[string]any); ok {
-			result = append(result, m)
-		}
-	}
-	return result
-}
-
-// extractCount extracts an integer count from a response key.
-// HelixDB returns Count results as {"key": {"count": N}}.
-func extractCount(resp map[string]any, key string) int {
-	obj, ok := resp[key].(map[string]any)
-	if !ok {
-		return 0
-	}
-	count, _ := obj["count"].(float64)
-	return int(count)
-}
-
 // ParseAuthorStats extracts author commit counts from a HelixDB response.
-func ParseAuthorStats(resp map[string]any) []AuthorStat {
-	entries := extractProperties(resp, "by_author")
-	if len(entries) == 0 {
-		// Also try "authors_by_array" as an alternative key
-		entries = extractProperties(resp, "authors_by_array")
+func ParseAuthorStats(resp *Response) []AuthorStat {
+	nodes := resp.Nodes("by_author")
+	if len(nodes) == 0 {
+		nodes = resp.Nodes("authors_by_array")
 	}
-	if len(entries) == 0 {
+	if len(nodes) == 0 {
 		return nil
 	}
 
 	emailCount := make(map[string]int)
-	for _, m := range entries {
-		author, _ := m["author"].(string)
+	for _, n := range nodes {
+		author := n.String("author")
 		if author == "" {
 			continue
 		}
@@ -159,16 +127,15 @@ func ParseAuthorStats(resp map[string]any) []AuthorStat {
 }
 
 // ParseTopFiles extracts file change counts from a HelixDB response.
-// The response includes ValueMap results from the File → MODIFIES → Commit traversal.
-func ParseTopFiles(resp map[string]any) []FileStat {
-	entries := extractProperties(resp, "files")
-	if len(entries) == 0 {
+func ParseTopFiles(resp *Response) []FileStat {
+	nodes := resp.Nodes("files")
+	if len(nodes) == 0 {
 		return nil
 	}
 
 	pathCount := make(map[string]int)
-	for _, m := range entries {
-		path, _ := m["path"].(string)
+	for _, n := range nodes {
+		path := n.String("path")
 		if path == "" {
 			continue
 		}
@@ -184,18 +151,18 @@ func ParseTopFiles(resp map[string]any) []FileStat {
 }
 
 // ParseTrends extracts daily trends from a HelixDB response.
-func ParseTrends(resp map[string]any) []TrendPoint {
-	entries := extractProperties(resp, "commits_by_day")
-	if len(entries) == 0 {
-		entries = extractProperties(resp, "commits")
+func ParseTrends(resp *Response) []TrendPoint {
+	nodes := resp.Nodes("commits_by_day")
+	if len(nodes) == 0 {
+		nodes = resp.Nodes("commits")
 	}
-	if len(entries) == 0 {
+	if len(nodes) == 0 {
 		return nil
 	}
 
 	dayCount := make(map[string]int)
-	for _, m := range entries {
-		t, ok := parseTimestamp(m["timestamp"])
+	for _, n := range nodes {
+		t, ok := parseTimestamp(n.Float64("timestamp"))
 		if !ok {
 			continue
 		}
@@ -211,18 +178,13 @@ func ParseTrends(resp map[string]any) []TrendPoint {
 	return trends
 }
 
-// parseTimestamp attempts to parse a timestamp from various HelixDB response formats.
-func parseTimestamp(v any) (time.Time, bool) {
-	switch val := v.(type) {
-	case string:
-		t, err := time.Parse(time.RFC3339, val)
-		if err == nil {
-			return t, true
-		}
-	case float64:
-		return time.UnixMilli(int64(val)), true
+// parseTimestamp converts a HelixDB timestamp float64 (Unix milliseconds)
+// into a time.Time.
+func parseTimestamp(v float64) (time.Time, bool) {
+	if v == 0 {
+		return time.Time{}, false
 	}
-	return time.Time{}, false
+	return time.UnixMilli(int64(v)), true
 }
 
 // FormatAuthorStats renders AuthorStat list as human-readable text.
@@ -276,21 +238,20 @@ func FormatTrends(trends []TrendPoint) string {
 }
 
 // ParseRepoSummary parses the HelixDB response into a RepoStats.
-func ParseRepoSummary(resp map[string]any) RepoStats {
+func ParseRepoSummary(resp *Response) RepoStats {
 	var stats RepoStats
 
-	stats.TotalCommits = extractCount(resp, "total")
+	stats.TotalCommits = resp.Count("total")
 
 	stats.AuthorStats = ParseAuthorStats(resp)
 	stats.FileStats = ParseTopFiles(resp)
 
-	// If top-level parsing found nothing but there are raw entries, try
-	// grouping from the author count approach.
+	// If count-based parsing found nothing, fall back to counting node entries.
 	if stats.TotalCommits == 0 {
-		stats.TotalCommits = len(extractProperties(resp, "by_author"))
+		stats.TotalCommits = len(resp.Nodes("by_author"))
 	}
 	if stats.TotalCommits == 0 {
-		stats.TotalCommits = len(extractProperties(resp, "authors_by_array"))
+		stats.TotalCommits = len(resp.Nodes("authors_by_array"))
 	}
 
 	return stats
