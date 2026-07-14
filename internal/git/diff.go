@@ -114,6 +114,52 @@ func GetRecentCommits(ctx context.Context, n int) (string, error) {
 	return out.String(), nil
 }
 
+// StagedChanges bundles the full staged diff and a list of deleted file names,
+// all retrieved from a single git subprocess call.
+type StagedChanges struct {
+	Diff    string
+	Deleted []string
+}
+
+// GetStagedChanges runs a single `git diff --cached` subprocess (without any
+// diff-filter) and returns both the full diff content and a list of deleted
+// file names parsed from the output. Using a single subprocess instead of two
+// (GetStagedDiff + GetStagedDeletedFiles) reduces subprocess overhead.
+func GetStagedChanges(ctx context.Context) (*StagedChanges, error) {
+	cmd := exec.CommandContext(ctx, "git", "diff", "--cached")
+	var out bytes.Buffer
+	cmd.Stdout = &out
+
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("failed to get staged changes: %w", err)
+	}
+
+	diff := out.String()
+	return &StagedChanges{
+		Diff:    diff,
+		Deleted: extractDeletedFiles(diff),
+	}, nil
+}
+
+// extractDeletedFiles parses the output of `git diff --cached` and returns the
+// names of files that were deleted (indicated by "+++ /dev/null").
+func extractDeletedFiles(diff string) []string {
+	var deleted []string
+	lines := strings.Split(diff, "\n")
+	for i, line := range lines {
+		// A deleted file has the form:
+		//   --- a/path/to/file
+		//   +++ /dev/null
+		if strings.HasPrefix(line, "+++ /dev/null") && i > 0 {
+			prev := lines[i-1]
+			if strings.HasPrefix(prev, "--- a/") {
+				deleted = append(deleted, strings.TrimPrefix(prev, "--- a/"))
+			}
+		}
+	}
+	return deleted
+}
+
 // runGitDiff runs a git diff command with the given arguments and returns the output.
 // It is the single point of implementation for git diff operations in this package.
 func runGitDiff(ctx context.Context, args ...string) (string, error) {

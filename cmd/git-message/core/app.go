@@ -8,6 +8,7 @@ import (
 
 	"gud/internal/config"
 	"gud/internal/config/mediator"
+	"gud/internal/git"
 	"gud/internal/mem"
 	"gud/internal/request"
 
@@ -26,6 +27,11 @@ type AppContext struct {
 	client       *request.Client
 	helixDB      *mem.DB
 	containerMgr *mem.ContainerManager
+
+	// Cached values computed once per invocation.
+	repoRoot    string
+	repoRootErr error
+	repoRootOK  bool // true once repoRoot has been computed
 }
 
 // NewAppContext loads and merges configuration from all sources (CLI flags,
@@ -98,10 +104,18 @@ func (a *AppContext) InitClient(ctx context.Context) error {
 // If auto-manage is enabled and the container is not running, it starts one
 // automatically. This is safe to call even when HelixDB is not enabled — it
 // returns nil for the DB and error is nil.
+//
+// Schema migration (EnsureSchema) is only run when the container was NOT
+// already running — if the container was already running, the schema persists
+// from a previous session and does not need to be recreated.
 func (a *AppContext) InitHelixDB(ctx context.Context) error {
 	if !a.cfg.HelixDBEnabled {
 		return nil
 	}
+
+	// Check container state BEFORE any action, so we know whether to run
+	// schema migration after ensuring the container is running.
+	wasRunning := a.cfg.HelixDBAutoManage && a.containerMgr.IsRunning(ctx)
 
 	// Auto-manage: ensure the Docker container is running.
 	if a.cfg.HelixDBAutoManage {
@@ -125,14 +139,19 @@ func (a *AppContext) InitHelixDB(ctx context.Context) error {
 		return nil
 	}
 
-	// Check availability and run schema migration.
-	if db.IsAvailable(ctx) {
+	if !db.IsAvailable(ctx) {
+		return nil
+	}
+
+	// Only run schema migration if the container was freshly started by us.
+	// If it was already running, the indexes persist from a previous session.
+	if !wasRunning {
 		if err := db.EnsureSchema(ctx); err != nil {
 			return fmt.Errorf("helixdb schema: %w", err)
 		}
-		a.helixDB = db
 	}
 
+	a.helixDB = db
 	return nil
 }
 
@@ -152,6 +171,17 @@ func extractPort(rawURL string) string {
 	}
 
 	return defaultPort
+}
+
+// RepoRoot returns the absolute path to the git repository root, caching the
+// result so that repeated calls within the same invocation use the cached
+// value and avoid a redundant subprocess spawn.
+func (a *AppContext) RepoRoot(ctx context.Context) (string, error) {
+	if !a.repoRootOK {
+		a.repoRoot, a.repoRootErr = git.GetRepoRoot(ctx)
+		a.repoRootOK = true
+	}
+	return a.repoRoot, a.repoRootErr
 }
 
 // StopHelixDB stops the managed container if it was started by this session.

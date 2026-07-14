@@ -101,17 +101,17 @@ func getStagedDiffOrError(ctx context.Context) (string, error) {
 	return appendDeletedContext(diff, deleted), nil
 }
 
-// getStagedDiffAndDeleted retrieves both the staged diff (excluding deleted content)
-// and the list of deleted file names.
+// getStagedDiffAndDeleted retrieves both the staged diff and the list of
+// deleted file names from a single git subprocess call.
 func getStagedDiffAndDeleted(ctx context.Context) (diff, deleted string, err error) {
-	diff, err = git.GetStagedDiff(ctx)
+	changes, err := git.GetStagedChanges(ctx)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to get staged diff: %w", err)
+		return "", "", fmt.Errorf("failed to get staged changes: %w", err)
 	}
 
-	deleted, err = git.GetStagedDeletedFiles(ctx)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to get deleted files: %w", err)
+	diff = changes.Diff
+	if len(changes.Deleted) > 0 {
+		deleted = strings.Join(changes.Deleted, "\n") + "\n"
 	}
 
 	return diff, deleted, nil
@@ -161,7 +161,7 @@ func maybeAppendMEMContext(
 		return existingContext
 	}
 
-	repoPath, err := git.GetRepoRoot(ctx)
+	repoPath, err := app.RepoRoot(ctx)
 	if err != nil || repoPath == "" {
 		slog.Debug("helixdb: failed to get repo root", "error", err)
 

@@ -179,7 +179,7 @@ func persistToHelixDB(ctx context.Context, app *AppContext, diff, hash, message 
 		return
 	}
 
-	repoPath, err := git.GetRepoRoot(ctx)
+	repoPath, err := app.RepoRoot(ctx)
 	if err != nil || repoPath == "" {
 		slog.Debug("helixdb: failed to get repo root for persistence", "error", err)
 
