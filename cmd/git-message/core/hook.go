@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"gud/internal/git"
 	"gud/internal/request"
@@ -101,13 +102,18 @@ func runHookUninstall(global bool) error {
 	return nil
 }
 
+// hookTimeout is the maximum time a hook-mode generation is allowed to take.
+// This prevents a stuck Gemini API call from blocking git commit indefinitely.
+const hookTimeout = 2 * time.Minute
+
 func runHookMode(cmd *cobra.Command, msgFile string) error {
 	app, err := NewAppContext(cmd)
 	if err != nil {
 		return err
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), hookTimeout)
+	defer cancel()
 
 	return runHookModeInternal(ctx, msgFile, app)
 }
