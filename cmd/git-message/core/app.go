@@ -152,6 +152,7 @@ func (a *AppContext) InitHelixDB(ctx context.Context) error {
 	}
 
 	a.helixDB = db
+
 	return nil
 }
 
@@ -181,6 +182,7 @@ func (a *AppContext) RepoRoot(ctx context.Context) (string, error) {
 		a.repoRoot, a.repoRootErr = git.GetRepoRoot(ctx)
 		a.repoRootOK = true
 	}
+
 	return a.repoRoot, a.repoRootErr
 }
 

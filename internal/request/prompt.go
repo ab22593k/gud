@@ -5,11 +5,6 @@ import (
 	"strings"
 )
 
-type Showcase struct {
-	Diff   string
-	Output string
-}
-
 // DetailLevel represents the level of detail for the commit message.
 type DetailLevel string
 

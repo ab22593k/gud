@@ -1,20 +1,22 @@
 package profile
 
-// Package profile manages AI agent profile caching and remote fetching.
-
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"regexp"
 	"strings"
 	"time"
 )
 
-const catalogURL = "https://raw.githubusercontent.com/K-Dense-AI/scientific-agents/main/catalog.json"
+var validSlug = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]*$`)
 
-const profileBaseURL = "https://raw.githubusercontent.com/K-Dense-AI/scientific-agents/" +
+var catalogURL = "https://raw.githubusercontent.com/K-Dense-AI/scientific-agents/main/catalog.json"
+
+var profileBaseURL = "https://raw.githubusercontent.com/K-Dense-AI/scientific-agents/" +
 	"main/scientific-agents/%s/AGENTS.md"
 
 type RemoteCatalog struct {
@@ -70,8 +72,11 @@ func (m *Manager) FetchCatalog(ctx context.Context) ([]CatalogEntry, error) {
 }
 
 func (m *Manager) FetchProfile(ctx context.Context, slug string) (string, error) {
-	url := fmt.Sprintf(profileBaseURL, slug)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if !validSlug.MatchString(slug) {
+		return "", fmt.Errorf("invalid profile slug %q: must match %s", slug, validSlug.String())
+	}
+	urlStr := fmt.Sprintf(profileBaseURL, url.PathEscape(slug))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, urlStr, nil)
 	if err != nil {
 		return "", fmt.Errorf("create request: %w", err)
 	}

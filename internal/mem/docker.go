@@ -64,7 +64,7 @@ func (m *ContainerManager) EnsureRunning(ctx context.Context) (string, error) {
 	case "exited", "paused":
 		slog.Debug("helixdb: restarting existing container",
 			"container", m.containerName)
-		if err := m.runDocker("start", m.containerName); err != nil {
+		if err := m.runDocker(ctx, "start", m.containerName); err != nil {
 			return "", fmt.Errorf("start container: %w", err)
 		}
 		m.startedByUs = true
@@ -73,7 +73,7 @@ func (m *ContainerManager) EnsureRunning(ctx context.Context) (string, error) {
 		// Container doesn't exist — create and start it.
 		slog.Debug("helixdb: starting new container",
 			"container", m.containerName, "image", DefaultImage)
-		if err := m.runDocker("run", "-d",
+		if err := m.runDocker(ctx, "run", "-d",
 			"--name", m.containerName,
 			"-p", m.hostPort+":"+DefaultInternalPort,
 			DefaultImage,
@@ -99,7 +99,7 @@ func (m *ContainerManager) Stop(ctx context.Context) error {
 		return nil
 	}
 	slog.Debug("helixdb: stopping container", "container", m.containerName)
-	_ = m.runDocker("rm", "-f", m.containerName)
+	_ = m.runDocker(ctx, "rm", "-f", m.containerName)
 	m.startedByUs = false
 	return nil
 }
@@ -166,9 +166,9 @@ func (m *ContainerManager) baseURL() string {
 	return "http://localhost:" + m.hostPort
 }
 
-// runDocker executes a docker command with the given args.
-func (m *ContainerManager) runDocker(args ...string) error {
-	cmd := exec.Command("docker", args...)
+// runDocker executes a docker command with the given context.
+func (m *ContainerManager) runDocker(ctx context.Context, args ...string) error {
+	cmd := exec.CommandContext(ctx, "docker", args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("docker %s: %w\n%s", strings.Join(args, " "), err, string(out))

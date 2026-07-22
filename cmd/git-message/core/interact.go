@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -152,8 +151,8 @@ func editMessage(msg string) (string, error) {
 		return "", fmt.Errorf("failed to write temp file: %w", err)
 	}
 
-	//nolint:gosec // editor comes from user's $EDITOR env var, running their own CLI
-	editCmd := exec.Command("sh", "-c", editor+" "+strconv.Quote(path))
+	//nolint:gosec // editor comes from user's $EDITOR env var; user chose to run it
+	editCmd := exec.Command(editor, path)
 	editCmd.Stdin = os.Stdin
 	editCmd.Stdout = os.Stdout
 	editCmd.Stderr = os.Stderr

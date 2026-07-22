@@ -69,6 +69,12 @@ func (c Config) Validate() Config {
 // Merge returns a new Config with non-zero fields from override applied on top.
 // Zero-value fields in override are left as-is from the receiver. This allows
 // layering: file config → env overrides → CLI flag overrides.
+//
+// CAUTION: Zero is an ambiguous signal — it means "not set" rather than
+// "set to zero". This means you cannot explicitly set Temperature=0,
+// History=0, or WrapLine=0 via CLI or env overrides; they will be silently
+// ignored. CLI flag defaults should avoid zero for any field that has a
+// meaningful zero value.
 func (c Config) Merge(override Config) Config {
 	merged := c
 
