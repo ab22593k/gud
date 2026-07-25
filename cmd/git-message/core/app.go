@@ -69,6 +69,13 @@ func (a *AppContext) Config() config.Config {
 	return a.cfg
 }
 
+// setProfile updates the profile in the resolved config.
+// This is used by the suggestion flow to apply a newly chosen profile
+// immediately without requiring a config reload.
+func (a *AppContext) setProfile(name config.ProfileName) {
+	a.cfg.Profile = name
+}
+
 // Client returns the request client, or nil if InitClient has not been called.
 func (a *AppContext) Client() *request.Client {
 	return a.client

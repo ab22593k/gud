@@ -371,13 +371,16 @@ func TestProfileCommandHelp(t *testing.T) {
 
 func TestProfileListCommand(t *testing.T) {
 	origOut := rootCmd.OutOrStdout()
+	origIn := rootCmd.InOrStdin()
 	t.Cleanup(func() {
 		rootCmd.SetOut(origOut)
+		rootCmd.SetIn(origIn)
 		rootCmd.SetArgs(nil)
 	})
 
 	var buf bytes.Buffer
 	rootCmd.SetOut(&buf)
+	rootCmd.SetIn(&bytes.Buffer{}) // non-terminal stdin to prevent TUI launch
 	rootCmd.SetArgs([]string{testProfileCmdName, testListCmdName})
 
 	err := rootCmd.Execute()

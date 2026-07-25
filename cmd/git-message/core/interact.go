@@ -15,6 +15,7 @@ import (
 	"gud/internal/git"
 	"gud/internal/mem"
 	"gud/internal/request"
+	"gud/internal/tui"
 
 	"github.com/spf13/cobra"
 )
@@ -46,11 +47,21 @@ func interactiveCommit(ctx context.Context, cmd *cobra.Command, app *AppContext,
 
 		msg = appendAssistedBy(msg, client.ModelName())
 
-		_, _ = fmt.Fprintln(out, "")
-		_, _ = fmt.Fprintln(out, msg)
-		_, _ = fmt.Fprintln(out, "")
-
-		action := promptAction(scanner, out)
+		// Use TUI in terminal mode, fall back to text prompt otherwise
+		var action string
+		if file, ok := cmd.InOrStdin().(*os.File); ok && isTerminal(file) {
+			var edited string
+			action, edited, err = tui.RunCommitReview(msg, cfg.WrapLine)
+			if err != nil {
+				action = actionAbort
+			}
+			// If the user edited inline, use the TUI's version.
+			if action == actionCommit && edited != "" {
+				msg = edited
+			}
+		} else {
+			action = promptAction(scanner, out)
+		}
 		switch action {
 		case actionCommit:
 			hash, err := git.Commit(ctx, msg)

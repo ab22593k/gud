@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"sort"
 	"strings"
 
 	"gud/internal/profile"
+	"gud/internal/tui"
 
 	"github.com/spf13/cobra"
 )
@@ -64,6 +66,11 @@ var profileListCmd = &cobra.Command{
 			return nil
 		}
 
+		// In terminal mode, launch the interactive TUI profile picker directly.
+		if file, ok := cmd.InOrStdin().(*os.File); ok && isTerminal(file) {
+			return runLocalTUIPicker(cmd, profiles)
+		}
+
 		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Cached profiles:")
 		_, _ = fmt.Fprintln(cmd.OutOrStdout())
 
@@ -76,6 +83,38 @@ var profileListCmd = &cobra.Command{
 
 		return nil
 	},
+}
+
+// runLocalTUIPicker launches the TUI profile list for locally cached profiles.
+func runLocalTUIPicker(cmd *cobra.Command, profiles []profile.Profile) error {
+	cached := make(map[string]bool, len(profiles))
+	entries := make([]profile.CatalogEntry, len(profiles))
+
+	for i, p := range profiles {
+		cached[p.Slug] = true
+		workMode := p.WorkMode
+		if workMode == "" {
+			workMode = "Cached"
+		}
+		entries[i] = profile.CatalogEntry{
+			Slug:       p.Slug,
+			Profession: p.Profession,
+			WorkMode:   workMode,
+			Summary:    p.Content,
+		}
+	}
+
+	selected, err := tui.RunPicker(entries, nil, cached, "GUD Cached Profiles")
+	if err != nil {
+		return fmt.Errorf("picker: %w", err)
+	}
+	if selected != nil {
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(),
+			"\nProfile %q selected. Use: gud message --profile %s\n",
+			selected.Slug, selected.Slug)
+	}
+
+	return nil
 }
 
 func listRemoteProfiles(cmd *cobra.Command) error {
@@ -96,12 +135,80 @@ func listRemoteProfiles(cmd *cobra.Command) error {
 		return entries[i].Profession < entries[j].Profession
 	})
 
-	cats := categorizeByWorkMode(entries)
+	// In terminal mode, launch the interactive TUI picker directly.
+	if file, ok := cmd.InOrStdin().(*os.File); ok && isTerminal(file) {
+		return runTUIPicker(cmd, entries)
+	}
 
+	// Non-terminal: print the catalog listing to stdout.
+	cats := categorizeByWorkMode(entries)
 	printProfileSummary(cmd.OutOrStdout(), len(entries), cats)
 	printDetailedEntries(cmd.OutOrStdout(), entries)
 
 	return nil
+}
+
+// runTUIPicker launches the TUI profile picker and saves the selected profile.
+func runTUIPicker(cmd *cobra.Command, entries []profile.CatalogEntry) error {
+	// Build the set of already-cached slugs for cache indicators in the TUI.
+	cached := make(map[string]bool)
+	if cachedList, err := profileManager.List(); err == nil {
+		for _, p := range cachedList {
+			cached[p.Slug] = true
+		}
+	}
+
+	download := func(ctx context.Context, slug string) error {
+		profession := findProfession(slug, entries)
+
+		return downloadAndSaveProfile(ctx, slug, profession)
+	}
+
+	selected, err := tui.RunPicker(entries, download, cached)
+	if err != nil {
+		return fmt.Errorf("picker: %w", err)
+	}
+	if selected != nil {
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(),
+			"\nProfile %q saved. Use: gud message --profile %s\n",
+			selected.Slug, selected.Slug)
+	}
+
+	return nil
+}
+
+// downloadAndSaveProfile fetches a profile from the remote catalog and
+// caches it locally. Returns nil if already cached or successfully saved.
+func downloadAndSaveProfile(ctx context.Context, slug, profession string) error {
+	if profileManager.IsCached(slug) {
+		return nil
+	}
+
+	content, err := profileManager.FetchProfile(ctx, slug)
+	if err != nil {
+		return fmt.Errorf("fetch profile %q: %w", slug, err)
+	}
+
+	if err := profileManager.Save(slug, profile.Profile{
+		Profession: profession,
+		Content:    content,
+	}); err != nil {
+		return fmt.Errorf("save profile %q: %w", slug, err)
+	}
+
+	return nil
+}
+
+// findProfession looks up the profession for a slug in the entries list.
+// Returns empty string if not found.
+func findProfession(slug string, entries []profile.CatalogEntry) string {
+	for _, e := range entries {
+		if e.Slug == slug {
+			return e.Profession
+		}
+	}
+
+	return ""
 }
 
 // category groups profiles by their work mode for display.
@@ -179,17 +286,8 @@ Run 'gud profile list --remote' to see all available slugs.`,
 		}
 
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Downloading profile %q...\n", slug)
-
-		content, err := profileManager.FetchProfile(context.Background(), slug)
-		if err != nil {
-			return fmt.Errorf("fetch: %w", err)
-		}
-
-		if err := profileManager.Save(slug, profile.Profile{
-			Profession: slug,
-			Content:    content,
-		}); err != nil {
-			return fmt.Errorf("save: %w", err)
+		if err := downloadAndSaveProfile(context.Background(), slug, slug); err != nil {
+			return err
 		}
 
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Profile %q saved successfully.\n", slug)
@@ -223,10 +321,28 @@ var profileShowCmd = &cobra.Command{
 	Short: "Show details of a profile",
 	Args:  cobra.ExactArgs(1),
 	Example: `  gud profile show astrophysicist
-  gud profile show computer-scientist`,
+  gud profile show computer-scientist
+  gud profile show astrophysicist --remote`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		initProfileManager()
 		slug := args[0]
+
+		showRemote, _ := cmd.Flags().GetBool("remote")
+
+		if showRemote {
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Fetching profile %q from remote...\n", slug)
+			content, err := profileManager.FetchProfile(context.Background(), slug)
+			if err != nil {
+				return fmt.Errorf("fetch remote: %w", err)
+			}
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Profile: %s (remote)\n", slug)
+			_, _ = fmt.Fprintln(cmd.OutOrStdout())
+			_, _ = fmt.Fprintln(cmd.OutOrStdout(), content)
+			_, _ = fmt.Fprintln(cmd.OutOrStdout())
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Use 'gud profile save %s' to cache it locally.\n", slug)
+
+			return nil
+		}
 
 		p, err := profileManager.Get(slug)
 		if err != nil {
@@ -253,6 +369,7 @@ func truncate(s string, maxLen int) string {
 
 func init() {
 	profileListCmd.Flags().BoolP("remote", "r", false, "List all remote profiles from K-Dense-AI/scientific-agents")
+	profileShowCmd.Flags().BoolP("remote", "r", false, "Show a remote profile without saving it")
 
 	profileCmd.AddCommand(profileListCmd)
 	profileCmd.AddCommand(profileSaveCmd)

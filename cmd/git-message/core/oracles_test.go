@@ -465,9 +465,11 @@ func TestOracle_UserExpectations_HelpOffline(t *testing.T) {
 func TestOracle_Purpose_ProfileListStructure(t *testing.T) {
 	var buf bytes.Buffer
 	rootCmd.SetOut(&buf)
+	rootCmd.SetIn(&bytes.Buffer{}) // non-terminal stdin to prevent TUI launch
 	rootCmd.SetArgs([]string{"profile", "list"})
 	t.Cleanup(func() {
 		rootCmd.SetOut(os.Stdout)
+		rootCmd.SetIn(os.Stdin)
 		rootCmd.SetArgs(nil)
 	})
 	if err := rootCmd.Execute(); err != nil {

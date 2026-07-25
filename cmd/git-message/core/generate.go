@@ -10,6 +10,7 @@ import (
 	"strings"
 	"syscall"
 
+	"gud/internal/detect"
 	"gud/internal/git"
 	"gud/internal/mem"
 
@@ -41,6 +42,13 @@ func runGenerate(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
+	// Suggest a profile if none is configured (first invocation in this repo).
+	if app.Config().Profile == "" {
+		if err := suggestProfileIfNeeded(ctx, cmd, app); err != nil {
+			slog.Debug("profile suggestion skipped", "error", err)
+		}
+	}
+
 	diff, err := getStagedDiffOrError(ctx)
 	if err != nil {
 		return err
@@ -48,7 +56,8 @@ func runGenerate(cmd *cobra.Command, _ []string) error {
 
 	units := git.ExtractCodeUnits(diff)
 
-	promptContext := buildHistoryContext(ctx, app)
+	promptContext := buildRepoContext(ctx, app)
+	promptContext = joinContexts(promptContext, buildHistoryContext(ctx, app))
 	promptContext = maybeAppendMEMContext(ctx, app, diff, units, promptContext)
 
 	return interactiveCommit(ctx, cmd, app, diff, promptContext, units)
@@ -219,6 +228,41 @@ func maybeAppendMEMContext(
 	}
 
 	return ctxStr
+}
+
+// buildRepoContext returns a formatted string of repository file statistics,
+// or empty string if the stats cannot be computed.
+func buildRepoContext(ctx context.Context, app *AppContext) string {
+	repoRoot, err := app.RepoRoot(ctx)
+	if err != nil {
+		slog.Debug("failed to get repo root for stats", "error", err)
+
+		return ""
+	}
+
+	stats, err := detect.ComputeStats(repoRoot)
+	if err != nil {
+		slog.Debug("failed to compute repo stats", "error", err)
+
+		return ""
+	}
+
+	return detect.FormatRepoContext(stats)
+}
+
+// joinContexts joins two non-empty context strings with a blank line separator.
+// Returns whichever is non-empty if the other is empty, or empty if both are.
+func joinContexts(a, b string) string {
+	switch {
+	case a == "" && b == "":
+		return ""
+	case a == "":
+		return b
+	case b == "":
+		return a
+	default:
+		return a + "\n\n" + b
+	}
 }
 
 // buildHistoryContext returns a formatted string of recent commit history, or
