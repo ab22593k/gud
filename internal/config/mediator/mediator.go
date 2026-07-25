@@ -206,20 +206,9 @@ func configFromEnv() config.Config {
 		}
 	}
 
-	v = os.Getenv("GUD_MEM_ENABLED")
-	if v != "" {
-		cfg.HelixDBEnabled = v == "1" || v == "true" || v == "yes"
-	}
-
-	v = os.Getenv("GUD_MEM_URL")
-	if v != "" {
-		cfg.HelixDBURL = v
-	}
-
-	v = os.Getenv("GUD_MEM_AUTO_MANAGE")
-	if v != "" {
-		cfg.HelixDBAutoManage = v == "1" || v == "true" || v == "yes"
-	}
+	cfg.HelixDBEnabled = boolEnv("GUD_MEM_ENABLED")
+	cfg.HelixDBURL = os.Getenv("GUD_MEM_URL")
+	cfg.HelixDBAutoManage = boolEnv("GUD_MEM_AUTO_MANAGE")
 
 	v = os.Getenv("GUD_MEM_CONTAINER_NAME")
 	if v != "" {
@@ -239,4 +228,11 @@ func firstSet(keys ...string) string {
 	}
 
 	return ""
+}
+
+// boolEnv returns true if the env var is set to a truthy value ("1", "true", "yes").
+func boolEnv(key string) bool {
+	v := os.Getenv(key)
+
+	return v == "1" || v == "true" || v == "yes"
 }
