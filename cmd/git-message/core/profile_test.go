@@ -6,6 +6,11 @@ import (
 	"gud/internal/profile"
 )
 
+const (
+	testBiology = "biology"
+	testPhysics = "physics"
+)
+
 func TestCategorizeByWorkMode(t *testing.T) {
 	t.Parallel()
 
@@ -29,35 +34,35 @@ func TestCategorizeByWorkMode(t *testing.T) {
 		{
 			name: "single entry",
 			input: []profile.CatalogEntry{
-				{WorkMode: "physics", Profession: "astrophysicist"},
+				{WorkMode: testPhysics, Profession: testAstrophysicist},
 			},
 			want: []category{
-				{name: "physics", count: 1},
+				{name: testPhysics, count: 1},
 			},
 		},
 		{
 			name: "multiple entries same work mode",
 			input: []profile.CatalogEntry{
-				{WorkMode: "physics", Profession: "astrophysicist"},
-				{WorkMode: "physics", Profession: "cosmologist"},
-				{WorkMode: "physics", Profession: "quantum physicist"},
+				{WorkMode: testPhysics, Profession: testAstrophysicist},
+				{WorkMode: testPhysics, Profession: "cosmologist"},
+				{WorkMode: testPhysics, Profession: "quantum physicist"},
 			},
 			want: []category{
-				{name: "physics", count: 3},
+				{name: testPhysics, count: 3},
 			},
 		},
 		{
 			name: "entries grouped by work mode and sorted by name",
 			input: []profile.CatalogEntry{
-				{WorkMode: "biology", Profession: "molecular biologist"},
-				{WorkMode: "physics", Profession: "astrophysicist"},
+				{WorkMode: testBiology, Profession: "molecular biologist"},
+				{WorkMode: testPhysics, Profession: testAstrophysicist},
 				{WorkMode: "chemistry", Profession: "organic chemist"},
-				{WorkMode: "biology", Profession: "geneticist"},
+				{WorkMode: testBiology, Profession: "geneticist"},
 			},
 			want: []category{
-				{name: "biology", count: 2},
+				{name: testBiology, count: 2},
 				{name: "chemistry", count: 1},
-				{name: "physics", count: 1},
+				{name: testPhysics, count: 1},
 			},
 		},
 		{

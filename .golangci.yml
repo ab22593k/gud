@@ -13,7 +13,13 @@ linters:
     - goconst
     - revive
     - lll
+    - funlen
+    - errorlint
+    - modernize
   settings:
+    funlen:
+      lines: 65
+      statements: 40
     lll:
       line-length: 120
     revive:
@@ -36,6 +42,9 @@ linters:
         - linters:
             - lll
           path: \.go
+    rules:
+      - linters: [funlen]
+        path: "_test\\.go"
 formatters:
   enable:
     - gofmt
