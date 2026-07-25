@@ -210,10 +210,7 @@ func configFromEnv() config.Config {
 	cfg.HelixDBURL = os.Getenv("GUD_MEM_URL")
 	cfg.HelixDBAutoManage = boolEnv("GUD_MEM_AUTO_MANAGE")
 
-	v = os.Getenv("GUD_MEM_CONTAINER_NAME")
-	if v != "" {
-		cfg.HelixDBContainerName = v
-	}
+	cfg.HelixDBContainerName = os.Getenv("GUD_MEM_CONTAINER_NAME")
 
 	return cfg
 }
