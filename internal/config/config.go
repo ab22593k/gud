@@ -121,7 +121,8 @@ func (c Config) Merge(override Config) Config {
 // DefaultConfig returns a Config populated with sensible defaults.
 func DefaultConfig() Config {
 	return Config{
-		DetailLevel: DetailStandard,
-		WrapLine:    72,
+		DetailLevel:    DetailStandard,
+		WrapLine:       72,
+		HelixDBEnabled: true,
 	}
 }

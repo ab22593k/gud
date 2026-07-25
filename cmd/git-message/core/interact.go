@@ -170,23 +170,9 @@ func editMessage(msg string) (string, error) {
 	return strings.TrimSpace(string(edited)), nil
 }
 
-// persistToHelixDB persists the commit data to HelixDB after a successful commit.
-// Errors are logged and silently discarded — HelixDB persistence is fire-and-forget.
-func persistToHelixDB(ctx context.Context, app *AppContext, diff, hash, message string, units []git.CodeUnit) {
-	db := app.HelixDB()
-	if db == nil || !db.Enabled() || !db.IsAvailable(ctx) {
-		return
-	}
-
-	repoPath, err := app.RepoRoot(ctx)
-	if err != nil || repoPath == "" {
-		slog.Debug("helixdb: failed to get repo root for persistence", "error", err)
-
-		return
-	}
-
-	author := git.GetAuthor(ctx)
-
+// toFileChanges deduplicates git.CodeUnit entries by FilePath and converts
+// them to mem.FileChange for HelixDB persistence.
+func toFileChanges(units []git.CodeUnit) []mem.FileChange {
 	var fileChanges []mem.FileChange
 	for _, u := range units {
 		existing := false
@@ -204,6 +190,28 @@ func persistToHelixDB(ctx context.Context, app *AppContext, diff, hash, message 
 			})
 		}
 	}
+
+	return fileChanges
+}
+
+// persistToHelixDB persists the commit data to HelixDB after a successful commit.
+// Errors are logged and silently discarded — HelixDB persistence is fire-and-forget.
+func persistToHelixDB(ctx context.Context, app *AppContext, diff, hash, message string, units []git.CodeUnit) {
+	db := app.HelixDB()
+	if db == nil || !db.Enabled() || !db.IsAvailable(ctx) {
+		return
+	}
+
+	repoPath, err := app.RepoRoot(ctx)
+	if err != nil || repoPath == "" {
+		slog.Debug("helixdb: failed to get repo root for persistence", "error", err)
+
+		return
+	}
+
+	author := git.GetAuthor(ctx)
+
+	fileChanges := toFileChanges(units)
 
 	commit := mem.CommitData{
 		SHA:            hash,

@@ -7,7 +7,9 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 )
 
 const slugTestAgent = "test-agent"
@@ -178,6 +180,100 @@ func TestFetchProfile_Success(t *testing.T) {
 	}
 	if content != "You are an astrophysicist." {
 		t.Errorf("content = %q, want %q", content, "You are an astrophysicist.")
+	}
+}
+
+func TestFetchProfile_NotFound(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	origBase := profileBaseURL
+	profileBaseURL = server.URL + "/%s/AGENTS.md"
+	t.Cleanup(func() { profileBaseURL = origBase })
+
+	m := &Manager{}
+	_, err := m.FetchProfile(context.Background(), "nonexistent")
+	if err == nil {
+		t.Fatal("FetchProfile() expected error for 404")
+	}
+	if !strings.Contains(err.Error(), "not found on remote") {
+		t.Errorf("error = %v, want 'not found on remote'", err)
+	}
+}
+
+func TestFetchProfile_ServerError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	origBase := profileBaseURL
+	profileBaseURL = server.URL + "/%s/AGENTS.md"
+	t.Cleanup(func() { profileBaseURL = origBase })
+
+	m := &Manager{}
+	_, err := m.FetchProfile(context.Background(), slugAstro)
+	if err == nil {
+		t.Fatal("FetchProfile() expected error for 500")
+	}
+	if !strings.Contains(err.Error(), "500") {
+		t.Errorf("error = %v, want HTTP 500 mention", err)
+	}
+}
+
+func TestFetchCatalog_ServerError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	origURL := catalogURL
+	catalogURL = server.URL
+	t.Cleanup(func() { catalogURL = origURL })
+
+	m := &Manager{}
+	_, err := m.FetchCatalog(context.Background())
+	if err == nil {
+		t.Fatal("FetchCatalog() expected error for 500")
+	}
+}
+
+func TestGetDownloadETA(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		count int
+		want  time.Duration
+	}{
+		{count: 0, want: 0},
+		{count: 1, want: 500 * time.Millisecond},
+		{count: 10, want: 5 * time.Second},
+	}
+
+	for _, tt := range tests {
+		got := GetDownloadETA(tt.count)
+		if got != tt.want {
+			t.Errorf("GetDownloadETA(%d) = %v, want %v", tt.count, got, tt.want)
+		}
+	}
+}
+
+func TestFetchCatalog_InvalidJSON(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("not valid json"))
+	}))
+	defer server.Close()
+
+	origURL := catalogURL
+	catalogURL = server.URL
+	t.Cleanup(func() { catalogURL = origURL })
+
+	m := &Manager{}
+	_, err := m.FetchCatalog(context.Background())
+	if err == nil {
+		t.Fatal("FetchCatalog() expected error for invalid JSON")
 	}
 }
 

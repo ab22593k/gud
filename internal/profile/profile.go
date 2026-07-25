@@ -41,6 +41,12 @@ func NewManager() (*Manager, error) {
 	return &Manager{cacheDir: cacheDir}, nil
 }
 
+// NewManagerWithDir creates a Manager with an explicit cache directory.
+// This is primarily useful for testing with temporary directories.
+func NewManagerWithDir(cacheDir string) *Manager {
+	return &Manager{cacheDir: cacheDir}
+}
+
 func (m *Manager) List() ([]Profile, error) {
 	var profiles []Profile
 
