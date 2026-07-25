@@ -117,7 +117,7 @@ func TestMultipleSaveCycles(t *testing.T) {
 	path := filepath.Join(dir, "multi.json")
 	p := NewFileProvider(path)
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		cfg := config.Config{
 			Model:   "model-v1",
 			History: i,

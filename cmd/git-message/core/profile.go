@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 
@@ -95,45 +96,64 @@ func listRemoteProfiles(cmd *cobra.Command) error {
 		return entries[i].Profession < entries[j].Profession
 	})
 
-	type category struct {
-		name  string
-		count int
-	}
+	cats := categorizeByWorkMode(entries)
 
+	printProfileSummary(cmd.OutOrStdout(), len(entries), cats)
+	printDetailedEntries(cmd.OutOrStdout(), entries)
+
+	return nil
+}
+
+// category groups profiles by their work mode for display.
+type category struct {
+	name  string
+	count int
+}
+
+// categorizeByWorkMode groups entries by WorkMode and returns a sorted list
+// of categories (ordered by name), each with its profile count.
+func categorizeByWorkMode(entries []profile.CatalogEntry) []category {
 	catMap := make(map[string][]profile.CatalogEntry)
 	for _, e := range entries {
 		catMap[e.WorkMode] = append(catMap[e.WorkMode], e)
 	}
 
-	var cats []category
+	cats := make([]category, 0, len(catMap))
 	for name, list := range catMap {
 		cats = append(cats, category{name, len(list)})
 	}
 	sort.Slice(cats, func(i, j int) bool { return cats[i].name < cats[j].name })
 
-	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "\nFound %d profiles in %d categories:\n", len(entries), len(cats))
-	_, _ = fmt.Fprintln(cmd.OutOrStdout())
+	return cats
+}
+
+// printProfileSummary prints the category summary header with profile counts
+// and an instruction line for using profiles.
+func printProfileSummary(w io.Writer, total int, cats []category) {
+	_, _ = fmt.Fprintf(w, "\nFound %d profiles in %d categories:\n", total, len(cats))
+	_, _ = fmt.Fprintln(w)
 
 	for _, cat := range cats {
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  %s (%d profiles)\n", cat.name, cat.count)
+		_, _ = fmt.Fprintf(w, "  %s (%d profiles)\n", cat.name, cat.count)
 	}
 
-	_, _ = fmt.Fprintln(cmd.OutOrStdout())
-	_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Use 'message --profile <slug>' or 'profile save <slug>' "+
+	_, _ = fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(w, "Use 'message --profile <slug>' or 'profile save <slug>' "+
 		"with one of the slugs below.")
-	_, _ = fmt.Fprintln(cmd.OutOrStdout())
+	_, _ = fmt.Fprintln(w)
+}
 
-	// Show all entries with their slugs
+// printDetailedEntries prints all profile entries grouped by work mode,
+// with work mode headers separating the groups.
+func printDetailedEntries(w io.Writer, entries []profile.CatalogEntry) {
 	currentWorkMode := ""
 	for _, e := range entries {
 		if e.WorkMode != currentWorkMode {
 			currentWorkMode = e.WorkMode
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "\n  [%s]\n", currentWorkMode)
+			_, _ = fmt.Fprintf(w, "\n  [%s]\n", currentWorkMode)
 		}
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "    %-50s %s\n", e.Slug, truncate(e.Summary, 70))
+		_, _ = fmt.Fprintf(w, "    %-50s %s\n", e.Slug, truncate(e.Summary, 70))
 	}
-
-	return nil
 }
 
 var profileSaveCmd = &cobra.Command{

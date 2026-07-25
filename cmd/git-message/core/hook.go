@@ -189,7 +189,7 @@ func generateAndWriteMsg(ctx context.Context, app *AppContext, diff, msgFile str
 // consists entirely of comments, so this distinguishes "user supplied a
 // message" from "git created an empty template".
 func hasMeaningfulContent(text string) bool {
-	for _, line := range strings.Split(text, "\n") {
+	for line := range strings.SplitSeq(text, "\n") {
 		trimmed := strings.TrimSpace(line)
 		if trimmed != "" && !strings.HasPrefix(trimmed, "#") {
 			return true
