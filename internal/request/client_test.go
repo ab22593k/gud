@@ -46,7 +46,7 @@ func TestNewClient(t *testing.T) {
 		},
 		{
 			name:    "valid API key with model",
-			cfg:     ClientConfig{APIKey: "test-api-key", Model: "gemini-2.5-pro"},
+			cfg:     ClientConfig{APIKey: "test-api-key", Model: "gemini-flash-latest"},
 			wantErr: false,
 		},
 	}
@@ -73,7 +73,7 @@ func TestNewClient(t *testing.T) {
 func TestNewClientWithGenerator(t *testing.T) {
 	t.Parallel()
 	mock := &mockLLM{}
-	client := NewClientWithGenerator(mock, "test-model", 0)
+	client := NewClientWithGenerator(mock, "test-model")
 
 	if client == nil {
 		t.Fatal("NewClientWithGenerator() returned nil")
@@ -83,9 +83,6 @@ func TestNewClientWithGenerator(t *testing.T) {
 	}
 	if client.modelImpl != mock {
 		t.Errorf("modelImpl should be the mock")
-	}
-	if client.temperature != nil {
-		t.Errorf("temperature should be nil for default 0")
 	}
 }
 
@@ -211,7 +208,7 @@ func TestOracle_Comparable_ModelInRequestMatchesClientModel(t *testing.T) {
 	t.Parallel()
 
 	capture := &captureRequestLLM{name: "fake-llm"}
-	client := NewClientWithGenerator(capture, "gemini-2.5-pro", 0.7)
+	client := NewClientWithGenerator(capture, "gemini-flash-latest")
 
 	_, err := client.GenerateCommitMessage(context.Background(),
 		"diff --git a/main.go b/main.go", "",
@@ -223,8 +220,8 @@ func TestOracle_Comparable_ModelInRequestMatchesClientModel(t *testing.T) {
 	if capture.captured == nil {
 		t.Fatal("LLM was never called")
 	}
-	if capture.captured.Model != "gemini-2.5-pro" {
-		t.Errorf("req.Model = %q, want %q (must match Client.model for Consistent trailer)", capture.captured.Model, "gemini-2.5-pro")
+	if capture.captured.Model != "gemini-flash-latest" {
+		t.Errorf("req.Model = %q, want %q (must match Client.model for Consistent trailer)", capture.captured.Model, "gemini-flash-latest")
 	}
 }
 
@@ -235,7 +232,7 @@ func TestOracle_Comparable_ModelNameMatchesConfigured(t *testing.T) {
 	t.Parallel()
 
 	capture := &captureRequestLLM{name: "fake-llm"}
-	client := NewClientWithGenerator(capture, "gemini-2.5-pro", 0.7)
+	client := NewClientWithGenerator(capture, "gemini-flash-latest")
 
 	_, err := client.GenerateCommitMessage(context.Background(),
 		"diff --git a/main.go b/main.go", "",
@@ -257,7 +254,7 @@ func TestOracle_Claims_DefaultModelIsUsedWhenEmpty(t *testing.T) {
 	t.Parallel()
 
 	capture := &captureRequestLLM{name: "fake-llm"}
-	client := NewClientWithGenerator(capture, "", 0)
+	client := NewClientWithGenerator(capture, "")
 
 	_, err := client.GenerateCommitMessage(context.Background(),
 		"diff --git a/main.go b/main.go", "",
@@ -387,7 +384,7 @@ func TestClient_GenerateCommitMessage(t *testing.T) {
 				},
 			}
 
-			client := NewClientWithGenerator(mock, "gemini-3.1-flash-lite", 0)
+			client := NewClientWithGenerator(mock, "gemini-flash-lite-latest")
 
 			msg, err := client.GenerateCommitMessage(context.Background(), tt.diff, tt.context, tt.detailLevel, tt.hint, tt.profile)
 

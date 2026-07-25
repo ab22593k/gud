@@ -251,7 +251,6 @@ func TestOracle_History_HelpTextSmoke(t *testing.T) {
 		"--profile",
 		"--detail-level",
 		"--wrapline",
-		"--temperature",
 		"--model",
 		"--hint",
 	}
@@ -298,15 +297,15 @@ func TestOracle_Image_AssistedByTrailer(t *testing.T) {
 			desc:     "appends trailer with blank line separator",
 		},
 		{
-			msg:      "fix: resolve crash\n\nAssisted-by: deepseek-v4-flash\n",
+			msg:      "fix: resolve crash\n\nAssisted-by: gemini-flash-latest\n",
 			model:    testModelName,
-			wantSuff: "Assisted-by: deepseek-v4-flash\n",
+			wantSuff: "Assisted-by: gemini-flash-latest\n",
 			desc:     "idempotent — no duplicate trailer",
 		},
 		{
-			msg:      "chore: bump deps\n\nAssisted-by: gemini-3.1-flash-lite\n",
-			model:    "gemini-3.1-flash-lite",
-			wantSuff: "Assisted-by: gemini-3.1-flash-lite\n",
+			msg:      "chore: bump deps\n\nAssisted-by: gemini-flash-lite-latest\n",
+			model:    "gemini-flash-lite-latest",
+			wantSuff: "Assisted-by: gemini-flash-lite-latest\n",
 			desc:     "preserves existing trailer with same model",
 		},
 	}

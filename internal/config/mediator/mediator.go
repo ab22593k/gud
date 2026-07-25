@@ -169,9 +169,11 @@ func isKnownPlaceholder(s string) bool {
 //
 // Recognised variables:
 //
-//	GUD_DETAIL_LEVEL  GUD_PROFILE  GUD_MODEL   GUD_TEMPERATURE
+//	GUD_DETAIL_LEVEL  GUD_PROFILE  GUD_MODEL
 //	GUD_HINT          GUD_HISTORY  GOOGLE_API_KEY GUD_WRAPLINE
 //	GUD_MEM_ENABLED  GUD_MEM_URL  GUD_MEM_AUTO_MANAGE  GUD_MEM_CONTAINER_NAME
+//
+// NOTE: GUD_TEMPERATURE is no longer read — Google deprecated the parameter.
 func configFromEnv() config.Config {
 	cfg := config.Config{
 		APIKey:  firstSet("GOOGLE_API_KEY"),
@@ -183,13 +185,6 @@ func configFromEnv() config.Config {
 	v := os.Getenv("GUD_DETAIL_LEVEL")
 	if v != "" {
 		cfg.DetailLevel = config.DetailLevel(v)
-	}
-
-	v = os.Getenv("GUD_TEMPERATURE")
-	if v != "" {
-		if f, err := strconv.ParseFloat(v, 64); err == nil {
-			cfg.Temperature = f
-		}
 	}
 
 	v = os.Getenv("GUD_HISTORY")

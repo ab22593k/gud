@@ -92,15 +92,13 @@ func TestValidateWrapLine(t *testing.T) {
 func TestMerge(t *testing.T) {
 	base := Config{
 		DetailLevel: DetailStandard,
-		Model:       "gemini-3.1-flash-lite",
-		Temperature: 1.0,
+		Model:       "gemini-flash-lite-latest",
 		History:     5,
 		WrapLine:    72,
 	}
 
 	override := Config{
-		Model:       "gemini-3.1-pro",
-		Temperature: 0.5,
+		Model: "gemini-flash-latest",
 	}
 
 	merged := base.Merge(override)
@@ -108,11 +106,8 @@ func TestMerge(t *testing.T) {
 	if merged.DetailLevel != DetailStandard {
 		t.Errorf("Merge preserved DetailLevel = %q, want %q", merged.DetailLevel, DetailStandard)
 	}
-	if merged.Model != "gemini-3.1-pro" {
-		t.Errorf("Merge overrode Model = %q, want %q", merged.Model, "gemini-3.1-pro")
-	}
-	if merged.Temperature != 0.5 {
-		t.Errorf("Merge overrode Temperature = %v, want %v", merged.Temperature, 0.5)
+	if merged.Model != "gemini-flash-latest" {
+		t.Errorf("Merge overrode Model = %q, want %q", merged.Model, "gemini-flash-latest")
 	}
 	if merged.History != 5 {
 		t.Errorf("Merge preserved History = %d, want 5", merged.History)
@@ -125,7 +120,7 @@ func TestMerge(t *testing.T) {
 func TestMergeEmptyOverride(t *testing.T) {
 	base := Config{
 		DetailLevel: DetailDetailed,
-		Model:       "gemini-3.1-flash-lite",
+		Model:       "gemini-flash-lite-latest",
 	}
 
 	merged := base.Merge(Config{})
@@ -133,25 +128,21 @@ func TestMergeEmptyOverride(t *testing.T) {
 	if merged.DetailLevel != DetailDetailed {
 		t.Errorf("Merge empty preserved DetailLevel = %q", merged.DetailLevel)
 	}
-	if merged.Model != "gemini-3.1-flash-lite" {
+	if merged.Model != "gemini-flash-lite-latest" {
 		t.Errorf("Merge empty preserved Model = %q", merged.Model)
 	}
 }
 
 func TestMergeOverrideEmptyBase(t *testing.T) {
 	override := Config{
-		Model:       "claude-4-opus",
-		Temperature: 0.3,
-		WrapLine:    80,
+		Model:    "claude-4-opus",
+		WrapLine: 80,
 	}
 
 	merged := Config{}.Merge(override)
 
 	if merged.Model != "claude-4-opus" {
 		t.Errorf("Merge from zero value: Model = %q", merged.Model)
-	}
-	if merged.Temperature != 0.3 {
-		t.Errorf("Merge from zero value: Temperature = %v", merged.Temperature)
 	}
 	if merged.WrapLine != 80 {
 		t.Errorf("Merge from zero value: WrapLine = %d", merged.WrapLine)

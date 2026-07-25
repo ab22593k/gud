@@ -19,11 +19,13 @@ type ProfileName string
 // It contains no format-specific tags — it is the pure business concept.
 // Zero values represent "not set" and are treated as undefined, allowing
 // layered overrides (file → env → CLI flags).
+//
+// NOTE: Temperature, top_p, and top_k have been deprecated by Google for
+// Gemini 3.6+ models and are no longer sent to the API.
 type Config struct {
 	DetailLevel          DetailLevel
 	Profile              ProfileName
 	Model                string
-	Temperature          float64
 	Hint                 string
 	History              int
 	APIKey               string
@@ -71,8 +73,8 @@ func (c Config) Validate() Config {
 // layering: file config → env overrides → CLI flag overrides.
 //
 // CAUTION: Zero is an ambiguous signal — it means "not set" rather than
-// "set to zero". This means you cannot explicitly set Temperature=0,
-// History=0, or WrapLine=0 via CLI or env overrides; they will be silently
+// "set to zero". This means you cannot explicitly set History=0
+// or WrapLine=0 via CLI or env overrides; they will be silently
 // ignored. CLI flag defaults should avoid zero for any field that has a
 // meaningful zero value.
 func (c Config) Merge(override Config) Config {
@@ -86,9 +88,6 @@ func (c Config) Merge(override Config) Config {
 	}
 	if override.Model != "" {
 		merged.Model = override.Model
-	}
-	if override.Temperature != 0 {
-		merged.Temperature = override.Temperature
 	}
 	if override.Hint != "" {
 		merged.Hint = override.Hint

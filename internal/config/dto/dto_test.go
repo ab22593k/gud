@@ -12,8 +12,7 @@ func TestToEntity(t *testing.T) {
 	dto := ConfigDTO{
 		DetailLevel: "detailed",
 		Profile:     "computer-scientist",
-		Model:       "gemini-3.1-pro",
-		Temperature: 0.7,
+		Model:       "gemini-flash-latest",
 		Hint:        "focus on security",
 		History:     10,
 		APIKey:      "sk-test",
@@ -28,11 +27,8 @@ func TestToEntity(t *testing.T) {
 	if string(entity.Profile) != "computer-scientist" {
 		t.Errorf("Profile = %q", entity.Profile)
 	}
-	if entity.Model != "gemini-3.1-pro" {
+	if entity.Model != "gemini-flash-latest" {
 		t.Errorf("Model = %q", entity.Model)
-	}
-	if entity.Temperature != 0.7 {
-		t.Errorf("Temperature = %v", entity.Temperature)
 	}
 	if entity.Hint != "focus on security" {
 		t.Errorf("Hint = %q", entity.Hint)
@@ -52,8 +48,7 @@ func TestFromEntity(t *testing.T) {
 	entity := config.Config{
 		DetailLevel: config.DetailDetailed,
 		Profile:     config.ProfileName("astrophysicist"),
-		Model:       "gemini-3.1-flash-lite",
-		Temperature: 1.0,
+		Model:       "gemini-flash-lite-latest",
 		Hint:        "explain physics",
 		History:     3,
 		APIKey:      "sk-123",
@@ -68,11 +63,8 @@ func TestFromEntity(t *testing.T) {
 	if dto.Profile != "astrophysicist" {
 		t.Errorf("Profile = %q", dto.Profile)
 	}
-	if dto.Model != "gemini-3.1-flash-lite" {
+	if dto.Model != "gemini-flash-lite-latest" {
 		t.Errorf("Model = %q", dto.Model)
-	}
-	if dto.Temperature != 1.0 {
-		t.Errorf("Temperature = %v", dto.Temperature)
 	}
 	if dto.Hint != "explain physics" {
 		t.Errorf("Hint = %q", dto.Hint)
@@ -92,8 +84,7 @@ func TestRoundTrip(t *testing.T) {
 	original := config.Config{
 		DetailLevel: config.DetailStandard,
 		Profile:     config.ProfileName("chemist"),
-		Model:       "gemini-3.1-pro",
-		Temperature: 0.5,
+		Model:       "gemini-flash-latest",
 		Hint:        "mention reaction mechanisms",
 		History:     8,
 		APIKey:      "sk-roundtrip",
@@ -112,8 +103,7 @@ func TestJSONRoundTrip(t *testing.T) {
 	original := ConfigDTO{
 		DetailLevel: "standard",
 		Profile:     "biologist",
-		Model:       "gemini-3.1-flash-lite",
-		Temperature: 0.8,
+		Model:       "gemini-flash-lite-latest",
 		History:     5,
 		WrapLine:    72,
 	}

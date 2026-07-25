@@ -35,8 +35,7 @@ func TestSaveAndLoad(t *testing.T) {
 	original := config.Config{
 		DetailLevel: config.DetailDetailed,
 		Profile:     config.ProfileName("chemist"),
-		Model:       "gemini-3.1-pro",
-		Temperature: 0.3,
+		Model:       "gemini-flash-latest",
 		Hint:        "focus on catalysis",
 		History:     10,
 		APIKey:      "sk-test-key",
@@ -93,7 +92,7 @@ func TestSaveAndLoadPartialConfig(t *testing.T) {
 
 	// Only set a few fields — simulates a partial config file
 	original := config.Config{
-		Model:    "gemini-3.1-flash-lite",
+		Model:    "gemini-flash-lite-latest",
 		APIKey:   "sk-partial",
 		WrapLine: 100,
 	}

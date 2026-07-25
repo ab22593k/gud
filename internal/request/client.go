@@ -17,20 +17,19 @@ type ContentResponse interface {
 }
 
 // ClientConfig holds configuration for creating a Client.
+// Temperature is intentionally omitted — deprecated by Google for Gemini 3.6+.
 type ClientConfig struct {
-	APIKey      string
-	Model       string
-	Temperature float64
+	APIKey string
+	Model  string
 }
 
 // Client wraps an ADK model.LLM for generating commit messages.
 type Client struct {
-	modelImpl   model.LLM
-	model       string
-	temperature *float32
+	modelImpl model.LLM
+	model     string
 }
 
-const defaultModel = "gemini-3.1-flash-lite"
+const defaultModel = "gemini-flash-lite-latest"
 
 // NewClient creates a new request client.
 // The caller is responsible for providing a context that can carry timeouts
@@ -55,18 +54,11 @@ func newGeminiClient(ctx context.Context, cfg ClientConfig) (*Client, error) {
 		return nil, fmt.Errorf("failed to create gemini model: %w", err)
 	}
 
-	var temp *float32
-	if cfg.Temperature != 0 {
-		t := float32(cfg.Temperature)
-		temp = &t
-	}
-
-	slog.Debug("created gemini client via ADK", "model", cfg.Model, "temperature", cfg.Temperature)
+	slog.Debug("created gemini client via ADK", "model", cfg.Model)
 
 	return &Client{
-		modelImpl:   adkModel,
-		model:       cfg.Model,
-		temperature: temp,
+		modelImpl: adkModel,
+		model:     cfg.Model,
 	}, nil
 }
 
@@ -76,19 +68,13 @@ func (c *Client) ModelName() string {
 }
 
 // NewClientWithGenerator creates a new client with a custom model for testing.
-func NewClientWithGenerator(llm model.LLM, modelName string, temperature float64) *Client {
+func NewClientWithGenerator(llm model.LLM, modelName string) *Client {
 	if modelName == "" {
 		modelName = defaultModel
 	}
-	var temp *float32
-	if temperature != 0 {
-		t := float32(temperature)
-		temp = &t
-	}
 	return &Client{
-		modelImpl:   llm,
-		model:       modelName,
-		temperature: temp,
+		modelImpl: llm,
+		model:     modelName,
 	}
 }
 
@@ -110,9 +96,7 @@ func (c *Client) GenerateCommitMessageWithContent(ctx context.Context, diff, com
 	req := &model.LLMRequest{
 		Model:    c.model,
 		Contents: genai.Text(prompt),
-		Config: &genai.GenerateContentConfig{
-			Temperature: c.temperature,
-		},
+		Config:   &genai.GenerateContentConfig{},
 	}
 
 	result, err := generateContent(c, ctx, req)

@@ -20,7 +20,7 @@ const (
 	testListCmdName    = "list"
 	testHookCmdName    = "hook"
 	testAstrophysicist = "astrophysicist"
-	testModelName      = "deepseek-v4-flash"
+	testModelName      = "gemini-flash-latest"
 	testDoneStr        = "done"
 )
 
@@ -193,14 +193,12 @@ func TestMediatorPriorityChain(t *testing.T) {
 		t.Fatalf("save CWD config: %v", err)
 	}
 
-	t.Setenv("GUD_TEMPERATURE", "0.5")
 	t.Setenv("GUD_MODEL", "env-model")
 	t.Setenv("GUD_HISTORY", "3")
 	t.Setenv("GOOGLE_API_KEY", "")
 
 	cliCfg := config.Config{
-		Temperature: 0.99,
-		WrapLine:    120,
+		WrapLine: 120,
 	}
 
 	m := &mediator.Mediator{XDGProvider: xdgP, CWDProvider: cwdP}
@@ -209,9 +207,6 @@ func TestMediatorPriorityChain(t *testing.T) {
 		t.Fatalf("Load: %v", err)
 	}
 
-	if cfg.Temperature != 0.99 {
-		t.Errorf("Temperature (CLI) = %v, want 0.99", cfg.Temperature)
-	}
 	if cfg.WrapLine != 120 {
 		t.Errorf("WrapLine (CLI) = %d, want 120", cfg.WrapLine)
 	}

@@ -44,7 +44,7 @@ func init() {
 	rootCmd.PersistentFlags().String("hint", "", "Focus boundaries for the AI")
 	rootCmd.PersistentFlags().Int("history", 5, "Number of recent commits to include as context (0 to disable)")
 	rootCmd.PersistentFlags().String("model", "", "Gemini model to use (or use GEMINI_MODEL env)")
-	rootCmd.PersistentFlags().Float64("temperature", 1, "Set the generation temperature (0-2, default: 1)")
+	// --temperature removed — deprecated by Google for Gemini 3.6+ models
 	rootCmd.PersistentFlags().Int("wrapline", 72, "Wrap all lines at this character width")
 
 	rootCmd.AddCommand(profileCmd)
@@ -58,7 +58,6 @@ func configFromCmd(cmd *cobra.Command) config.Config {
 	hint := mustGet(cmd, "hint", cmd.Flags().GetString)
 	history := mustGet(cmd, "history", cmd.Flags().GetInt)
 	model := mustGet(cmd, "model", cmd.Flags().GetString)
-	temp := mustGet(cmd, "temperature", cmd.Flags().GetFloat64)
 	wrapLine := mustGet(cmd, "wrapline", cmd.Flags().GetInt)
 
 	return config.Config{
@@ -67,7 +66,6 @@ func configFromCmd(cmd *cobra.Command) config.Config {
 		Hint:        hint,
 		History:     history,
 		Model:       model,
-		Temperature: temp,
 		WrapLine:    wrapLine,
 	}
 }

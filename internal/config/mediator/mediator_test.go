@@ -16,7 +16,6 @@ func TestConfigFromEnv(t *testing.T) {
 	t.Setenv("GUD_DETAIL_LEVEL", "minimal")
 	t.Setenv("GUD_PROFILE", "env-profile")
 	t.Setenv("GUD_MODEL", testModel)
-	t.Setenv("GUD_TEMPERATURE", "0.42")
 	t.Setenv("GUD_HINT", "env-hint")
 	t.Setenv("GUD_HISTORY", "7")
 	t.Setenv("GOOGLE_API_KEY", testAPIKey)
@@ -32,9 +31,6 @@ func TestConfigFromEnv(t *testing.T) {
 	}
 	if cfg.Model != testModel {
 		t.Errorf("Model = %q", cfg.Model)
-	}
-	if cfg.Temperature != 0.42 {
-		t.Errorf("Temperature = %v", cfg.Temperature)
 	}
 	if cfg.Hint != "env-hint" {
 		t.Errorf("Hint = %q", cfg.Hint)
@@ -62,9 +58,6 @@ func TestConfigFromEnvUnset(t *testing.T) {
 	}
 	if cfg.Model != "" {
 		t.Errorf("Model = %q, want empty", cfg.Model)
-	}
-	if cfg.Temperature != 0 {
-		t.Errorf("Temperature = %v, want 0", cfg.Temperature)
 	}
 	if cfg.Hint != "" {
 		t.Errorf("Hint = %q, want empty", cfg.Hint)
@@ -102,14 +95,12 @@ func TestMediatorLoad(t *testing.T) {
 		t.Fatalf("save CWD config: %v", err)
 	}
 
-	t.Setenv("GUD_TEMPERATURE", "0.5")
 	t.Setenv("GUD_MODEL", "env-model")
 	t.Setenv("GUD_HISTORY", "3")
 	t.Setenv("GOOGLE_API_KEY", "")
 
 	cliCfg := config.Config{
-		Temperature: 0.99,
-		WrapLine:    120,
+		WrapLine: 120,
 	}
 
 	m := &Mediator{XDGProvider: xdgP, CWDProvider: cwdP}
@@ -119,9 +110,6 @@ func TestMediatorLoad(t *testing.T) {
 	}
 
 	// CLI overrides all
-	if cfg.Temperature != 0.99 {
-		t.Errorf("Temperature (CLI) = %v, want 0.99", cfg.Temperature)
-	}
 	if cfg.WrapLine != 120 {
 		t.Errorf("WrapLine (CLI) = %d, want 120", cfg.WrapLine)
 	}
@@ -221,7 +209,7 @@ func TestValidateStrictUnresolvedPlaceholder(t *testing.T) {
 		},
 		{
 			name:    "no placeholders passes",
-			cfg:     config.Config{APIKey: "real-key", Model: "gemini-2.0-flash"},
+			cfg:     config.Config{APIKey: "real-key", Model: "gemini-flash-latest"},
 			wantErr: "",
 		},
 		{
