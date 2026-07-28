@@ -9,74 +9,101 @@ import (
 )
 
 func TestToEntity(t *testing.T) {
-	dto := ConfigDTO{
-		DetailLevel: "detailed",
-		Profile:     "computer-scientist",
-		Model:       "gemini-flash-latest",
-		Hint:        "focus on security",
-		History:     10,
-		APIKey:      "sk-test",
-		WrapLine:    100,
+	tests := []struct {
+		name string
+		dto  ConfigDTO
+		want config.Config
+	}{
+		{
+			name: "all fields set",
+			dto: ConfigDTO{
+				DetailLevel: "detailed",
+				Profile:     "computer-scientist",
+				Model:       "gemini-flash-latest",
+				Hint:        "focus on security",
+				History:     10,
+				APIKey:      "sk-test",
+				WrapLine:    100,
+			},
+			want: config.Config{
+				DetailLevel: config.DetailDetailed,
+				Profile:     config.ProfileName("computer-scientist"),
+				Model:       "gemini-flash-latest",
+				Hint:        "focus on security",
+				History:     10,
+				APIKey:      "sk-test",
+				WrapLine:    100,
+			},
+		},
+		{
+			name: "partial fields set",
+			dto: ConfigDTO{
+				Model:  "gemini-flash-lite-latest",
+				APIKey: "sk-partial",
+			},
+			want: config.Config{
+				Model:  "gemini-flash-lite-latest",
+				APIKey: "sk-partial",
+			},
+		},
+		{
+			name: "empty dto",
+			dto:  ConfigDTO{},
+			want: config.Config{},
+		},
 	}
 
-	entity := dto.ToEntity()
-
-	if string(entity.DetailLevel) != "detailed" {
-		t.Errorf("DetailLevel = %q, want %q", entity.DetailLevel, "detailed")
-	}
-	if string(entity.Profile) != "computer-scientist" {
-		t.Errorf("Profile = %q", entity.Profile)
-	}
-	if entity.Model != "gemini-flash-latest" {
-		t.Errorf("Model = %q", entity.Model)
-	}
-	if entity.Hint != "focus on security" {
-		t.Errorf("Hint = %q", entity.Hint)
-	}
-	if entity.History != 10 {
-		t.Errorf("History = %d", entity.History)
-	}
-	if entity.APIKey != "sk-test" {
-		t.Errorf("APIKey = %q", entity.APIKey)
-	}
-	if entity.WrapLine != 100 {
-		t.Errorf("WrapLine = %d", entity.WrapLine)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.dto.ToEntity()
+			if got != tt.want {
+				t.Errorf("ToEntity() = %+v, want %+v", got, tt.want)
+			}
+		})
 	}
 }
 
 func TestFromEntity(t *testing.T) {
-	entity := config.Config{
-		DetailLevel: config.DetailDetailed,
-		Profile:     config.ProfileName("astrophysicist"),
-		Model:       "gemini-flash-lite-latest",
-		Hint:        "explain physics",
-		History:     3,
-		APIKey:      "sk-123",
-		WrapLine:    72,
+	tests := []struct {
+		name   string
+		entity config.Config
+		want   ConfigDTO
+	}{
+		{
+			name: "all fields set",
+			entity: config.Config{
+				DetailLevel: config.DetailDetailed,
+				Profile:     config.ProfileName("astrophysicist"),
+				Model:       "gemini-flash-lite-latest",
+				Hint:        "explain physics",
+				History:     3,
+				APIKey:      "sk-123",
+				WrapLine:    72,
+			},
+			want: ConfigDTO{
+				DetailLevel: "detailed",
+				Profile:     "astrophysicist",
+				Model:       "gemini-flash-lite-latest",
+				Hint:        "explain physics",
+				History:     3,
+				APIKey:      "sk-123",
+				WrapLine:    72,
+			},
+		},
+		{
+			name:   "empty entity",
+			entity: config.Config{},
+			want:   ConfigDTO{},
+		},
 	}
 
-	dto := FromEntity(entity)
-
-	if dto.DetailLevel != "detailed" {
-		t.Errorf("DetailLevel = %q", dto.DetailLevel)
-	}
-	if dto.Profile != "astrophysicist" {
-		t.Errorf("Profile = %q", dto.Profile)
-	}
-	if dto.Model != "gemini-flash-lite-latest" {
-		t.Errorf("Model = %q", dto.Model)
-	}
-	if dto.Hint != "explain physics" {
-		t.Errorf("Hint = %q", dto.Hint)
-	}
-	if dto.History != 3 {
-		t.Errorf("History = %d", dto.History)
-	}
-	if dto.APIKey != "sk-123" {
-		t.Errorf("APIKey = %q", dto.APIKey)
-	}
-	if dto.WrapLine != 72 {
-		t.Errorf("WrapLine = %d", dto.WrapLine)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := FromEntity(tt.entity)
+			if got != tt.want {
+				t.Errorf("FromEntity() = %+v, want %+v", got, tt.want)
+			}
+		})
 	}
 }
 
