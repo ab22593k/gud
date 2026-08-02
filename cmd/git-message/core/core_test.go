@@ -4,6 +4,7 @@ package core
 import (
 	"bufio"
 	"context"
+	"log/slog"
 	"strings"
 	"testing"
 
@@ -64,6 +65,34 @@ func TestBuildHistoryContext_Disabled(t *testing.T) {
 			got := buildHistoryContext(ctx, tt.app)
 			if got != "" {
 				t.Errorf("buildHistoryContext(%+v) = %q, want empty string", tt.app.Config(), got)
+			}
+		})
+	}
+}
+
+func TestParseLogLevel(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		input string
+		want  slog.Level
+	}{
+		{name: "debug", input: "debug", want: slog.LevelDebug},
+		{name: "debug uppercase", input: "DEBUG", want: slog.LevelDebug},
+		{name: "debug padded", input: " debug ", want: slog.LevelDebug},
+		{name: "info", input: "info", want: slog.LevelInfo},
+		{name: "warn", input: "warn", want: slog.LevelWarn},
+		{name: "error", input: "error", want: slog.LevelError},
+		{name: "empty defaults to info", input: "", want: slog.LevelInfo},
+		{name: "unknown defaults to info", input: "trace", want: slog.LevelInfo},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := parseLogLevel(tt.input); got != tt.want {
+				t.Errorf("parseLogLevel(%q) = %v, want %v", tt.input, got, tt.want)
 			}
 		})
 	}

@@ -172,6 +172,8 @@ func maybeAppendMEMContext(
 ) string {
 	db := app.HelixDB()
 	if db == nil || !db.Enabled() || !db.IsAvailable(ctx) {
+		slog.Debug("helixdb: skipping context retrieval, server unavailable")
+
 		return existingContext
 	}
 
@@ -227,12 +229,40 @@ func maybeAppendMEMContext(
 		return existingContext
 	}
 
+	logRetrievedRecords(records, repoPath, groups)
 	ctxStr := mem.FormatContextRecords(records)
 	if existingContext != "" {
 		return existingContext + "\n\n" + ctxStr
 	}
 
 	return ctxStr
+}
+
+// logRetrievedRecords logs a debug summary of what HelixDB recall produced.
+func logRetrievedRecords(records []mem.CommitRecord, repoPath string, groups []mem.RankedGroup) {
+	slog.Debug("helixdb: retrieved context records",
+		"count", len(records),
+		"repo", repoPath,
+		"sources", contextGroupKeys(groups),
+		"top", firstLine(records[0].Message),
+	)
+}
+
+// contextGroupKeys returns the retrieval sources that produced ranked results.
+func contextGroupKeys(groups []mem.RankedGroup) []string {
+	keys := make([]string, 0, len(groups))
+	for _, g := range groups {
+		keys = append(keys, g.Key)
+	}
+
+	return keys
+}
+
+// firstLine returns the first line of s, or "" if s is empty.
+func firstLine(s string) string {
+	line, _, _ := strings.Cut(s, "\n")
+
+	return line
 }
 
 // buildRepoContext returns a formatted string of repository file statistics,

@@ -79,16 +79,29 @@ func newGeminiClient(ctx context.Context, cfg ClientConfig) (*Client, error) {
 		model:          cfg.Model,
 		embeddingModel: embeddingModel,
 	}
+	// gemini-embedding-2 does not accept task_type (Google's newer embedding
+	// models steer retrieval via prompt instructions instead). Output
+	// dimensionality is pinned to embeddingDimensions so vectors keep matching
+	// the existing HelixDB 768-dim index.
 	c.embedFn = func(ctx context.Context, text string) ([]float32, error) {
 		resp, err := gClient.Models.EmbedContent(ctx, embeddingModel,
-			genai.Text(text), &genai.EmbedContentConfig{TaskType: "RETRIEVAL_DOCUMENT"})
+			genai.Text(text), &genai.EmbedContentConfig{
+				OutputDimensionality: genai.Ptr(int32(embeddingDimensions)),
+			})
 		if err != nil {
 			return nil, fmt.Errorf("embed content: %w", err)
 		}
 		if len(resp.Embeddings) == 0 || resp.Embeddings[0] == nil {
 			return nil, fmt.Errorf("embed content: empty response")
 		}
-		return resp.Embeddings[0].Values, nil
+		values := resp.Embeddings[0].Values
+		// Guard against a misconfigured embedding model returning a different
+		// dimension (e.g. one that ignores output_dimensionality): such vectors
+		// would silently corrupt the HelixDB 768-dim index.
+		if len(values) != embeddingDimensions {
+			return nil, fmt.Errorf("embed content: got %d-dim vector, want %d", len(values), embeddingDimensions)
+		}
+		return values, nil
 	}
 
 	return c, nil

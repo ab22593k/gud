@@ -96,3 +96,28 @@ func TestEmbedTextLimitConstant(t *testing.T) {
 		t.Fatalf("embedTextLimit = %d, want > 0", embedTextLimit)
 	}
 }
+
+func TestDefaultEmbeddingModel(t *testing.T) {
+	t.Parallel()
+
+	// text-embedding-004 was shut down by Google on 2026-01-14; the default
+	// must never point at a retired model, otherwise vector recall silently
+	// degrades to BM25-only (as the API returns 404 NOT_FOUND).
+	if defaultEmbeddingModel == "text-embedding-004" {
+		t.Fatal("defaultEmbeddingModel must not be the retired text-embedding-004")
+	}
+	if strings.TrimSpace(defaultEmbeddingModel) == "" {
+		t.Fatal("defaultEmbeddingModel must not be empty")
+	}
+}
+
+func TestEmbeddingDimensionsIndexCompatibility(t *testing.T) {
+	t.Parallel()
+
+	// The HelixDB Commit.embedding vector index was created for 768-dim
+	// vectors (text-embedding-004). Changing the dimension invalidates the
+	// index, so embeddingDimensions is pinned to 768 and must never change.
+	if embeddingDimensions != 768 {
+		t.Fatalf("embeddingDimensions = %d, want 768 to match the HelixDB vector index", embeddingDimensions)
+	}
+}

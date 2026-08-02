@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/helixdb/helix-db/sdks/go"
+	helix "github.com/helixdb/helix-db/sdks/go"
 )
 
 // ErrHelixUnavailable is returned when HelixDB is not reachable.
@@ -41,7 +41,7 @@ type DB struct {
 func NewDB(opts Options) *DB {
 	baseURL := opts.BaseURL
 	if baseURL == "" {
-		baseURL = "http://localhost:6969"
+		baseURL = "http://localhost:2232"
 	}
 
 	db := &DB{

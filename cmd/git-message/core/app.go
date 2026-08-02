@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"gud/internal/config"
 	"gud/internal/config/mediator"
@@ -111,10 +112,14 @@ func (a *AppContext) InitHelixDB(ctx context.Context) error {
 	db := mem.NewDB(mem.Options{Enabled: true})
 
 	if !db.Enabled() {
+		slog.Debug("helixdb: client creation failed, degraded mode")
+
 		return nil
 	}
 
 	if !db.IsAvailable(ctx) {
+		slog.Debug("helixdb: server not reachable, degraded mode", "url", db.BaseURL())
+
 		return nil
 	}
 

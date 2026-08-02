@@ -21,7 +21,9 @@ git profile save <slug>        Download a profile
 
 Priority (highest to lowest): CLI flags → env vars → `./gud.json` → `~/.config/gud/config.json`
 
-Key env vars: `GOOGLE_API_KEY`, `GUD_MODEL`, `GUD_DETAIL_LEVEL`, `GUD_PROFILE`, `GUD_TEMPERATURE`
+Key env vars: `GOOGLE_API_KEY`, `GUD_MODEL`, `GUD_DETAIL_LEVEL`, `GUD_PROFILE`
+
+Set `GUD_LOG_LEVEL=debug` (also `info`, `warn`, `error`) to see diagnostics on stderr, including HelixDB memory retrieval:
 
 ## Profiles
 
@@ -36,7 +38,7 @@ git message --profile astrophysicist
 ## Memory
 
 gud persists commit history to HelixDB for context-aware generation. Memory is
-always on and connects to the default server at `http://localhost:6969`; gud
+always on and connects to the default server at `http://localhost:2232`; gud
 never starts or stops a HelixDB server itself — it connects to one shared
 server, so a single database is reused across all your projects. Repos are
 isolated per `repo_path` (the tenant key), so project data never mixes.

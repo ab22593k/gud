@@ -1,6 +1,10 @@
 package core
 
 import (
+	"log/slog"
+	"os"
+	"strings"
+
 	"gud/internal/config"
 
 	"github.com/spf13/cobra"
@@ -23,7 +27,37 @@ It supports multiple profiles and detail levels to match your project's style.`,
 
 // Execute runs the root command. It is the entry point for the CLI.
 func Execute() error {
+	setupLogLevel()
+
 	return rootCmd.Execute()
+}
+
+const (
+	logLevelDebug = "debug"
+	logLevelWarn  = "warn"
+	logLevelError = "error"
+)
+
+// parseLogLevel maps a GUD_LOG_LEVEL value to a slog level. Unknown or empty
+// values map to Info (the slog default).
+func parseLogLevel(v string) slog.Level {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case logLevelDebug:
+		return slog.LevelDebug
+	case logLevelWarn:
+		return slog.LevelWarn
+	case logLevelError:
+		return slog.LevelError
+	default: // "", "info", and anything unrecognised
+		return slog.LevelInfo
+	}
+}
+
+// setupLogLevel configures the global slog level from the GUD_LOG_LEVEL
+// environment variable. All gud diagnostics (including HelixDB memory
+// retrieval) use slog.Debug, so set GUD_LOG_LEVEL=debug to observe them.
+func setupLogLevel() {
+	slog.SetLogLoggerLevel(parseLogLevel(os.Getenv("GUD_LOG_LEVEL")))
 }
 
 // mustGet panics if the flag name is not registered. Only use for flags

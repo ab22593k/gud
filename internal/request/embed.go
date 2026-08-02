@@ -8,13 +8,20 @@ import (
 
 const (
 	// defaultEmbeddingModel is the Gemini embedding model used to vectorise
-	// commit diffs and queries. It produces fixed 768-dim vectors, matching
-	// the HelixDB Commit.embedding vector index. The model (and therefore the
-	// dimension) must never change for an existing index.
-	defaultEmbeddingModel = "text-embedding-004"
+	// commit diffs and queries. Vectors are pinned to embeddingDimensions via
+	// OutputDimensionality, matching the HelixDB Commit.embedding vector
+	// index. The model (and therefore the dimension) must never change for an
+	// existing index.
+	defaultEmbeddingModel = "gemini-embedding-2"
+
+	// embeddingDimensions pins the output vector size. gemini-embedding-2
+	// defaults to 3072-dim; it is truncated to 768 to keep the HelixDB vector
+	// index (built for text-embedding-004's 768-dim vectors) valid. Google
+	// recommends 768, 1536, or 3072 and auto-normalises truncated dims.
+	embeddingDimensions = 768
 
 	// embedTextLimit caps input length before embedding so diffs stay within
-	// model token limits (text-embedding-004 supports 2048 input tokens,
+	// model token limits (gemini-embedding-2 supports 8192 input tokens,
 	// roughly 6000 characters of code).
 	embedTextLimit = 6000
 )

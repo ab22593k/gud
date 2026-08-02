@@ -4,7 +4,7 @@ queries = "db"
 container_runtime = "docker"
 
 [local.disk]
-port = 7272
+port = 2232
 image = "ghcr.io/helixdb/enterprise-dev"
 tag = "latest"
 storage = "disk"

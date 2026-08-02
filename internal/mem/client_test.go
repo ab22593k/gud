@@ -11,7 +11,7 @@ func TestNewDB_DefaultURL(t *testing.T) {
 	if db == nil {
 		t.Fatal("expected non-nil DB")
 	}
-	if db.BaseURL() != "http://localhost:6969" {
+	if db.BaseURL() != "http://localhost:2232" {
 		t.Errorf("expected default URL, got %q", db.BaseURL())
 	}
 }
@@ -24,14 +24,14 @@ func TestNewDB_CustomURL(t *testing.T) {
 }
 
 func TestNewDB_WithAPIKey(t *testing.T) {
-	db := NewDB(Options{BaseURL: "http://localhost:6969", APIKey: "hx_test_key"})
+	db := NewDB(Options{BaseURL: "http://localhost:2232", APIKey: "hx_test_key"})
 	if db.APIKey() != "hx_test_key" {
 		t.Errorf("expected API key to be set, got %q", db.APIKey())
 	}
 }
 
 func TestDB_IsAvailable_NoConnection(t *testing.T) {
-	db := NewDB(Options{BaseURL: "http://localhost:16969"})
+	db := NewDB(Options{BaseURL: "http://localhost:2232"})
 	// Should not panic; returns false gracefully
 	available := db.IsAvailable(context.Background())
 	if available {
