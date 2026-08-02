@@ -95,8 +95,9 @@ func (a *AppContext) ContainerManager() *mem.ContainerManager {
 // Must be called at most once with a context that supports cancellation.
 func (a *AppContext) InitClient(ctx context.Context) error {
 	client, err := request.NewClient(ctx, request.ClientConfig{
-		APIKey: a.cfg.APIKey,
-		Model:  a.cfg.Model,
+		APIKey:         a.cfg.APIKey,
+		Model:          a.cfg.Model,
+		EmbeddingModel: a.cfg.EmbeddingModel,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create request client: %w", err)

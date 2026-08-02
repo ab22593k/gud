@@ -26,6 +26,7 @@ type Config struct {
 	DetailLevel          DetailLevel
 	Profile              ProfileName
 	Model                string
+	EmbeddingModel       string
 	Hint                 string
 	History              int
 	APIKey               string
@@ -88,6 +89,9 @@ func (c Config) Merge(override Config) Config {
 	}
 	if override.Model != "" {
 		merged.Model = override.Model
+	}
+	if override.EmbeddingModel != "" {
+		merged.EmbeddingModel = override.EmbeddingModel
 	}
 	if override.Hint != "" {
 		merged.Hint = override.Hint

@@ -87,19 +87,23 @@ type CommitRecord struct {
 	RepoPath  string
 	Branch    string
 	DiffStat  string
+	// Distance is the $distance from the search source (smaller = more
+	// relevant). Zero when the result did not come from a scored search.
+	Distance float64
 }
 
 // CommitRecordFromHelixData converts a HelixDB query result Node into a CommitRecord.
 func CommitRecordFromHelixData(node Node) CommitRecord {
 	return CommitRecord{
-		HelixID:  node.Uint64("$id"),
-		SHA:      firstNonEmpty(node.String("sha"), node.String("id")),
-		Message:  node.String("message"),
-		Author:   node.String("author"),
+		HelixID:   node.Uint64("$id"),
+		SHA:       firstNonEmpty(node.String("sha"), node.String("id")),
+		Message:   node.String("message"),
+		Author:    node.String("author"),
 		Timestamp: time.UnixMilli(int64(node.Float64("timestamp"))),
-		RepoPath: node.String("repo_path"),
-		Branch:   node.String("branch"),
-		DiffStat: node.String("diff_stat"),
+		RepoPath:  node.String("repo_path"),
+		Branch:    node.String("branch"),
+		DiffStat:  node.String("diff_stat"),
+		Distance:  node.Float64("distance"),
 	}
 }
 

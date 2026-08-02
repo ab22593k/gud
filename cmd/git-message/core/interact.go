@@ -256,6 +256,17 @@ func persistToHelixDB(ctx context.Context, app *AppContext, diff, hash, message 
 		IsGudGenerated: true,
 	}
 
+	// Embed the diff so the hybrid (vector + BM25) recall path can find this
+	// commit semantically. A failed embedding is non-fatal: the commit is
+	// still persisted and remains findable via BM25 and MENTIONS edges.
+	if client := app.Client(); client != nil {
+		if vec, err := client.EmbedText(ctx, diff); err != nil {
+			slog.Debug("helixdb: embedding failed, persisting without", "error", err)
+		} else {
+			commit.Embedding = vec
+		}
+	}
+
 	query := mem.BuildPersistCommitQuery(commit)
 	var rawResp map[string]any
 	if err := db.Exec(ctx, query, &rawResp); err != nil {

@@ -470,7 +470,7 @@ func TestIntegration_VectorSearch(t *testing.T) {
 
 	// Search with a similar vector (slightly different seed).
 	queryVec := createTestVector(43)
-	q := BuildHybridContextQuery(testTenant, queryVec, "", nil, 10)
+	q := BuildHybridContextQuery(testTenant, "main", queryVec, "", nil, 10)
 	var rawResp map[string]any
 	if err := db.Exec(ctx, q, &rawResp); err != nil {
 		t.Fatalf("BuildHybridContextQuery failed: %v", err)

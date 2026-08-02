@@ -13,6 +13,7 @@ type ConfigDTO struct {
 	History              int    `json:"history,omitempty"`
 	APIKey               string `json:"api_key,omitempty"`
 	WrapLine             int    `json:"wrapline,omitempty"`
+	EmbeddingModel       string `json:"embedding_model,omitempty"`
 	HelixDBEnabled       bool   `json:"helixdb_enabled,omitempty"`
 	HelixDBURL           string `json:"helixdb_url,omitempty"`
 	HelixDBAutoManage    bool   `json:"helixdb_auto_manage,omitempty"`
@@ -30,6 +31,7 @@ func (d ConfigDTO) ToEntity() config.Config {
 		History:              d.History,
 		APIKey:               d.APIKey,
 		WrapLine:             d.WrapLine,
+		EmbeddingModel:       d.EmbeddingModel,
 		HelixDBEnabled:       d.HelixDBEnabled,
 		HelixDBURL:           d.HelixDBURL,
 		HelixDBAutoManage:    d.HelixDBAutoManage,
@@ -48,6 +50,7 @@ func FromEntity(c config.Config) ConfigDTO {
 		History:              c.History,
 		APIKey:               c.APIKey,
 		WrapLine:             c.WrapLine,
+		EmbeddingModel:       c.EmbeddingModel,
 		HelixDBEnabled:       c.HelixDBEnabled,
 		HelixDBURL:           c.HelixDBURL,
 		HelixDBAutoManage:    c.HelixDBAutoManage,

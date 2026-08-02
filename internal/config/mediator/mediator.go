@@ -123,10 +123,11 @@ func (m *Mediator) loadOrZero(p *provider.FileProvider) config.Config {
 //   - Missing required fields
 func validateStrict(cfg config.Config) error {
 	stringFields := map[string]string{
-		"model":     cfg.Model,
-		fieldAPIKey: cfg.APIKey,
-		"hint":      cfg.Hint,
-		"profile":   string(cfg.Profile),
+		"model":           cfg.Model,
+		"embedding_model": cfg.EmbeddingModel,
+		fieldAPIKey:       cfg.APIKey,
+		"hint":            cfg.Hint,
+		"profile":         string(cfg.Profile),
 	}
 
 	for name, value := range stringFields {
@@ -171,15 +172,17 @@ func isKnownPlaceholder(s string) bool {
 //
 //	GUD_DETAIL_LEVEL  GUD_PROFILE  GUD_MODEL
 //	GUD_HINT          GUD_HISTORY  GOOGLE_API_KEY GUD_WRAPLINE
+//	GUD_EMBEDDING_MODEL
 //	GUD_MEM_ENABLED  GUD_MEM_URL  GUD_MEM_AUTO_MANAGE  GUD_MEM_CONTAINER_NAME
 //
 // NOTE: GUD_TEMPERATURE is no longer read — Google deprecated the parameter.
 func configFromEnv() config.Config {
 	cfg := config.Config{
-		APIKey:  firstSet("GOOGLE_API_KEY"),
-		Model:   firstSet("GUD_MODEL", "GEMINI_MODEL"),
-		Profile: config.ProfileName(firstSet("GUD_PROFILE")),
-		Hint:    os.Getenv("GUD_HINT"),
+		APIKey:         firstSet("GOOGLE_API_KEY"),
+		Model:          firstSet("GUD_MODEL", "GEMINI_MODEL"),
+		Profile:        config.ProfileName(firstSet("GUD_PROFILE")),
+		Hint:           os.Getenv("GUD_HINT"),
+		EmbeddingModel: os.Getenv("GUD_EMBEDDING_MODEL"),
 	}
 
 	v := os.Getenv("GUD_DETAIL_LEVEL")

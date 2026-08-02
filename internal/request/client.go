@@ -21,12 +21,18 @@ type ContentResponse interface {
 type ClientConfig struct {
 	APIKey string
 	Model  string
+	// EmbeddingModel is the Gemini model used to embed diffs for vector
+	// retrieval. When empty, defaultEmbeddingModel is used.
+	EmbeddingModel string
 }
 
-// Client wraps an ADK model.LLM for generating commit messages.
+// Client wraps an ADK model.LLM for generating commit messages and, when
+// available, a Gemini client for text embeddings (hybrid memory retrieval).
 type Client struct {
-	modelImpl model.LLM
-	model     string
+	modelImpl      model.LLM
+	model          string
+	embeddingModel string
+	embedFn        func(ctx context.Context, text string) ([]float32, error)
 }
 
 const defaultModel = "gemini-flash-lite-latest"
@@ -54,12 +60,38 @@ func newGeminiClient(ctx context.Context, cfg ClientConfig) (*Client, error) {
 		return nil, fmt.Errorf("failed to create gemini model: %w", err)
 	}
 
-	slog.Debug("created gemini client via ADK", "model", cfg.Model)
+	embeddingModel := cfg.EmbeddingModel
+	if embeddingModel == "" {
+		embeddingModel = defaultEmbeddingModel
+	}
 
-	return &Client{
-		modelImpl: adkModel,
-		model:     cfg.Model,
-	}, nil
+	// A separate genai client powers embeddings; the ADK model handles content
+	// generation. Sharing the API key keeps a single credential in config.
+	gClient, err := genai.NewClient(ctx, &genai.ClientConfig{APIKey: cfg.APIKey})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create genai client: %w", err)
+	}
+
+	slog.Debug("created gemini client via ADK", "model", cfg.Model, "embeddingModel", embeddingModel)
+
+	c := &Client{
+		modelImpl:      adkModel,
+		model:          cfg.Model,
+		embeddingModel: embeddingModel,
+	}
+	c.embedFn = func(ctx context.Context, text string) ([]float32, error) {
+		resp, err := gClient.Models.EmbedContent(ctx, embeddingModel,
+			genai.Text(text), &genai.EmbedContentConfig{TaskType: "RETRIEVAL_DOCUMENT"})
+		if err != nil {
+			return nil, fmt.Errorf("embed content: %w", err)
+		}
+		if len(resp.Embeddings) == 0 || resp.Embeddings[0] == nil {
+			return nil, fmt.Errorf("embed content: empty response")
+		}
+		return resp.Embeddings[0].Values, nil
+	}
+
+	return c, nil
 }
 
 // ModelName returns the model name used by this client.

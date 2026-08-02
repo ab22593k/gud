@@ -21,6 +21,11 @@ import (
 // This prevents accidentally dumping hundreds of commits into the prompt and wasting tokens.
 const maxHistory = git.MaxRecentCommits
 
+// maxContextRecords caps how many related commits HelixDB recall may return to
+// the prompt. Matches the per-source limit used by the mem package so fused
+// results stay within the same token budget.
+const maxContextRecords = 5
+
 // runGenerate is the default action: generate a commit message from staged changes.
 func runGenerate(cmd *cobra.Command, _ []string) error {
 	app, err := NewAppContext(cmd)
@@ -159,8 +164,11 @@ func appendDeletedContext(diff, deleted string) string {
 
 // maybeAppendMEMContext queries HelixDB for semantically relevant context
 // based on the current diff and appends it to the prompt context string.
-// Uses BM25 text search and entity-aware recall via MENTIONS edges.
-// Errors are logged and silently discarded — HelixDB context is optional.
+// Retrieval is hybrid: vector similarity over commit embeddings (when a query
+// embedding can be computed), BM25 over diff text and commit messages, and
+// entity-aware recall via MENTIONS edges. Results are fused with reciprocal
+// rank fusion and re-ranked by recency. All errors are logged and silently
+// discarded — HelixDB context is optional.
 func maybeAppendMEMContext(
 	ctx context.Context, app *AppContext, diff string,
 	units []git.CodeUnit, existingContext string,
@@ -184,17 +192,26 @@ func maybeAppendMEMContext(
 		codeElemKeys = append(codeElemKeys, fmt.Sprintf("%s:%s:%s", repoPath, u.FilePath, u.Name))
 	}
 
-	var allRecords []mem.CommitRecord
+	// Query embedding for vector recall. A failed embedding call is non-fatal:
+	// retrieval falls back to BM25 and entity recall.
+	var queryVec []float32
+	if client := app.Client(); client != nil {
+		if vec, err := client.EmbedText(ctx, diff); err != nil {
+			slog.Debug("helixdb: query embedding failed, falling back to BM25", "error", err)
+		} else {
+			queryVec = vec
+		}
+	}
 
-	// 1. BM25 context query using diff text and file name signals.
-	// Scope to the current branch (BuildContextQuery includes legacy records
-	// persisted without a branch).
-	query := mem.BuildContextQuery(repoPath, git.GetBranch(ctx), filePaths, diff)
+	var groups []mem.RankedGroup
+
+	// 1. Hybrid recall: vector + BM25 over diff text + BM25 over messages.
+	query := mem.BuildHybridContextQuery(repoPath, git.GetBranch(ctx), queryVec, diff, filePaths, maxContextRecords)
 	var rawResp map[string]any
 	if err := db.Exec(ctx, query, &rawResp); err != nil {
-		slog.Debug("helixdb bm25 context query failed", "error", err)
+		slog.Debug("helixdb hybrid context query failed", "error", err)
 	} else {
-		allRecords = mem.ParseContextResults(mem.NewResponse(rawResp))
+		groups = append(groups, mem.CollectContextGroups(mem.NewResponse(rawResp))...)
 	}
 
 	// 2. Entity-aware recall: find commits mentioning the same code elements.
@@ -204,26 +221,16 @@ func maybeAppendMEMContext(
 		if err := db.Exec(ctx, entityQ, &rawEntityResp); err != nil {
 			slog.Debug("helixdb entity context query failed", "error", err)
 		} else {
-			entityRecords := mem.ParseContextResults(mem.NewResponse(rawEntityResp))
-			allRecords = append(allRecords, entityRecords...)
+			groups = append(groups, mem.CollectContextGroups(mem.NewResponse(rawEntityResp))...)
 		}
 	}
 
-	// Deduplicate by SHA.
-	seen := make(map[string]bool)
-	var deduped []mem.CommitRecord
-	for _, r := range allRecords {
-		if !seen[r.SHA] {
-			seen[r.SHA] = true
-			deduped = append(deduped, r)
-		}
-	}
-
-	if len(deduped) == 0 {
+	records := mem.FuseContextRecords(groups, maxContextRecords)
+	if len(records) == 0 {
 		return existingContext
 	}
 
-	ctxStr := mem.FormatContextRecords(deduped)
+	ctxStr := mem.FormatContextRecords(records)
 	if existingContext != "" {
 		return existingContext + "\n\n" + ctxStr
 	}
