@@ -3,6 +3,8 @@ package mem
 import (
 	"strings"
 	"testing"
+
+	"github.com/helixdb/helix-db/sdks/go"
 )
 
 func TestBuildContextQuery_ValidDiff(t *testing.T) {
@@ -199,4 +201,37 @@ func TestFormatContextRecords_NotEmpty(t *testing.T) {
 	if !strings.Contains(result, "feat: add login") {
 		t.Errorf("expected 'feat: add login' in output, got %q", result)
 	}
+}
+
+func TestBuildContextQuery_BranchFilter(t *testing.T) {
+	t.Parallel()
+
+	t.Run("branch scopes and includes legacy records", func(t *testing.T) {
+		q := BuildContextQuery("/home/user/repo", "feature-x",
+			[]string{"main.go"},
+			"diff text",
+		)
+		data, err := helix.MarshalRequest(q)
+		if err != nil {
+			t.Fatalf("MarshalRequest: %v", err)
+		}
+		js := string(data)
+		if !strings.Contains(js, "feature-x") {
+			t.Errorf("expected branch 'feature-x' in serialized query, got:\n%s", js)
+		}
+	})
+
+	t.Run("empty branch disables scoping", func(t *testing.T) {
+		q := BuildContextQuery("/home/user/repo", "",
+			[]string{"main.go"},
+			"diff text",
+		)
+		data, err := helix.MarshalRequest(q)
+		if err != nil {
+			t.Fatalf("MarshalRequest: %v", err)
+		}
+		if strings.Contains(string(data), "feature-x") {
+			t.Errorf("unexpected branch filter with empty branch:\n%s", data)
+		}
+	})
 }

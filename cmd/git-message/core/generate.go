@@ -187,8 +187,9 @@ func maybeAppendMEMContext(
 	var allRecords []mem.CommitRecord
 
 	// 1. BM25 context query using diff text and file name signals.
-	branch := ""
-	query := mem.BuildContextQuery(repoPath, branch, filePaths, diff)
+	// Scope to the current branch (BuildContextQuery includes legacy records
+	// persisted without a branch).
+	query := mem.BuildContextQuery(repoPath, git.GetBranch(ctx), filePaths, diff)
 	var rawResp map[string]any
 	if err := db.Exec(ctx, query, &rawResp); err != nil {
 		slog.Debug("helixdb bm25 context query failed", "error", err)

@@ -120,17 +120,12 @@ func runHookMode(cmd *cobra.Command, msgFile string) error {
 
 // runHookModeInternal generates a commit message and writes it to the message file.
 func runHookModeInternal(ctx context.Context, msgFile string, app *AppContext) error {
-	diff, err := getStagedDiffOrSkip(ctx)
+	diff, deleted, err := getStagedDiffAndDeleted(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get staged diff: %w", err)
+		return fmt.Errorf("failed to get staged changes: %w", err)
 	}
-	if diff == "" {
+	if strings.TrimSpace(diff) == "" {
 		return nil
-	}
-
-	deleted, err := git.GetStagedDeletedFiles(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get deleted files: %w", err)
 	}
 	diff = appendDeletedContext(diff, deleted)
 
@@ -139,19 +134,6 @@ func runHookModeInternal(ctx context.Context, msgFile string, app *AppContext) e
 	}
 
 	return generateAndWriteMsg(ctx, app, diff, msgFile)
-}
-
-// getStagedDiffOrSkip returns the staged diff, or an empty string if there are no staged changes.
-func getStagedDiffOrSkip(ctx context.Context) (string, error) {
-	diff, err := git.GetStagedDiff(ctx)
-	if err != nil {
-		return "", err
-	}
-	if strings.TrimSpace(diff) == "" {
-		return "", nil
-	}
-
-	return diff, nil
 }
 
 // generateAndWriteMsg generates a commit message and writes it to the message file.

@@ -91,7 +91,12 @@ type PickerModel struct {
 // NewPicker creates a new picker model with the given catalog entries,
 // download function, and optional cached-slug set and custom title.
 // Any slug present in cached will display a cache indicator.
-func NewPicker(entries []profile.CatalogEntry, download DownloadFunc, cached map[string]bool, title ...string) PickerModel {
+func NewPicker(
+	entries []profile.CatalogEntry,
+	download DownloadFunc,
+	cached map[string]bool,
+	title ...string,
+) PickerModel {
 	items := make([]list.Item, len(entries))
 	for i, e := range entries {
 		items[i] = catalogItem{entry: e, cached: cached[e.Slug]}

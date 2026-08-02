@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -115,15 +116,13 @@ func suggestProfileIfNeeded(ctx context.Context, cmd *cobra.Command, app *AppCon
 
 		selected := suggestions[idx-1]
 
-		return applySelectedProfile(ctx, app, selected)
+		return applySelectedProfile(ctx, app, out, selected)
 	}
 }
 
 // applySelectedProfile caches the profile, updates app config, and writes
 // gud.json in the working directory so the selection persists across invocations.
-func applySelectedProfile(ctx context.Context, app *AppContext, entry profile.CatalogEntry) error {
-	out := os.Stdout // Always print to stdout for visibility
-
+func applySelectedProfile(ctx context.Context, app *AppContext, out io.Writer, entry profile.CatalogEntry) error {
 	// Download and cache if not already cached
 	if !profileManager.IsCached(entry.Slug) {
 		_, _ = fmt.Fprintf(out, "Downloading profile %q...\n", entry.Slug)
@@ -178,7 +177,7 @@ func writeProjectConfig(dir string, cfg config.Config) error {
 		return fmt.Errorf("marshal: %w", err)
 	}
 
-	return os.WriteFile(path, data, 0644)
+	return os.WriteFile(path, data, 0600)
 }
 
 // hasSkipMarker returns true if the .gud-skip marker exists in the directory.
@@ -190,7 +189,7 @@ func hasSkipMarker(dir string) bool {
 
 // writeSkipMarker creates the .gud-skip marker to suppress future prompts.
 func writeSkipMarker(dir string) {
-	_ = os.WriteFile(filepath.Join(dir, skipMarker), []byte("# gud profile suggestion skipped\n"), 0644)
+	_ = os.WriteFile(filepath.Join(dir, skipMarker), []byte("# gud profile suggestion skipped\n"), 0600)
 }
 
 // isTerminal reports whether f is a character device (terminal).

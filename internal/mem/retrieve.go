@@ -10,11 +10,12 @@ import (
 const maxContextRecords = 5
 
 // BuildContextQuery constructs a HelixDB ReadQuery that searches for relevant
-// past commits to use as context for the LLM. It searches three ways:
+// past commits to use as context for the LLM. It searches two ways:
 //  1. BM25 over diff_text — find commits with semantically similar diffs
 //  2. BM25 over message — find commits mentioning the same files
-//  3. Vector search over embedding — find semantically similar commits (when
-//     diffText is long enough to generate a meaningful embedding query)
+//
+// When branch is non-empty, results are scoped to that branch, including
+// legacy records persisted without a branch (branch = "").
 func BuildContextQuery(tenantID, branch string, files []string, diffText string) helix.Request {
 	b := helix.ReadQuery("commit_context")
 	returns := []string{"by_diff"}
@@ -28,10 +29,37 @@ func BuildContextQuery(tenantID, branch string, files []string, diffText string)
 		diffSearch = diffSearch.NWithLabel("Commit")
 	}
 
-	b.VarAs("by_diff", diffSearch.
+	byDiff := diffSearch.
 		Has("repo_path", tenantID).
-		Where(helix.PredIsNull("deletedAt")).
-		Project(
+		Where(helix.PredIsNull("deletedAt"))
+	if branch != "" {
+		byDiff = byDiff.Where(branchFilter(branch))
+	}
+
+	b.VarAs("by_diff", byDiff.Project(
+		helix.ProjectPropAs("$id", "$id"),
+		helix.ProjectPropAs("id", "sha"),
+		helix.ProjectPropAs("message", "message"),
+		helix.ProjectPropAs("author", "author"),
+		helix.ProjectPropAs("timestamp", "timestamp"),
+		helix.ProjectPropAs("repo_path", "repo_path"),
+		helix.ProjectPropAs("branch", "branch"),
+		helix.ProjectPropAs("diff_stat", "diff_stat"),
+	).
+		Limit(maxContextRecords))
+
+	// 2. BM25 search over commit messages using file names as signals.
+	if len(files) > 0 {
+		msgQuery := strings.Join(files, " ")
+		byMessage := helix.G().
+			TextSearchNodes("Commit", "message", msgQuery, maxContextRecords, tenantID).
+			Has("repo_path", tenantID).
+			Where(helix.PredIsNull("deletedAt"))
+		if branch != "" {
+			byMessage = byMessage.Where(branchFilter(branch))
+		}
+
+		b.VarAs("by_message", byMessage.Project(
 			helix.ProjectPropAs("$id", "$id"),
 			helix.ProjectPropAs("id", "sha"),
 			helix.ProjectPropAs("message", "message"),
@@ -41,30 +69,21 @@ func BuildContextQuery(tenantID, branch string, files []string, diffText string)
 			helix.ProjectPropAs("branch", "branch"),
 			helix.ProjectPropAs("diff_stat", "diff_stat"),
 		).
-		Limit(maxContextRecords))
-
-	// 2. BM25 search over commit messages using file names as signals.
-	if len(files) > 0 {
-		msgQuery := strings.Join(files, " ")
-		b.VarAs("by_message", helix.G().
-			TextSearchNodes("Commit", "message", msgQuery, maxContextRecords, tenantID).
-			Has("repo_path", tenantID).
-			Where(helix.PredIsNull("deletedAt")).
-			Project(
-				helix.ProjectPropAs("$id", "$id"),
-				helix.ProjectPropAs("id", "sha"),
-				helix.ProjectPropAs("message", "message"),
-				helix.ProjectPropAs("author", "author"),
-				helix.ProjectPropAs("timestamp", "timestamp"),
-				helix.ProjectPropAs("repo_path", "repo_path"),
-				helix.ProjectPropAs("branch", "branch"),
-				helix.ProjectPropAs("diff_stat", "diff_stat"),
-			).
 			Limit(maxContextRecords))
 		returns = append(returns, "by_message")
 	}
 
 	return b.Returning(returns...)
+}
+
+// branchFilter scopes results to the given branch, including legacy records
+// persisted without a branch (branch = ""). It must only be applied when
+// branch is non-empty.
+func branchFilter(branch string) helix.Predicate {
+	return helix.PredOr(
+		helix.PredEq("branch", branch),
+		helix.PredEq("branch", ""),
+	)
 }
 
 // BuildHybridContextQuery fuses vector + BM25 recall for commits that are
@@ -81,17 +100,17 @@ func BuildHybridContextQuery(tenantID string, queryVector []float32, diffText st
 			helix.G().
 				VectorSearchNodes("Commit", "embedding", queryVector, int(limit), tenantID).
 				Where(helix.PredIsNull("deletedAt")).
-		Project(
-				helix.ProjectPropAs("$id", "$id"),
-				helix.ProjectPropAs("id", "sha"),
-				helix.ProjectPropAs("message", "message"),
-				helix.ProjectPropAs("author", "author"),
-				helix.ProjectPropAs("$distance", "distance"),
-				helix.ProjectPropAs("repo_path", "repo_path"),
-				helix.ProjectPropAs("branch", "branch"),
-				helix.ProjectPropAs("diff_stat", "diff_stat"),
-			).
-			Limit(int(limit)))
+				Project(
+					helix.ProjectPropAs("$id", "$id"),
+					helix.ProjectPropAs("id", "sha"),
+					helix.ProjectPropAs("message", "message"),
+					helix.ProjectPropAs("author", "author"),
+					helix.ProjectPropAs("$distance", "distance"),
+					helix.ProjectPropAs("repo_path", "repo_path"),
+					helix.ProjectPropAs("branch", "branch"),
+					helix.ProjectPropAs("diff_stat", "diff_stat"),
+				).
+				Limit(int(limit)))
 		returns = append(returns, "by_vector")
 	}
 

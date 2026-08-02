@@ -1,3 +1,5 @@
+// Package git provides a thin wrapper around the git CLI for reading staged
+// diffs, extracting code units, and installing git hooks.
 package git
 
 import (
@@ -13,6 +15,10 @@ type CodeUnit struct {
 	ChangeType string // "modified", "added", "removed"
 	FilePath   string
 }
+
+// changeTypeModified is the change type assigned to code units parsed from hunk
+// headers, which do not carry added/removed information.
+const changeTypeModified = "modified"
 
 // hunkHeaderWithDecl matches hunk headers that include an inline declaration:
 //
@@ -121,6 +127,7 @@ func parseDeclaration(decl, filePath string) *CodeUnit {
 	switch {
 	case strings.HasPrefix(trimmed, "func "):
 		sig := strings.TrimPrefix(trimmed, "func ")
+
 		return parseFuncOrMethod(sig, filePath)
 
 	case strings.HasPrefix(trimmed, "type "):
@@ -130,7 +137,7 @@ func parseDeclaration(decl, filePath string) *CodeUnit {
 		if len(name) > 0 && name[0] >= 'A' && name[0] <= 'Z' {
 			kind = "struct"
 		}
-		return &CodeUnit{Name: name, Kind: kind, ChangeType: "modified", FilePath: filePath}
+		return &CodeUnit{Name: name, Kind: kind, ChangeType: changeTypeModified, FilePath: filePath}
 	}
 
 	return nil
@@ -150,9 +157,10 @@ func parseFuncOrMethod(sig, filePath string) *CodeUnit {
 		if funcName == "" {
 			return nil
 		}
+
 		return &CodeUnit{
 			Name: "(*" + extractReceiverType(sig[1:closeParen]) + ")." + funcName,
-			Kind: "method", ChangeType: "modified", FilePath: filePath,
+			Kind: "method", ChangeType: changeTypeModified, FilePath: filePath,
 		}
 	}
 

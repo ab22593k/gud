@@ -119,7 +119,7 @@ func TestCommit(t *testing.T) {
 			t.Fatalf("%s failed: %v", cmd, err)
 		}
 	}
-	if err := os.WriteFile(dir+"/file.go", []byte("package main\n"), 0644); err != nil {
+	if err := os.WriteFile(dir+"/file.go", []byte("package main\n"), 0600); err != nil {
 		t.Fatalf("write file failed: %v", err)
 	}
 	addCmd := exec.Command("git", "add", ".")
@@ -166,7 +166,7 @@ func TestCommit_EmptyMessage(t *testing.T) {
 			t.Fatalf("%s failed: %v", cmd, err)
 		}
 	}
-	if err := os.WriteFile(dir+"/file.go", []byte("package main\n"), 0644); err != nil {
+	if err := os.WriteFile(dir+"/file.go", []byte("package main\n"), 0600); err != nil {
 		t.Fatalf("write file failed: %v", err)
 	}
 	addCmd := exec.Command("git", "add", ".")
@@ -217,10 +217,10 @@ func TestGetStagedDeletedFiles_WithDeletion(t *testing.T) {
 			t.Fatalf("%s failed: %v", cmd, err)
 		}
 	}
-	if err := os.WriteFile(dir+"/file.go", []byte("package main\n"), 0644); err != nil {
+	if err := os.WriteFile(dir+"/file.go", []byte("package main\n"), 0600); err != nil {
 		t.Fatalf("write file.go failed: %v", err)
 	}
-	if err := os.WriteFile(dir+"/keep.go", []byte("package main\n"), 0644); err != nil {
+	if err := os.WriteFile(dir+"/keep.go", []byte("package main\n"), 0600); err != nil {
 		t.Fatalf("write keep.go failed: %v", err)
 	}
 
@@ -254,7 +254,7 @@ func TestGetStagedDeletedFiles_WithDeletion(t *testing.T) {
 	}
 
 	// Modify the kept file to also have some non-deletion diff
-	if err := os.WriteFile("keep.go", []byte("package main\n\nfunc main() {}\n"), 0644); err != nil {
+	if err := os.WriteFile("keep.go", []byte("package main\n\nfunc main() {}\n"), 0600); err != nil {
 		t.Fatalf("write keep.go failed: %v", err)
 	}
 	addAgain := exec.Command("git", "add", "keep.go")
@@ -305,7 +305,7 @@ func TestGetStagedDiff_ExcludesRenames(t *testing.T) {
 			t.Fatalf("%s failed: %v", cmd, err)
 		}
 	}
-	if err := os.WriteFile(dir+"/old.go", []byte("package main\n"), 0644); err != nil {
+	if err := os.WriteFile(dir+"/old.go", []byte("package main\n"), 0600); err != nil {
 		t.Fatalf("write old.go failed: %v", err)
 	}
 
@@ -384,5 +384,57 @@ func TestGetRecentCommits_EmptyRepo(t *testing.T) {
 	}
 	if err == nil {
 		t.Errorf("GetRecentCommits(5) on empty repo should return an error")
+	}
+}
+
+func TestGetBranch(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	branch := GetBranch(ctx)
+	if branch == "" {
+		t.Log("GetBranch returned empty (detached HEAD or no git repo) — acceptable")
+	}
+	if strings.ContainsAny(branch, " \n\t") {
+		t.Errorf("GetBranch() = %q, want a bare branch name", branch)
+	}
+}
+
+func TestGetBranchIntegration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	// Initialize a temp repo, commit, and verify the branch is detected.
+	dir := t.TempDir()
+	cmd := exec.Command("git", "init", "-b", "main")
+	cmd.Dir = dir
+	if err := cmd.Run(); err != nil {
+		t.Skipf("git init unavailable: %v", err)
+	}
+	write := func(name, content string) {
+		path := dir + "/" + name
+		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("f.txt", "hello\n")
+	msg := "init"
+	for _, a := range [][]string{{"add", "f.txt"}, {"-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", msg}} {
+		c := exec.Command("git", a...)
+		c.Dir = dir
+		if err := c.Run(); err != nil {
+			t.Skipf("git %v failed: %v", a, err)
+		}
+	}
+
+	cwd, _ := os.Getwd()
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(cwd) })
+
+	if got := GetBranch(context.Background()); got != "main" {
+		t.Errorf("GetBranch() = %q, want %q", got, "main")
 	}
 }

@@ -103,11 +103,11 @@ func TestCommitReviewEnterSelection(t *testing.T) {
 func TestActionItemProperties(t *testing.T) {
 	item := actionItem{
 		id:          ActionCommit,
-		title:       "✓ Commit",
+		title:       commitTitle,
 		description: "Accept message",
 	}
 
-	if item.Title() != "✓ Commit" {
+	if item.Title() != commitTitle {
 		t.Errorf("unexpected title: %s", item.Title())
 	}
 	if item.Description() != "Accept message" {
@@ -122,8 +122,8 @@ func TestWrapText(t *testing.T) {
 	longLine := "This is a long commit message paragraph that exceeds forty characters."
 	wrapped := wrapText(longLine, 40)
 
-	lines := strings.Split(wrapped, "\n")
-	for _, l := range lines {
+	lines := strings.SplitSeq(wrapped, "\n")
+	for l := range lines {
 		if len(l) > 40 {
 			t.Errorf("line length %d exceeds max wrap limit 40: %q", len(l), l)
 		}
@@ -138,7 +138,7 @@ func TestCommitReviewRespectsWrapLine(t *testing.T) {
 		t.Errorf("expected wrapLine 50, got %d", model.wrapLine)
 	}
 
-	for _, line := range strings.Split(model.msg, "\n") {
+	for line := range strings.SplitSeq(model.msg, "\n") {
 		if len(line) > 50 {
 			t.Errorf("line in model.msg exceeds wrapLine 50: %q", line)
 		}

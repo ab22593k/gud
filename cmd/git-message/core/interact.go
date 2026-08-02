@@ -64,14 +64,7 @@ func interactiveCommit(ctx context.Context, cmd *cobra.Command, app *AppContext,
 		}
 		switch action {
 		case actionCommit:
-			hash, err := git.Commit(ctx, msg)
-			if err != nil {
-				return err
-			}
-			_, _ = fmt.Fprintln(out, "Committed successfully.")
-			persistToHelixDB(ctx, app, diff, hash, msg, units)
-
-			return nil
+			return commitFinalized(ctx, app, out, diff, msg, units)
 
 		case actionEdit:
 			edited, err := editMessage(msg)
@@ -79,14 +72,8 @@ func interactiveCommit(ctx context.Context, cmd *cobra.Command, app *AppContext,
 				return fmt.Errorf("failed to edit message: %w", err)
 			}
 			edited = appendAssistedBy(edited, client.ModelName())
-			hash, err := git.Commit(ctx, edited)
-			if err != nil {
-				return err
-			}
-			_, _ = fmt.Fprintln(out, "Committed successfully.")
-			persistToHelixDB(ctx, app, diff, hash, edited, units)
 
-			return nil
+			return commitFinalized(ctx, app, out, diff, edited, units)
 
 		case actionRegenerate:
 			continue
@@ -97,6 +84,20 @@ func interactiveCommit(ctx context.Context, cmd *cobra.Command, app *AppContext,
 			return nil
 		}
 	}
+}
+
+// commitFinalized runs the git commit, reports success, and persists the
+// commit to HelixDB. Shared by the direct and edited commit paths.
+func commitFinalized(ctx context.Context, app *AppContext, out io.Writer,
+	diff, msg string, units []git.CodeUnit) error {
+	hash, err := git.Commit(ctx, msg)
+	if err != nil {
+		return err
+	}
+	_, _ = fmt.Fprintln(out, "Committed successfully.")
+	persistToHelixDB(ctx, app, diff, hash, msg, units)
+
+	return nil
 }
 
 // promptAction reads a single-line action from the user and returns the
@@ -205,6 +206,22 @@ func toFileChanges(units []git.CodeUnit) []mem.FileChange {
 	return fileChanges
 }
 
+// toCodeUnitRefs maps parsed git code units to mem.CodeUnitRef for HelixDB
+// persistence. They back the entity-aware recall path (MENTIONS edges).
+func toCodeUnitRefs(units []git.CodeUnit) []mem.CodeUnitRef {
+	refs := make([]mem.CodeUnitRef, 0, len(units))
+	for _, u := range units {
+		refs = append(refs, mem.CodeUnitRef{
+			Name:       u.Name,
+			Kind:       u.Kind,
+			FilePath:   u.FilePath,
+			ChangeType: u.ChangeType,
+		})
+	}
+
+	return refs
+}
+
 // persistToHelixDB persists the commit data to HelixDB after a successful commit.
 // Errors are logged and silently discarded — HelixDB persistence is fire-and-forget.
 func persistToHelixDB(ctx context.Context, app *AppContext, diff, hash, message string, units []git.CodeUnit) {
@@ -221,17 +238,21 @@ func persistToHelixDB(ctx context.Context, app *AppContext, diff, hash, message 
 	}
 
 	author := git.GetAuthor(ctx)
+	branch := git.GetBranch(ctx)
 
 	fileChanges := toFileChanges(units)
+	codeUnits := toCodeUnitRefs(units)
 
 	commit := mem.CommitData{
 		SHA:            hash,
 		RepoPath:       repoPath,
+		Branch:         branch,
 		Message:        message,
 		DiffText:       diff,
 		Author:         author,
 		Timestamp:      time.Now(),
 		Files:          fileChanges,
+		CodeUnits:      codeUnits,
 		IsGudGenerated: true,
 	}
 

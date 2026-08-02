@@ -81,6 +81,21 @@ func GetRepoRoot(ctx context.Context) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
+// GetBranch returns the current git branch name, or empty string on detached
+// HEAD or error. Callers should handle the empty result gracefully.
+func GetBranch(ctx context.Context) string {
+	out, err := exec.CommandContext(ctx, "git", "rev-parse", "--abbrev-ref", "HEAD").Output()
+	if err != nil {
+		return ""
+	}
+	branch := strings.TrimSpace(string(out))
+	if branch == "HEAD" {
+		return "" // detached HEAD — no named branch
+	}
+
+	return branch
+}
+
 // getHEADHash returns the abbreviated hash of HEAD.
 func getHEADHash(ctx context.Context) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", "rev-parse", "--short", "HEAD")

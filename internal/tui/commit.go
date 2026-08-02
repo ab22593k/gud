@@ -19,6 +19,14 @@ const (
 	ActionAbort      = "abort"
 )
 
+// Display titles for commit review actions.
+const (
+	commitTitle     = "✓ Commit"
+	editTitle       = "✎ Edit"
+	regenerateTitle = "↻ Regenerate"
+	abortTitle      = "✗ Abort"
+)
+
 var (
 	commitKeyStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#7C56D9")).
@@ -47,22 +55,22 @@ func defaultActionItems() []list.Item {
 	return []list.Item{
 		actionItem{
 			id:          ActionCommit,
-			title:       "✓ Commit",
+			title:       commitTitle,
 			description: "Accept message and commit staged changes",
 		},
 		actionItem{
 			id:          ActionEdit,
-			title:       "✎ Edit",
+			title:       editTitle,
 			description: "Modify commit message inline",
 		},
 		actionItem{
 			id:          ActionRegenerate,
-			title:       "↻ Regenerate",
+			title:       regenerateTitle,
 			description: "Generate a new commit message",
 		},
 		actionItem{
 			id:          ActionAbort,
-			title:       "✗ Abort",
+			title:       abortTitle,
 			description: "Cancel without committing",
 		},
 	}
@@ -128,18 +136,9 @@ func (m CommitReviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		// Reserve height for the preview box (~6 lines) and list (~10 lines).
-		listHeight := 10
-		if listHeight > msg.Height-6 {
-			listHeight = msg.Height - 6
-		}
-		if listHeight < 5 {
-			listHeight = 5
-		}
+		listHeight := max(min(10, msg.Height-6), 5)
 
-		vpHeight := msg.Height - listHeight - 6
-		if vpHeight < 3 {
-			vpHeight = 3
-		}
+		vpHeight := max(msg.Height-listHeight-6, 3)
 
 		vpWidth := msg.Width - 6
 		if m.wrapLine > 0 && m.wrapLine < vpWidth {
@@ -316,22 +315,17 @@ func wrapText(text string, limit int) string {
 	for _, line := range lines {
 		if len(line) <= limit {
 			result = append(result, line)
+
 			continue
 		}
 
 		// Preserve leading indentation (spaces or tabs)
-		indent := ""
-		for _, r := range line {
-			if r == ' ' || r == '\t' {
-				indent += string(r)
-			} else {
-				break
-			}
-		}
+		indent := line[:len(line)-len(strings.TrimLeft(line, " \t"))]
 
 		words := strings.Fields(line)
 		if len(words) == 0 {
 			result = append(result, line)
+
 			continue
 		}
 

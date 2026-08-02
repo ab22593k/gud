@@ -79,7 +79,7 @@ func TestUninstallHook(t *testing.T) {
 	}
 	hookPath := filepath.Join(hookDir, string(PrepareCommitMsg))
 
-	if err := os.WriteFile(hookPath, []byte("#!/bin/sh\necho test"), 0755); err != nil {
+	if err := os.WriteFile(hookPath, []byte("#!/bin/sh\necho test"), 0600); err != nil {
 		t.Fatalf("failed to write hook file: %v", err)
 	}
 

@@ -142,3 +142,52 @@ func TestToFileChanges(t *testing.T) {
 		})
 	}
 }
+
+func TestToCodeUnitRefs(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		units []git.CodeUnit
+		want  []mem.CodeUnitRef
+	}{
+		{
+			name:  "empty input returns nil",
+			units: nil,
+			want:  nil,
+		},
+		{
+			name: "single function mapped",
+			units: []git.CodeUnit{
+				{Name: "Render", Kind: "function", ChangeType: "deleted", FilePath: "main.go"},
+			},
+			want: []mem.CodeUnitRef{
+				{Name: "Render", Kind: "function", ChangeType: "deleted", FilePath: "main.go"},
+			},
+		},
+		{
+			name: "all fields preserved including method receiver",
+			units: []git.CodeUnit{
+				{Name: "(*App).Bootstrap", Kind: "method", ChangeType: "removed", FilePath: "app.go"},
+			},
+			want: []mem.CodeUnitRef{
+				{Name: "(*App).Bootstrap", Kind: "method", ChangeType: "removed", FilePath: "app.go"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := toCodeUnitRefs(tt.units)
+			if len(got) != len(tt.want) {
+				t.Fatalf("toCodeUnitRefs() returned %d items, want %d", len(got), len(tt.want))
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("toCodeUnitRefs()[%d] = %+v, want %+v", i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}

@@ -29,7 +29,7 @@ func TestComputeStats_SingleExtension(t *testing.T) {
 
 	files := []string{"main.go", "handler.go", "utils.go"}
 	for _, f := range files {
-		if err := os.WriteFile(filepath.Join(dir, f), []byte("package main"), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, f), []byte("package main"), 0600); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -50,10 +50,10 @@ func TestComputeStats_MultipleExtensions(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 
-	_ = os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main"), 0644)
-	_ = os.WriteFile(filepath.Join(dir, "app.ts"), []byte("const x = 1;"), 0644)
-	_ = os.WriteFile(filepath.Join(dir, "style.css"), []byte("body {}"), 0644)
-	_ = os.WriteFile(filepath.Join(dir, "README.md"), []byte("# Project"), 0644)
+	_ = os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main"), 0600)
+	_ = os.WriteFile(filepath.Join(dir, "app.ts"), []byte("const x = 1;"), 0600)
+	_ = os.WriteFile(filepath.Join(dir, "style.css"), []byte("body {}"), 0600)
+	_ = os.WriteFile(filepath.Join(dir, "README.md"), []byte("# Project"), 0600)
 
 	stats, err := ComputeStats(dir)
 	if err != nil {
@@ -74,9 +74,9 @@ func TestComputeStats_SkipsGitDir(t *testing.T) {
 	dir := t.TempDir()
 
 	_ = os.MkdirAll(filepath.Join(dir, ".git", "objects"), 0750)
-	_ = os.WriteFile(filepath.Join(dir, ".git", "HEAD"), []byte("ref: refs/heads/main\n"), 0644)
-	_ = os.WriteFile(filepath.Join(dir, ".git", "objects", "pack"), []byte("data"), 0644)
-	_ = os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main"), 0644)
+	_ = os.WriteFile(filepath.Join(dir, ".git", "HEAD"), []byte("ref: refs/heads/main\n"), 0600)
+	_ = os.WriteFile(filepath.Join(dir, ".git", "objects", "pack"), []byte("data"), 0600)
+	_ = os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main"), 0600)
 
 	stats, err := ComputeStats(dir)
 	if err != nil {
@@ -94,8 +94,8 @@ func TestComputeStats_NoExtensionFiles(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 
-	_ = os.WriteFile(filepath.Join(dir, "Makefile"), []byte("all:\n"), 0644)
-	_ = os.WriteFile(filepath.Join(dir, "Dockerfile"), []byte("FROM ubuntu"), 0644)
+	_ = os.WriteFile(filepath.Join(dir, "Makefile"), []byte("all:\n"), 0600)
+	_ = os.WriteFile(filepath.Join(dir, "Dockerfile"), []byte("FROM ubuntu"), 0600)
 
 	stats, err := ComputeStats(dir)
 	if err != nil {

@@ -24,6 +24,7 @@ func InstallHook(hookDir string, hookType HookType, binaryPath string) error {
 
 	content := buildHookScript(binaryPath)
 
+	//nolint:gosec // git hooks must be executable for git to invoke them
 	if err := os.WriteFile(hookPath, []byte(content), 0755); err != nil {
 		return fmt.Errorf("failed to write hook file: %w", err)
 	}
