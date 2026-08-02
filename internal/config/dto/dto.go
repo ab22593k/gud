@@ -9,15 +9,11 @@ type ConfigDTO struct {
 	Profile     string `json:"profile,omitempty"`
 	Model       string `json:"model,omitempty"`
 	// Temperature is intentionally omitted — deprecated by Google for Gemini 3.6+
-	Hint                 string `json:"hint,omitempty"`
-	History              int    `json:"history,omitempty"`
-	APIKey               string `json:"api_key,omitempty"`
-	WrapLine             int    `json:"wrapline,omitempty"`
-	EmbeddingModel       string `json:"embedding_model,omitempty"`
-	HelixDBEnabled       bool   `json:"helixdb_enabled,omitempty"`
-	HelixDBURL           string `json:"helixdb_url,omitempty"`
-	HelixDBAutoManage    bool   `json:"helixdb_auto_manage,omitempty"`
-	HelixDBContainerName string `json:"helixdb_container_name,omitempty"`
+	Hint           string `json:"hint,omitempty"`
+	History        int    `json:"history,omitempty"`
+	APIKey         string `json:"api_key,omitempty"`
+	WrapLine       int    `json:"wrapline,omitempty"`
+	EmbeddingModel string `json:"embedding_model,omitempty"`
 }
 
 // ToEntity converts the DTO to a domain Config entity.
@@ -27,15 +23,11 @@ func (d ConfigDTO) ToEntity() config.Config {
 		Profile:     config.ProfileName(d.Profile),
 		Model:       d.Model,
 
-		Hint:                 d.Hint,
-		History:              d.History,
-		APIKey:               d.APIKey,
-		WrapLine:             d.WrapLine,
-		EmbeddingModel:       d.EmbeddingModel,
-		HelixDBEnabled:       d.HelixDBEnabled,
-		HelixDBURL:           d.HelixDBURL,
-		HelixDBAutoManage:    d.HelixDBAutoManage,
-		HelixDBContainerName: d.HelixDBContainerName,
+		Hint:           d.Hint,
+		History:        d.History,
+		APIKey:         d.APIKey,
+		WrapLine:       d.WrapLine,
+		EmbeddingModel: d.EmbeddingModel,
 	}
 }
 
@@ -46,14 +38,10 @@ func FromEntity(c config.Config) ConfigDTO {
 		Profile:     string(c.Profile),
 		Model:       c.Model,
 
-		Hint:                 c.Hint,
-		History:              c.History,
-		APIKey:               c.APIKey,
-		WrapLine:             c.WrapLine,
-		EmbeddingModel:       c.EmbeddingModel,
-		HelixDBEnabled:       c.HelixDBEnabled,
-		HelixDBURL:           c.HelixDBURL,
-		HelixDBAutoManage:    c.HelixDBAutoManage,
-		HelixDBContainerName: c.HelixDBContainerName,
+		Hint:           c.Hint,
+		History:        c.History,
+		APIKey:         c.APIKey,
+		WrapLine:       c.WrapLine,
+		EmbeddingModel: c.EmbeddingModel,
 	}
 }

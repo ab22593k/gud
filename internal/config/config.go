@@ -23,18 +23,14 @@ type ProfileName string
 // NOTE: Temperature, top_p, and top_k have been deprecated by Google for
 // Gemini 3.6+ models and are no longer sent to the API.
 type Config struct {
-	DetailLevel          DetailLevel
-	Profile              ProfileName
-	Model                string
-	EmbeddingModel       string
-	Hint                 string
-	History              int
-	APIKey               string
-	WrapLine             int
-	HelixDBEnabled       bool
-	HelixDBURL           string
-	HelixDBAutoManage    bool
-	HelixDBContainerName string
+	DetailLevel    DetailLevel
+	Profile        ProfileName
+	Model          string
+	EmbeddingModel string
+	Hint           string
+	History        int
+	APIKey         string
+	WrapLine       int
 }
 
 const (
@@ -105,18 +101,6 @@ func (c Config) Merge(override Config) Config {
 	if override.WrapLine != 0 {
 		merged.WrapLine = override.WrapLine
 	}
-	if override.HelixDBEnabled {
-		merged.HelixDBEnabled = true
-	}
-	if override.HelixDBURL != "" {
-		merged.HelixDBURL = override.HelixDBURL
-	}
-	if override.HelixDBAutoManage {
-		merged.HelixDBAutoManage = true
-	}
-	if override.HelixDBContainerName != "" {
-		merged.HelixDBContainerName = override.HelixDBContainerName
-	}
 
 	return merged
 }
@@ -124,8 +108,7 @@ func (c Config) Merge(override Config) Config {
 // DefaultConfig returns a Config populated with sensible defaults.
 func DefaultConfig() Config {
 	return Config{
-		DetailLevel:    DetailStandard,
-		WrapLine:       72,
-		HelixDBEnabled: true,
+		DetailLevel: DetailStandard,
+		WrapLine:    72,
 	}
 }

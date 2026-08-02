@@ -33,16 +33,20 @@ git profile save astrophysicist
 git message --profile astrophysicist
 ```
 
-## Memory (optional)
+## Memory
 
-gud can persist commit history to HelixDB for context-aware generation:
+gud persists commit history to HelixDB for context-aware generation. Memory is
+always on and connects to the default server at `http://localhost:6969`; gud
+never starts or stops a HelixDB server itself — it connects to one shared
+server, so a single database is reused across all your projects. Repos are
+isolated per `repo_path` (the tenant key), so project data never mixes.
 
 ```bash
-export GUD_MEM_ENABLED=true
+# Start one HelixDB server with persistent disk storage, once per machine:
+helix start --disk   # or: docker run -d --name helixdb -p 6969:8080 ghcr.io/helixdb/enterprise-dev
+
 gud message
 ```
-
-HelixDB auto-management uses Docker. Disable with `GUD_MEM_AUTO_MANAGE=false`.
 
 ## License
 

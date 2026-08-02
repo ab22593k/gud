@@ -3,8 +3,6 @@ package core
 import (
 	"context"
 	"fmt"
-	"log/slog"
-	"net/url"
 
 	"gud/internal/config"
 	"gud/internal/config/mediator"
@@ -21,12 +19,13 @@ type ConfigGetter interface {
 }
 
 // AppContext bundles resolved application configuration with the request client
-// and optional HelixDB connection.
+// and optional HelixDB connection. gud never manages a HelixDB server itself:
+// it connects to a shared, externally-run instance at the default URL
+// (http://localhost:6969), so one database is reused across projects and repos.
 type AppContext struct {
-	cfg          config.Config
-	client       *request.Client
-	helixDB      *mem.DB
-	containerMgr *mem.ContainerManager
+	cfg     config.Config
+	client  *request.Client
+	helixDB *mem.DB
 
 	// Cached values computed once per invocation.
 	repoRoot    string
@@ -57,10 +56,6 @@ func NewAppContext(cmd *cobra.Command) (*AppContext, error) {
 
 	return &AppContext{
 		cfg: cfg,
-		containerMgr: mem.NewContainerManager(
-			cfg.HelixDBContainerName,
-			extractPort(cfg.HelixDBURL),
-		),
 	}, nil
 }
 
@@ -86,11 +81,6 @@ func (a *AppContext) HelixDB() *mem.DB {
 	return a.helixDB
 }
 
-// ContainerManager returns the Docker container manager.
-func (a *AppContext) ContainerManager() *mem.ContainerManager {
-	return a.containerMgr
-}
-
 // InitClient creates the request client from the resolved configuration.
 // Must be called at most once with a context that supports cancellation.
 func (a *AppContext) InitClient(ctx context.Context) error {
@@ -107,36 +97,18 @@ func (a *AppContext) InitClient(ctx context.Context) error {
 	return nil
 }
 
-// InitHelixDB creates the HelixDB connection from the resolved configuration.
-// If auto-manage is enabled and the container is not running, it starts one
-// automatically. This is safe to call even when HelixDB is not enabled — it
-// returns nil for the DB and error is nil.
+// InitHelixDB creates the HelixDB connection. Memory is always enabled: gud
+// connects to a shared, externally-run HelixDB server at the default URL
+// (http://localhost:6969) and never starts or stops a container itself — one
+// server serves all projects, isolated per repository via the tenant property.
+// This is safe to call when the server is down — it returns nil for the DB and
+// error is nil (degraded mode).
 //
 // Schema migration (EnsureSchema) runs whenever the DB is reachable. It is
 // idempotent and fast (verified ~15ms on a warm server), and guarantees a
-// pre-existing container never misses the indexes.
+// pre-existing server never misses the indexes.
 func (a *AppContext) InitHelixDB(ctx context.Context) error {
-	if !a.cfg.HelixDBEnabled {
-		return nil
-	}
-
-	// Auto-manage: ensure the Docker container is running.
-	if a.cfg.HelixDBAutoManage {
-		url, err := a.containerMgr.EnsureRunning(ctx)
-		if err != nil {
-			slog.Debug("helixdb: auto-manage failed, proceeding without",
-				"error", err)
-			// Don't return error — degraded mode.
-			return nil
-		}
-		// Update URL to the auto-managed container.
-		a.cfg.HelixDBURL = url
-	}
-
-	db := mem.NewDB(mem.Options{
-		BaseURL: a.cfg.HelixDBURL,
-		Enabled: a.cfg.HelixDBEnabled,
-	})
+	db := mem.NewDB(mem.Options{Enabled: true})
 
 	if !db.Enabled() {
 		return nil
@@ -147,7 +119,7 @@ func (a *AppContext) InitHelixDB(ctx context.Context) error {
 	}
 
 	// EnsureSchema is idempotent and cheap on a warm server, so always run it
-	// rather than assuming a pre-existing container already has the schema.
+	// rather than assuming a pre-existing server already has the schema.
 	if err := db.EnsureSchema(ctx); err != nil {
 		return fmt.Errorf("helixdb schema: %w", err)
 	}
@@ -155,24 +127,6 @@ func (a *AppContext) InitHelixDB(ctx context.Context) error {
 	a.helixDB = db
 
 	return nil
-}
-
-// extractPort returns the port from a URL like "http://localhost:6969".
-// It falls back to "6969" when the URL is empty or has no explicit port.
-func extractPort(rawURL string) string {
-	const defaultPort = "6969"
-	if rawURL == "" {
-		return defaultPort
-	}
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return defaultPort
-	}
-	if port := u.Port(); port != "" {
-		return port
-	}
-
-	return defaultPort
 }
 
 // RepoRoot returns the absolute path to the git repository root, caching the
@@ -185,11 +139,4 @@ func (a *AppContext) RepoRoot(ctx context.Context) (string, error) {
 	}
 
 	return a.repoRoot, a.repoRootErr
-}
-
-// StopHelixDB stops the managed container if it was started by this session.
-func (a *AppContext) StopHelixDB(ctx context.Context) {
-	if a.containerMgr.StartedByUs() {
-		_ = a.containerMgr.Stop(ctx)
-	}
 }

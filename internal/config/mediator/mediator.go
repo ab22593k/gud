@@ -173,7 +173,6 @@ func isKnownPlaceholder(s string) bool {
 //	GUD_DETAIL_LEVEL  GUD_PROFILE  GUD_MODEL
 //	GUD_HINT          GUD_HISTORY  GOOGLE_API_KEY GUD_WRAPLINE
 //	GUD_EMBEDDING_MODEL
-//	GUD_MEM_ENABLED  GUD_MEM_URL  GUD_MEM_AUTO_MANAGE  GUD_MEM_CONTAINER_NAME
 //
 // NOTE: GUD_TEMPERATURE is no longer read — Google deprecated the parameter.
 func configFromEnv() config.Config {
@@ -204,12 +203,6 @@ func configFromEnv() config.Config {
 		}
 	}
 
-	cfg.HelixDBEnabled = boolEnv("GUD_MEM_ENABLED")
-	cfg.HelixDBURL = os.Getenv("GUD_MEM_URL")
-	cfg.HelixDBAutoManage = boolEnv("GUD_MEM_AUTO_MANAGE")
-
-	cfg.HelixDBContainerName = os.Getenv("GUD_MEM_CONTAINER_NAME")
-
 	return cfg
 }
 
@@ -223,11 +216,4 @@ func firstSet(keys ...string) string {
 	}
 
 	return ""
-}
-
-// boolEnv returns true if the env var is set to a truthy value ("1", "true", "yes").
-func boolEnv(key string) bool {
-	v := os.Getenv(key)
-
-	return v == "1" || v == "true" || v == "yes"
 }
