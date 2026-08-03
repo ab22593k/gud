@@ -163,8 +163,8 @@ func editMessage(msg string) (string, error) {
 		return "", fmt.Errorf("failed to write temp file: %w", err)
 	}
 
-	//nolint:gosec // editor comes from user's $EDITOR env var; user chose to run it
-	editCmd := exec.Command(editor, path)
+	//nolint:gosec
+	editCmd := exec.Command(editor /* user's $EDITOR */, path)
 	editCmd.Stdin = os.Stdin
 	editCmd.Stdout = os.Stdout
 	editCmd.Stderr = os.Stderr
@@ -173,8 +173,7 @@ func editMessage(msg string) (string, error) {
 		return "", fmt.Errorf("editor failed: %w", err)
 	}
 
-	//nolint:gosec // path is constructed from os.MkdirTemp, not user input
-	edited, err := os.ReadFile(path)
+	edited, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		return "", fmt.Errorf("failed to read edited file: %w", err)
 	}

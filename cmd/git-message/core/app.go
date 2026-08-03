@@ -22,7 +22,7 @@ type ConfigGetter interface {
 // AppContext bundles resolved application configuration with the request client
 // and optional HelixDB connection. gud never manages a HelixDB server itself:
 // it connects to a shared, externally-run instance at the default URL
-// (http://localhost:6969), so one database is reused across projects and repos.
+// , so one database is reused across projects and repos.
 type AppContext struct {
 	cfg     config.Config
 	client  *request.Client
@@ -100,10 +100,6 @@ func (a *AppContext) InitClient(ctx context.Context) error {
 
 // InitHelixDB creates the HelixDB connection. Memory is always enabled: gud
 // connects to a shared, externally-run HelixDB server at the default URL
-// (http://localhost:6969) and never starts or stops a container itself — one
-// server serves all projects, isolated per repository via the tenant property.
-// This is safe to call when the server is down — it returns nil for the DB and
-// error is nil (degraded mode).
 //
 // Schema migration (EnsureSchema) runs whenever the DB is reachable. It is
 // idempotent and fast (verified ~15ms on a warm server), and guarantees a
