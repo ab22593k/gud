@@ -44,16 +44,19 @@ func runGenerate(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
+	// Check for staged changes before any interactive flow. A user with
+	// nothing staged should get the "no staged changes" error immediately,
+	// not a profile suggestion that may write .gud-skip/gud.json.
+	diff, err := getStagedDiffOrError(ctx)
+	if err != nil {
+		return err
+	}
+
 	// Suggest a profile if none is configured (first invocation in this repo).
 	if app.Config().Profile == "" {
 		if err := suggestProfileIfNeeded(ctx, cmd, app); err != nil {
 			slog.Debug("profile suggestion skipped", "error", err)
 		}
-	}
-
-	diff, err := getStagedDiffOrError(ctx)
-	if err != nil {
-		return err
 	}
 
 	units := git.ExtractCodeUnits(diff)
