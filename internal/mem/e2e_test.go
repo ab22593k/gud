@@ -182,8 +182,8 @@ func TestIntegration_EntityAwareRecall(t *testing.T) {
 		t.Fatalf("persist commit failed: %v", err)
 	}
 
-	// Query by code element key.
-	q2 := BuildEntityContextQuery(testTenant, []string{elementKey}, 10)
+	// Query by code element key, scoped to the persisted commit's branch.
+	q2 := BuildEntityContextQuery(testTenant, "main", []string{elementKey}, 10)
 	var rawResp map[string]any
 	if err := db.Exec(ctx, q2, &rawResp); err != nil {
 		t.Fatalf("BuildEntityContextQuery failed: %v", err)

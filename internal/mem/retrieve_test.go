@@ -100,7 +100,7 @@ func TestBuildHybridContextQuery_BranchScoping(t *testing.T) {
 }
 
 func TestBuildEntityContextQuery_Valid(t *testing.T) {
-	q := BuildEntityContextQuery("/repo",
+	q := BuildEntityContextQuery("/repo", "main",
 		[]string{"/repo:main.go:ParseInput"},
 		5,
 	)
@@ -111,6 +111,42 @@ func TestBuildEntityContextQuery_Valid(t *testing.T) {
 	if err != nil {
 		t.Errorf("query validation failed: %v", err)
 	}
+}
+
+func TestBuildEntityContextQuery_BranchScoping(t *testing.T) {
+	t.Parallel()
+
+	t.Run("branch scopes and includes legacy records", func(t *testing.T) {
+		q := BuildEntityContextQuery("/repo", "feature-x",
+			[]string{"/repo:main.go:ParseInput"},
+			5,
+		)
+		data, err := helix.MarshalRequest(q)
+		if err != nil {
+			t.Fatalf("MarshalRequest: %v", err)
+		}
+		js := string(data)
+		// "feature-x" only appears via the branch filter, and the empty
+		// string pins the legacy-record OR (branch == "") branchFilter
+		// semantics, mirroring the hybrid query.
+		if !strings.Contains(js, "feature-x") || !strings.Contains(js, `""`) {
+			t.Errorf("expected branch filter with legacy empty-branch OR in serialized query, got:\n%s", js)
+		}
+	})
+
+	t.Run("empty branch disables scoping", func(t *testing.T) {
+		q := BuildEntityContextQuery("/repo", "",
+			[]string{"/repo:main.go:ParseInput"},
+			5,
+		)
+		data, err := helix.MarshalRequest(q)
+		if err != nil {
+			t.Fatalf("MarshalRequest: %v", err)
+		}
+		if strings.Contains(string(data), "feature-x") {
+			t.Errorf("unexpected branch filter with empty branch:\n%s", data)
+		}
+	})
 }
 
 func TestBuildMemoryContextQuery_Valid(t *testing.T) {

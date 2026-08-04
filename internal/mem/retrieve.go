@@ -154,20 +154,27 @@ func BuildHybridContextQuery(tenantID, branch string, queryVector []float32, dif
 }
 
 // BuildEntityContextQuery finds commits that mention specific code elements
-// through MENTIONS edges, for entity-aware recall.
-func BuildEntityContextQuery(tenantID string, codeElementKeys []string, limit int) helix.Request {
+// through MENTIONS edges, for entity-aware recall. When branch is non-empty,
+// results are scoped to that branch, including legacy records persisted
+// without a branch (branch = ""), matching BuildHybridContextQuery.
+func BuildEntityContextQuery(tenantID, branch string, codeElementKeys []string, limit int) helix.Request {
 	b := helix.ReadQuery("entity_commit_context")
 
 	elemKeys := b.ParamArray("element_keys", toInterfaceSlice(codeElementKeys), helix.ParamTypeString())
 
+	traversal := helix.G().
+		NWithLabel("CodeElement").
+		Where(helix.PredIsIn("elementKey", elemKeys)).
+		Where(helix.PredEq("tenantId", tenantID)).
+		In("MENTIONS").
+		HasLabel("Commit").
+		Where(helix.PredIsNull("deletedAt"))
+	if branch != "" {
+		traversal = traversal.Where(branchFilter(branch))
+	}
+
 	b.VarAs("commits",
-		helix.G().
-			NWithLabel("CodeElement").
-			Where(helix.PredIsIn("elementKey", elemKeys)).
-			Where(helix.PredEq("tenantId", tenantID)).
-			In("MENTIONS").
-			HasLabel("Commit").
-			Where(helix.PredIsNull("deletedAt")).
+		traversal.
 			Project(
 				helix.ProjectPropAs("$id", "$id"),
 				helix.ProjectPropAs("id", "sha"),

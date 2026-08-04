@@ -222,7 +222,7 @@ func maybeAppendMEMContext(
 
 	// 2. Entity-aware recall: find commits mentioning the same code elements.
 	if len(codeElemKeys) > 0 {
-		entityQ := mem.BuildEntityContextQuery(repoPath, codeElemKeys, 3)
+		entityQ := mem.BuildEntityContextQuery(repoPath, git.GetBranch(ctx), codeElemKeys, 3)
 		var rawEntityResp map[string]any
 		if err := db.Exec(ctx, entityQ, &rawEntityResp); err != nil {
 			slog.Debug("helixdb entity context query failed", "error", err)
