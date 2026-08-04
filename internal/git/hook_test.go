@@ -39,9 +39,26 @@ func TestInstallHook(t *testing.T) {
 				if err != nil {
 					t.Fatalf("failed to read hook file: %v", err)
 				}
-				quotedBinary := `"` + testBinary + `"`
+				quotedBinary := `'` + testBinary + `'`
 				if !strings.Contains(string(content), quotedBinary+" hook run") {
 					t.Errorf("hook should call %s hook run, got:\n%s", testBinary, string(content))
+				}
+			},
+		},
+		{
+			name:       "install hook with single-quoted binary path escaped",
+			hookType:   PrepareCommitMsg,
+			binaryPath: `/usr/local/gud' -c "rm -rf /" `,
+			validateHook: func(t *testing.T, hookPath string) {
+				content, err := os.ReadFile(hookPath)
+				if err != nil {
+					t.Fatalf("failed to read hook file: %v", err)
+				}
+				// The embedded single quote must be shell-escaped so the
+				// hook still invokes exactly the intended binary.
+				want := `'/usr/local/gud'\'' -c "rm -rf /" ' hook run "$1"`
+				if !strings.Contains(string(content), want) {
+					t.Errorf("hook should shell-escape embedded single quotes, got:\n%s", string(content))
 				}
 			},
 		},

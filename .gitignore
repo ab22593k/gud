@@ -2,3 +2,4 @@ pomona_backlog.md
 .helix/
 target/
 *.log
+.agents/types/**
