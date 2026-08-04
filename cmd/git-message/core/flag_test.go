@@ -10,6 +10,8 @@ import (
 	"gud/internal/config"
 	"gud/internal/config/mediator"
 	"gud/internal/config/provider"
+
+	"github.com/spf13/cobra"
 )
 
 const (
@@ -276,6 +278,126 @@ func TestMediatorOnlyCLI(t *testing.T) {
 	}
 	if cfg.WrapLine != 50 {
 		t.Errorf("WrapLine = %d, want 50", cfg.WrapLine)
+	}
+}
+
+// flagCommand builds a fresh command registered with the same persistent
+// flags as production (via addPersistentFlags) and parses args, returning a
+// command whose FlagSet reflects a realistic CLI invocation. This avoids
+// mutating the package-level rootCmd shared by other tests.
+func flagCommand(t *testing.T, args ...string) *cobra.Command {
+	t.Helper()
+	cmd := &cobra.Command{Use: "test"}
+	addPersistentFlags(cmd)
+	if err := cmd.ParseFlags(args); err != nil {
+		t.Fatalf("ParseFlags(%q): %v", args, err)
+	}
+	return cmd
+}
+
+func TestConfigFromCmdUnchangedFlags(t *testing.T) {
+	// No flags on the command line: cobra defaults (standard/72/5) must NOT leak.
+	cfg := configFromCmd(flagCommand(t))
+
+	want := config.Config{}
+	if cfg != want {
+		t.Errorf("configFromCmd(default flags) = %+v, want zero-value %+v (no CLI overrides)", cfg, want)
+	}
+}
+
+func TestConfigFromCmdChangedFlags(t *testing.T) {
+	cfg := configFromCmd(flagCommand(t,
+		"--detail-level", "detailed",
+		"--history", "8",
+		"--wrapline", "90",
+	))
+
+	if cfg.DetailLevel != config.DetailDetailed {
+		t.Errorf("DetailLevel = %q, want detailed", cfg.DetailLevel)
+	}
+	if cfg.History != 8 {
+		t.Errorf("History = %d, want 8", cfg.History)
+	}
+	if cfg.WrapLine != 90 {
+		t.Errorf("WrapLine = %d, want 90", cfg.WrapLine)
+	}
+	// Unchanged flags stay zero so they don't override lower priorities.
+	if cfg.Profile != "" || cfg.Model != "" || cfg.Hint != "" {
+		t.Errorf("unchanged string flags set: %+v (want all empty)", cfg)
+	}
+}
+
+// TestMediatorPreservesGudJSONWhenFlagsUnchanged is the integration-gap test:
+// the prior TestMediatorLoad passed a zero-value/hand-built cliCfg which never
+// modelled the real CLI layer (where cobra flag defaults leak in). Here cliCfg
+// comes from configFromCmd on a real parsed command, so we prove that a user's
+// gud.json {detail_level: detailed, wrapline: 100, history: 20} survives the
+// full file → env → CLI pipeline when the user passes no flags.
+func TestMediatorPreservesGudJSONWhenFlagsUnchanged(t *testing.T) {
+	xdgP := provider.NewFileProvider(filepath.Join(t.TempDir(), "missing.json"))
+	cwdP := provider.NewFileProvider(filepath.Join(t.TempDir(), "gud.json"))
+	if err := cwdP.Save(config.Config{
+		DetailLevel: config.DetailDetailed,
+		WrapLine:    100,
+		History:     20,
+	}); err != nil {
+		t.Fatalf("save gud.json: %v", err)
+	}
+
+	// Realistic CLI layer: same flag registration + parser, but user passes
+	// no flags. The flag defaults must not clobber gud.json.
+	cliCfg := configFromCmd(flagCommand(t))
+
+	m := &mediator.Mediator{XDGProvider: xdgP, CWDProvider: cwdP}
+	cfg, err := m.Load(cliCfg)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if cfg.DetailLevel != config.DetailDetailed {
+		t.Errorf("DetailLevel = %q, want detailed (gud.json preserved, not flag default)", cfg.DetailLevel)
+	}
+	if cfg.WrapLine != 100 {
+		t.Errorf("WrapLine = %d, want 100 (gud.json preserved, not flag default 72)", cfg.WrapLine)
+	}
+	if cfg.History != 20 {
+		t.Errorf("History = %d, want 20 (gud.json preserved, not flag default 5)", cfg.History)
+	}
+}
+
+// TestMediatorCliOverridesGudJSON shows the inverse: an explicit flag still
+// wins over gud.json, per documented priority "CLI flags → env → gud.json".
+func TestMediatorCliOverridesGudJSON(t *testing.T) {
+	xdgP := provider.NewFileProvider(filepath.Join(t.TempDir(), "missing.json"))
+	cwdP := provider.NewFileProvider(filepath.Join(t.TempDir(), "gud.json"))
+	if err := cwdP.Save(config.Config{
+		DetailLevel: config.DetailDetailed,
+		WrapLine:    100,
+		History:     20,
+	}); err != nil {
+		t.Fatalf("save gud.json: %v", err)
+	}
+
+	cliCfg := configFromCmd(flagCommand(t,
+		"--detail-level", "minimal",
+		"--wrapline", "120",
+		"--history", "2",
+	))
+
+	m := &mediator.Mediator{XDGProvider: xdgP, CWDProvider: cwdP}
+	cfg, err := m.Load(cliCfg)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if cfg.DetailLevel != config.DetailMinimal {
+		t.Errorf("DetailLevel = %q, want minimal (explicit CLI wins)", cfg.DetailLevel)
+	}
+	if cfg.WrapLine != 120 {
+		t.Errorf("WrapLine = %d, want 120 (explicit CLI wins)", cfg.WrapLine)
+	}
+	if cfg.History != 2 {
+		t.Errorf("History = %d, want 2 (explicit CLI wins)", cfg.History)
 	}
 }
 

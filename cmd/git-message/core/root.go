@@ -69,35 +69,58 @@ func mustGet[T any](_ *cobra.Command, name string, fn func(string) (T, error)) T
 	return v
 }
 
-func init() {
-	// Persistent flags available to all commands (no global variable binding)
-	rootCmd.PersistentFlags().String("detail-level", "standard", "Set the detail level (minimal, standard, detailed)")
-	rootCmd.PersistentFlags().String("profile", "", "AI agent profile slug (download with 'gud profile save <slug>')")
-	rootCmd.PersistentFlags().String("hint", "", "Focus boundaries for the AI")
-	rootCmd.PersistentFlags().Int("history", 5, "Number of recent commits to include as context (0 to disable)")
-	rootCmd.PersistentFlags().String("model", "", "Gemini model to use (or use GEMINI_MODEL env)")
+// addPersistentFlags registers all persistent flags on cmd. The flag defaults
+// are cobra defaults only — configFromCmd only applies a flag when the user
+// explicitly set it, so these defaults never override gud.json or env values.
+// Subcommands are attached to rootCmd separately in init().
+func addPersistentFlags(cmd *cobra.Command) {
+	cmd.PersistentFlags().String("detail-level", "standard", "Set the detail level (minimal, standard, detailed)")
+	cmd.PersistentFlags().String("profile", "", "AI agent profile slug (download with 'gud profile save <slug>')")
+	cmd.PersistentFlags().String("hint", "", "Focus boundaries for the AI")
+	cmd.PersistentFlags().Int("history", 5, "Number of recent commits to include as context (0 to disable)")
+	cmd.PersistentFlags().String("model", "", "Gemini model to use (or use GEMINI_MODEL env)")
 	// --temperature removed — deprecated by Google for Gemini 3.6+ models
-	rootCmd.PersistentFlags().Int("wrapline", 72, "Wrap all lines at this character width")
+	cmd.PersistentFlags().Int("wrapline", 72, "Wrap all lines at this character width")
+}
+
+func init() {
+	addPersistentFlags(rootCmd)
 
 	rootCmd.AddCommand(profileCmd)
 }
 
 // configFromCmd reads flags from the cobra command to build the CLI override layer.
 // It does NOT read environment variables — that is handled by the mediator.
+//
+// Only flags that were explicitly set on the command line are populated; the
+// rest are left as zero values. This is critical: cobra flag defaults (e.g.
+// --detail-level standard, --wrapline 72, --history 5) are NOT user intent, so
+// they must not leak into the override layer and clobber gud.json / env
+// settings. config.Config.Merge treats any non-zero field as "explicitly set",
+// so leaving these zero preserves the documented priority
+// "CLI flags → env → gud.json" for anything the user did not pass.
 func configFromCmd(cmd *cobra.Command) config.Config {
-	detail := mustGet(cmd, "detail-level", cmd.Flags().GetString)
-	profile := mustGet(cmd, "profile", cmd.Flags().GetString)
-	hint := mustGet(cmd, "hint", cmd.Flags().GetString)
-	history := mustGet(cmd, "history", cmd.Flags().GetInt)
-	model := mustGet(cmd, "model", cmd.Flags().GetString)
-	wrapLine := mustGet(cmd, "wrapline", cmd.Flags().GetInt)
+	cfg := config.Config{}
+	flags := cmd.Flags()
 
-	return config.Config{
-		DetailLevel: config.DetailLevel(detail),
-		Profile:     config.ProfileName(profile),
-		Hint:        hint,
-		History:     history,
-		Model:       model,
-		WrapLine:    wrapLine,
+	if flags.Changed("detail-level") {
+		cfg.DetailLevel = config.DetailLevel(mustGet(cmd, "detail-level", flags.GetString))
 	}
+	if flags.Changed("profile") {
+		cfg.Profile = config.ProfileName(mustGet(cmd, "profile", flags.GetString))
+	}
+	if flags.Changed("hint") {
+		cfg.Hint = mustGet(cmd, "hint", flags.GetString)
+	}
+	if flags.Changed("history") {
+		cfg.History = mustGet(cmd, "history", flags.GetInt)
+	}
+	if flags.Changed("model") {
+		cfg.Model = mustGet(cmd, "model", flags.GetString)
+	}
+	if flags.Changed("wrapline") {
+		cfg.WrapLine = mustGet(cmd, "wrapline", flags.GetInt)
+	}
+
+	return cfg
 }
