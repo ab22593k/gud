@@ -118,7 +118,7 @@ func (m *Manager) Get(slug string) (*Profile, error) {
 	data, err := os.ReadFile(m.cachePath(slug))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("profile %q not found (use 'gud profile save %s' first)", slug, slug)
+			return nil, fmt.Errorf("profile %q not found (use 'git message profile save %s' first)", slug, slug)
 		}
 
 		return nil, fmt.Errorf("read: %w", err)

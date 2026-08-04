@@ -82,7 +82,7 @@ func mustGet[T any](_ *cobra.Command, name string, fn func(string) (T, error)) T
 // Subcommands are attached to rootCmd separately in init().
 func addPersistentFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().String("detail-level", "standard", "Set the detail level (minimal, standard, detailed)")
-	cmd.PersistentFlags().String("profile", "", "AI agent profile slug (download with 'gud profile save <slug>')")
+	cmd.PersistentFlags().String("profile", "", "AI agent profile slug (download with 'git message profile save <slug>')")
 	cmd.PersistentFlags().String("hint", "", "Focus boundaries for the AI")
 	cmd.PersistentFlags().Int("history", 5, "Number of recent commits to include as context (0 to disable)")
 	cmd.PersistentFlags().String("model", "", "Gemini model to use (or use GEMINI_MODEL env)")

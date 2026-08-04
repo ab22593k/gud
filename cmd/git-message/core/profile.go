@@ -34,9 +34,9 @@ var profileCmd = &cobra.Command{
 	Short: "Manage AI agent profiles",
 	Long: `Manage AI agent profiles from the K-Dense-AI/scientific-agents catalog (500+ profiles).
 
-Use 'gud profile list --remote' to browse all available profiles.
-Use 'gud profile save <slug>' to download and cache a profile.
-Use 'gud message --profile <slug>' to generate a message with that profile.`,
+Use 'git message profile list --remote' to browse all available profiles.
+Use 'git message profile save <slug>' to download and cache a profile.
+Use 'git message --profile <slug>' to generate a message with that profile.`,
 }
 
 const profileListCmdName = "list"
@@ -60,8 +60,8 @@ var profileListCmd = &cobra.Command{
 
 		if len(profiles) == 0 {
 			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "No cached profiles found. "+
-				"Use 'gud profile list --remote' to browse available profiles, "+
-				"then 'gud profile save <slug>' to install one.")
+				"Use 'git message profile list --remote' to browse available profiles, "+
+				"then 'git message profile save <slug>' to install one.")
 
 			return nil
 		}
@@ -79,7 +79,7 @@ var profileListCmd = &cobra.Command{
 		}
 
 		_, _ = fmt.Fprintln(cmd.OutOrStdout())
-		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Use 'gud profile list --remote' to browse all available profiles.")
+		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Use 'git message profile list --remote' to browse all available profiles.")
 
 		return nil
 	},
@@ -110,7 +110,7 @@ func runLocalTUIPicker(cmd *cobra.Command, profiles []profile.Profile) error {
 	}
 	if selected != nil {
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(),
-			"\nProfile %q selected. Use: gud message --profile %s\n",
+			"\nProfile %q selected. Use: git message --profile %s\n",
 			selected.Slug, selected.Slug)
 	}
 
@@ -170,7 +170,7 @@ func runTUIPicker(cmd *cobra.Command, entries []profile.CatalogEntry) error {
 	}
 	if selected != nil {
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(),
-			"\nProfile %q saved. Use: gud message --profile %s\n",
+			"\nProfile %q saved. Use: git message --profile %s\n",
 			selected.Slug, selected.Slug)
 	}
 
@@ -245,7 +245,7 @@ func printProfileSummary(w io.Writer, total int, cats []category) {
 	}
 
 	_, _ = fmt.Fprintln(w)
-	_, _ = fmt.Fprintln(w, "Use 'message --profile <slug>' or 'profile save <slug>' "+
+	_, _ = fmt.Fprintln(w, "Use 'git message --profile <slug>' or 'git message profile save <slug>' "+
 		"with one of the slugs below.")
 	_, _ = fmt.Fprintln(w)
 }
@@ -269,12 +269,12 @@ var profileSaveCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Long: `Download a scientific agent profile from K-Dense-AI/scientific-agents and cache it locally.
 
-After saving, use it with: gud message --profile <slug>
+After saving, use it with: git message --profile <slug>
 
-Run 'gud profile list --remote' to see all available slugs.`,
-	Example: `  gud profile save astrophysicist
-  gud profile save computer-scientist
-  gud profile save molecular-biologist`,
+Run 'git message profile list --remote' to see all available slugs.`,
+	Example: `  git message profile save astrophysicist
+  git message profile save computer-scientist
+  git message profile save molecular-biologist`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		initProfileManager()
 		slug := args[0]
@@ -291,7 +291,7 @@ Run 'gud profile list --remote' to see all available slugs.`,
 		}
 
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Profile %q saved successfully.\n", slug)
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Use: gud message --profile %s\n", slug)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Use: git message --profile %s\n", slug)
 
 		return nil
 	},
@@ -301,7 +301,7 @@ var profileRemoveCmd = &cobra.Command{
 	Use:     "remove <slug>",
 	Short:   "Remove a cached profile",
 	Args:    cobra.ExactArgs(1),
-	Example: `  gud profile remove astrophysicist`,
+	Example: `  git message profile remove astrophysicist`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		initProfileManager()
 		slug := args[0]
@@ -320,9 +320,9 @@ var profileShowCmd = &cobra.Command{
 	Use:   "show <slug>",
 	Short: "Show details of a profile",
 	Args:  cobra.ExactArgs(1),
-	Example: `  gud profile show astrophysicist
-  gud profile show computer-scientist
-  gud profile show astrophysicist --remote`,
+	Example: `  git message profile show astrophysicist
+  git message profile show computer-scientist
+  git message profile show astrophysicist --remote`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		initProfileManager()
 		slug := args[0]
@@ -339,7 +339,7 @@ var profileShowCmd = &cobra.Command{
 			_, _ = fmt.Fprintln(cmd.OutOrStdout())
 			_, _ = fmt.Fprintln(cmd.OutOrStdout(), content)
 			_, _ = fmt.Fprintln(cmd.OutOrStdout())
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Use 'gud profile save %s' to cache it locally.\n", slug)
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Use 'git message profile save %s' to cache it locally.\n", slug)
 
 			return nil
 		}

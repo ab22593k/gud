@@ -1,84 +1,97 @@
-## Mindset and First Principles
+# AGENTS.md
 
-- The Primacy of Structure: Structure is long-term and important, while behavior is short-term and urgent; engineers must prioritize structural integrity (Clean Architecture) before proceeding to new behaviors.
-- Software as a Liability: Every line of code added is a future maintenance task; therefore, engineers should aim for "KISS" (Keep It Simple and Small) and "YAGNI" (You Aren't Gonna Need It).
-- Human-Centric Responsibility: Software ultimately serves people; only humans (and agents acting as their instruments) can be responsible for technical outcomes, necessitating a "duty of care".
-- Probabilistic Reality: In AI engineering, systems are probabilistic, not deterministic; workflows must be designed to manage inconsistency and hallucinations.
-- Continuous Improvement: Adopt the "Boy Scout Rule"—always leave the code better than it was found.
+This file is the project README for coding agents. Keep it concise, current, and
+limited to repository-specific facts. Read only the sections needed for the task.
 
-## How to Frame A Problem
+## Project
 
-- Classify the System:
-  - Black Box: Focus on inputs and outputs without concern for internal mechanisms; ideal for service providers and third-party APIs.
-  - White/Glass Box: Requires detailed knowledge of internal code and data structures.
-  - Gray Box: A hybrid approach used when some internals are known but external services remain opaque.
-- Ask Discriminating Questions: Use Transpection (Socratic dialog) to evaluate AI or partner suggestions. Start with an intentionally "too simple" prompt to doubt first results and force deeper reasoning.
-- Separate Rival Hypotheses: Cultivate the skill of suspending multiple conflicting explanations for a bug or system behavior simultaneously.
-- Identify Red Herrings: Beware of "Vanity Metrics" (e.g., number of test cases or lines of code) that provide an illusion of progress without revealing system health.
+`gud` is a Go CLI that generates commit messages from staged Git changes.
+The canonical command is `git message`; `gud` is the product name. Preserve that
+distinction in command help, errors, documentation, and tests.
 
-## System Notes (Apply When Relevant)
+The repository is a Go workspace using Go 1.26.3:
 
-- Digital Twins: Maintain a virtual representation of the production system, including automated test environments, production instrumentation, and analytics, to simulate real-world behavior.
-- Clean Boundaries: Draw lines that separate "Entities" (core business logic) from "Interface Adapters" (controllers, presenters) and "Frameworks/Drivers" (DB, UI, External APIs) to ensure the core is independent of the delivery mechanism.
-- Hyrum’s Law: If a system has enough users, every observable behavior (even undocumented quirks) will eventually be depended upon.
+- `cmd/git-message`: CLI entry point and Cobra command handlers.
+- `internal/config`: configuration types, providers, and precedence handling.
+- `internal/detect`: change detection and suggestions.
+- `internal/git`: Git operations; separate workspace module.
+- `internal/mem`: HelixDB-backed commit memory; separate workspace module.
+- `internal/pipeline`: commit-message generation pipeline.
+- `internal/profile`: profile catalog and cache management.
+- `internal/request`: model and embedding requests; separate workspace module.
+- `internal/tui`: terminal interfaces.
 
-## How You Work
+## Efficient Workflow
 
-- The ReAct Loop: For agentic tasks, follow the Reason + Action + Observe cycle. Interleave thinking with tool calls to iteratively refine the goal based on environmental feedback.
-- Red-Green-Refactor: Use test-driven development (TDD) as a design technique: first make it work (pass the test), then make it right (fix the structure).
-- Progressive Disclosure: Load skills and information "on demand." Metadata is loaded at startup (~100 tokens), but detailed instructions and resource files are only pulled in when a task requires them.
-- Bootstrapping: "Begin in confusion, end in precision." Accept initial ambiguity in complex projects and use exploration to derive precise requirements.
+- Scope work to the user's request. Do not add unrelated refactors or speculative
+  compatibility code.
+- Inspect before editing. Prefer symbol search and `rg` over reading whole files.
+- Check file size before broad reads with `wc -l <path>`, then read only relevant
+  ranges. For structured data and logs, use `jq`, `rg`, `head`, or `tail` to extract
+  the needed evidence.
+- Find code with `rg -n 'pattern' --glob '*.go'`; list files with `rg --files`.
+- Read signatures, callers, implementation, and tests in that order when practical.
+- Run the narrowest relevant test while iterating, then the full suite before
+  finishing when the change can affect multiple packages.
+- Keep responses concise: state scope and assumptions, distinguish observed facts
+  from interpretation, and avoid repeating the same information.
+- Never expose secrets or include API keys, local credentials, or user data in
+  commands, logs, fixtures, or responses.
 
-## Rigor and Critical Thinking
+## Setup And Commands
 
-- Trajectory Evaluation: Do not just test the final output; programmatically verify the full sequence of steps (the "trajectory") the agent took to reach a conclusion.
-- Critical Distance: Maintain an "outsider stance" during testing. An engineer testing their own code lacks the detachment needed to find subtle bugs.
-- Refutation Mindset: Aim to falsify a product thesis rather than prove it; if you can't break your own design, you haven't tested it rigorously.
+No Makefile is used. Run commands from the repository root so `go.work` includes
+the root module and `internal/git`, `internal/mem`, and `internal/request`.
 
-## Sampling and Monitoring Protocols
+```bash
+go mod download                         # Download root-module dependencies
+go run ./cmd/git-message --help         # Run the CLI
+go build ./cmd/git-message              # Build the CLI
+go test ./... ./internal/git/... ./internal/mem/... ./internal/request/... # Test the workspace
+go test ./cmd/git-message/core          # Test one package
+go test ./path/to/package -run TestName # Run one test
+golangci-lint run                       # Lint and formatting checks
+gofmt -w path/to/file.go                # Format changed Go files
+git diff --check                        # Detect whitespace errors
+```
 
-- Exhaustive vs. Spot Checks: Use spot checks for rapid detection during development and exhaustive checks for comprehensive production health.
+The full workspace test command skips HelixDB integration and end-to-end tests unless
+`RUN_HELIXDB_INTEGRATION=1` is set. Do not enable those tests unless a HelixDB
+server is intentionally available at the configured endpoint. `internal/git`
+also contains tests skipped by `go test -short ./...`.
 
-## Regulatory, Quarantine, and Export Context
+The CLI needs `GOOGLE_API_KEY` for live model requests. Tests should remain
+deterministic and must not require network access or real credentials unless they
+are explicitly integration tests.
 
-- Compliance Frameworks: Adhere to 21 CFR 820.30 for medical devices, GDPR for privacy, and HIPAA for health data.
-- Data Minimization: Strictly limit the collection and storage of personal data to only what is necessary for the current task.
-- Input Guardrails: Prevent sensitive information leaks to third-party APIs by using automated detectors for PII or company secrets.
+## Code Style
 
-## Troubleshooting Playbook
+- Use idiomatic Go and keep code formatted with `gofmt`; imports are checked by
+  `goimports` through golangci-lint.
+- Keep lines at or below 120 characters. Production functions should generally
+  stay within 65 lines and 40 statements, as configured in `.golangci.yml`.
+- Wrap errors with useful operation context and preserve the cause with `%w`.
+- Pass `context.Context` as the first parameter when a function performs
+  cancellable I/O or calls context-aware dependencies.
+- Follow existing Cobra structure: commands and flags are package-level values,
+  registered in `init`, and handlers return errors.
+- Keep CLI presentation consistent with existing code, including intentionally
+  ignored output-write errors (`_, _ = fmt...`).
+- Preserve explicit pointer and zero-value semantics in configuration merging;
+  omitted Cobra defaults must not override environment or file configuration.
+- Treat profile slugs as cache/catalog identifiers and use
+  `internal/profile.Manager` for cached profile operations.
+- Add or update focused tests for behavioral changes. Prefer table-driven tests
+  when several cases exercise the same behavior.
+- Do not edit generated files, vendored dependencies, or module sums manually.
 
-- A FEW HICCUPPS: Use this heuristic for bug recognition: check against History, Image, Comparable products, Claims, User desires, Product self-consistency, Purpose, and Statutes.
-- Root Cause Analysis: Use Fishbone Diagrams and the CRUD/Event Decomposition methods to map failure modes to their origins.
-- Spiral Inquiry: When a bug is found, avoid disturbing the "crime scene." Back up one step, retry, and then progressively simplify inputs to generalize the failure.
+## Completion
 
-## Communicating Results
+Before reporting completion:
 
-- The Testing Story: Reports must answer "What's up?", "Says who?", and "So what?".
-- Telescoping Reports: Provide an executive summary of results first, followed by "how we tested," and finally the "value of testing" (addressed risks).
-- Safety Language: Use words like "seemed," "appears," and "apparently" to faithfully represent uncertainty and avoid promising certainty where none exists.
-
-## Standards, Units, Ethics, and Vocabulary
-
-- Professional Ontology: Use consistent, defined terminology (e.g., "Checking" vs. "Testing") to ensure clarity across roles.
-- Standard Interchanges: Favor JSON or TOML for configuration and data exchange to maintain format-agnostic domain logic.
-- Ethics of Agency: Protect the agency of the tester; do not allow management to "dictate the testing story" through coercive procedures.
-
-# Efficacy Trial Design and Analysis
-
-- A/B Testing: Compare different versions of a system against a "North Star" metric (e.g., flow completion rate).
-- Public vs. Private Benchmarks: Use public leaderboards (e.g., MMLU) to weed out bad models, but rely on private benchmarks with actual production data to find the best model for your specific use case.
-
-## Extension and Industry Communication
-
-- Model Context Protocol (MCP): Use this open standard to provide external context and tools to LLMs in a modular, plug-and-play fashion.
-- Agent2Agent (A2A): Follow this standard for discovery and coordination between opaque agentic applications.
-- Open Feedback Loops: Establish direct feedback channels with end-users and developer communities to discover "exaptation" (unintended beneficial uses) of your product.
-
-## Definition of Done
-
-- Holistic Completion: A task is done when:
-  - All code is written, reviewed, and integrated.
-  - It passes all unit, integration, and User Acceptance Tests (UAT).
-  - All defects are identified, triaged, or closed.
-  - Documentation (internal and external) is updated and verified.
-  - The feature meets both functional and non-functional requirements (NFRs).
+1. Format changed Go files.
+2. Run focused tests and, when practical, the full workspace test command above.
+3. Run `golangci-lint run` for Go changes when available.
+4. Run `git diff --check` and inspect `git diff` for accidental changes.
+5. Report the files changed, verification performed, and any skipped checks or
+   remaining assumptions without claiming unrun checks passed.

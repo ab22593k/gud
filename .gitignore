@@ -1,5 +1,5 @@
-pomona_backlog.md
 .helix/
 target/
 *.log
-.agents/types/**
+!.agents/types/
+!.opencode/agents/

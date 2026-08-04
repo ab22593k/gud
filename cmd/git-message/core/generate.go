@@ -84,7 +84,7 @@ func resolveProfileContent(profileName string) string {
 	if err != nil {
 		slog.Warn("configured profile not cached; proceeding without profile content",
 			"profile", profileName,
-			"hint", "gud profile save "+profileName)
+			"hint", "git message profile save "+profileName)
 
 		return ""
 	}
@@ -102,8 +102,8 @@ func requireProfile(profileName string) error {
 	_, err := profileManager.Get(profileName)
 	if err != nil {
 		return fmt.Errorf("profile %q not found.\n\n"+
-			"First download it:  gud profile save %s\n"+
-			"See all:            gud profile list --remote", profileName, profileName)
+			"First download it:  git message profile save %s\n"+
+			"See all:            git message profile list --remote", profileName, profileName)
 	}
 
 	return nil

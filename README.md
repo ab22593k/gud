@@ -9,9 +9,8 @@ This tool has two names that refer to the same binary:
 - **`git message`** — the canonical invocation. The binary is built from `cmd/git-message`
   and named `git-message`, so it lands on your PATH as `git message` (git runs any
   `git-*` executable as `git <name>`).
-- **`gud message`** — the product name, used in version output (`gud version X.Y.Z`)
-  and some docs. It is the same command; invoke it this way if you install or alias
-  the binary as `gud`.
+- **`gud message`** — the product name, used in version output (`gud version X.Y.Z`).
+  It is the same command; invoke it this way if you install or alias the binary as `gud`.
 
 The root command is registered as `message` (not `gud`) so help output reads
 naturally as `git message ...`. This is intentional git integration.
@@ -23,12 +22,12 @@ git add .
 ## Usage
 
 ```bash
-git message                    Generate a commit message from staged changes
-git message --profile <slug>   Use a scientific agent profile
-git message --detail detailed  More verbose commit messages
-git hook install               Install git prepare-commit-msg hook
-git profile list --remote      Browse available AI profiles
-git profile save <slug>        Download a profile
+git message                          Generate a commit message from staged changes
+git message --profile <slug>         Use a scientific agent profile
+git message --detail detailed        More verbose commit messages
+git message hook install             Install git prepare-commit-msg hook
+git message profile list --remote    Browse available AI profiles
+git message profile save <slug>      Download a profile
 ```
 
 ## Configuration
@@ -44,8 +43,8 @@ Set `GUD_LOG_LEVEL=debug` (also `info`, `warn`, `error`) to see diagnostics on s
 Browse 500+ scientific agent profiles from the [scientific-agents](https://github.com/K-Dense-AI/scientific-agents) catalog:
 
 ```bash
-git profile list --remote
-git profile save astrophysicist
+git message profile list --remote
+git message profile save astrophysicist
 git message --profile astrophysicist
 ```
 

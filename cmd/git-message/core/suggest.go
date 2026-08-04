@@ -96,7 +96,7 @@ func suggestProfileIfNeeded(ctx context.Context, cmd *cobra.Command, app *AppCon
 	switch {
 	case input == "" || strings.EqualFold(input, "s") || strings.EqualFold(input, "skip"):
 		writeSkipMarker(cwd)
-		_, _ = fmt.Fprintln(out, "Skipped. To see all profiles: gud profile list --remote")
+		_, _ = fmt.Fprintln(out, "Skipped. To see all profiles: git message profile list --remote")
 
 		return nil
 
@@ -148,7 +148,7 @@ func applySelectedProfile(ctx context.Context, app *AppContext, out io.Writer, e
 	// Apply immediately for this invocation
 	app.setProfile(config.ProfileName(entry.Slug))
 
-	_, _ = fmt.Fprintf(out, "Profile %q selected. Run 'gud message' to generate a commit.\n", entry.Slug)
+	_, _ = fmt.Fprintf(out, "Profile %q selected. Run 'git message' to generate a commit.\n", entry.Slug)
 
 	return nil
 }

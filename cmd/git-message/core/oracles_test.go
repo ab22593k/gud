@@ -147,7 +147,7 @@ func TestOracle_Explainability_ProfileNotFound(t *testing.T) {
 	if got == nil {
 		t.Skip("[E] requireProfile passed (unexpected) — skipping")
 	}
-	if !strings.Contains(got.Error(), "gud profile save") {
+	if !strings.Contains(got.Error(), "git message profile save") {
 		t.Errorf("[E] error should suggest how to fix it, got: %v", got)
 	}
 }
