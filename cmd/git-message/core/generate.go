@@ -67,6 +67,11 @@ func runGenerate(cmd *cobra.Command, _ []string) error {
 
 // resolveProfileContent returns the AGENTS.md content for a cached profile.
 // Returns empty string if no profile is set.
+//
+// A configured profile that is not cached logs a warning (not just debug):
+// the content silently degrades to "", and in practice only hook mode reaches
+// this branch — interactive mode fails earlier in the strict NewAppContext —
+// so the warning surfaces the degradation to users instead of hiding it.
 func resolveProfileContent(profileName string) string {
 	if profileName == "" {
 		return ""
@@ -74,7 +79,9 @@ func resolveProfileContent(profileName string) string {
 	initProfileManager()
 	p, err := profileManager.Get(profileName)
 	if err != nil {
-		slog.Debug("profile not found in cache", "profile", profileName)
+		slog.Warn("configured profile not cached; proceeding without profile content",
+			"profile", profileName,
+			"hint", "gud profile save "+profileName)
 
 		return ""
 	}

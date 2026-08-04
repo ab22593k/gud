@@ -36,7 +36,7 @@ func NewContainerManager(containerName, hostPort string) *ContainerManager {
 		containerName = DefaultContainerName
 	}
 	if hostPort == "" {
-		hostPort = "6969"
+		hostPort = "2232"
 	}
 	return &ContainerManager{
 		containerName: containerName,

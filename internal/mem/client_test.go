@@ -17,8 +17,8 @@ func TestNewDB_DefaultURL(t *testing.T) {
 }
 
 func TestNewDB_CustomURL(t *testing.T) {
-	db := NewDB(Options{BaseURL: "http://helix-cloud:6969"})
-	if db.BaseURL() != "http://helix-cloud:6969" {
+	db := NewDB(Options{BaseURL: "http://helix-cloud:2232"})
+	if db.BaseURL() != "http://helix-cloud:2232" {
 		t.Errorf("expected custom URL, got %q", db.BaseURL())
 	}
 }
@@ -35,7 +35,7 @@ func TestDB_IsAvailable_NoConnection(t *testing.T) {
 	// Should not panic; returns false gracefully
 	available := db.IsAvailable(context.Background())
 	if available {
-		t.Log("expected unavailable, got available (may be false positive if HelixDB is running on 16969)")
+		t.Log("expected unavailable, got available (may be false positive if HelixDB is running on 2232)")
 	}
 }
 

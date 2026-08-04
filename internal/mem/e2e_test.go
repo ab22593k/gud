@@ -7,13 +7,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/helixdb/helix-db/sdks/go"
+	helix "github.com/helixdb/helix-db/sdks/go"
 )
 
 // e2e helpers reuse the existing startManagedContainer from integration_test.go
-// and testPort = "16969".
+// and testPort = "2232".
 
-const testTenant  = "/test/repo"
+const testTenant = "/test/repo"
 const testTenantB = "/other/repo"
 
 // createTestVector generates a 1536-dim F32 vector for integration testing.
@@ -56,23 +56,23 @@ func TestIntegration_BM25ContextQueryByDiff(t *testing.T) {
 	// Persist two commits with distinct diff text.
 	for _, c := range []CommitData{
 		{
-			SHA:       "bm25-a",
-			Message:   "feat: add login handler",
-			Author:    "dev@example.com",
-			RepoPath:  testTenant,
-			Branch:    "main",
-			DiffText:  "diff --git a/auth/login.go b/auth/login.go\n@@ -0,0 +1,30 @@\n+package auth\n+\n+func Login(w http.ResponseWriter, r *http.Request) {\n+    // authenticate user\n+}",
-			Timestamp: now,
+			SHA:            "bm25-a",
+			Message:        "feat: add login handler",
+			Author:         "dev@example.com",
+			RepoPath:       testTenant,
+			Branch:         "main",
+			DiffText:       "diff --git a/auth/login.go b/auth/login.go\n@@ -0,0 +1,30 @@\n+package auth\n+\n+func Login(w http.ResponseWriter, r *http.Request) {\n+    // authenticate user\n+}",
+			Timestamp:      now,
 			IsGudGenerated: true,
 		},
 		{
-			SHA:       "bm25-b",
-			Message:   "fix: correct db connection leak",
-			Author:    "dev@example.com",
-			RepoPath:  testTenant,
-			Branch:    "main",
-			DiffText:  "diff --git a/internal/db/pool.go b/internal/db/pool.go\n@@ -15,7 +15,9 @@ func getConn() *sql.Conn {\n-    return pool.Get()\n+    conn := pool.Get()\n+    conn.SetMaxLifetime(5 * time.Minute)\n+    return conn",
-			Timestamp: now.Add(time.Second),
+			SHA:            "bm25-b",
+			Message:        "fix: correct db connection leak",
+			Author:         "dev@example.com",
+			RepoPath:       testTenant,
+			Branch:         "main",
+			DiffText:       "diff --git a/internal/db/pool.go b/internal/db/pool.go\n@@ -15,7 +15,9 @@ func getConn() *sql.Conn {\n-    return pool.Get()\n+    conn := pool.Get()\n+    conn.SetMaxLifetime(5 * time.Minute)\n+    return conn",
+			Timestamp:      now.Add(time.Second),
 			IsGudGenerated: true,
 		},
 	} {
@@ -115,13 +115,13 @@ func TestIntegration_BM25ContextQueryByFiles(t *testing.T) {
 	commitSHA := "bm25-file-a"
 
 	c := CommitData{
-		SHA:       commitSHA,
-		Message:   "refactor: update auth/login.go and auth/middleware.go",
-		Author:    "dev@example.com",
-		RepoPath:  testTenant,
-		Branch:    "main",
-		DiffText:  "diff --git a/auth/login.go b/auth/login.go",
-		Timestamp: now,
+		SHA:            commitSHA,
+		Message:        "refactor: update auth/login.go and auth/middleware.go",
+		Author:         "dev@example.com",
+		RepoPath:       testTenant,
+		Branch:         "main",
+		DiffText:       "diff --git a/auth/login.go b/auth/login.go",
+		Timestamp:      now,
 		IsGudGenerated: true,
 		Files: []FileChange{
 			{Path: "auth/login.go", ChangeType: "modified", LinesAdded: 5, LinesDeleted: 3},
@@ -165,13 +165,13 @@ func TestIntegration_EntityAwareRecall(t *testing.T) {
 	elementKey := testTenant + ":pkg/parser.go:ParseInput"
 
 	c := CommitData{
-		SHA:       commitSHA,
-		Message:   "fix: handle nil edge case in ParseInput",
-		Author:    "dev@example.com",
-		RepoPath:  testTenant,
-		Branch:    "main",
-		DiffText:  "diff --git a/pkg/parser.go b/pkg/parser.go",
-		Timestamp: now,
+		SHA:            commitSHA,
+		Message:        "fix: handle nil edge case in ParseInput",
+		Author:         "dev@example.com",
+		RepoPath:       testTenant,
+		Branch:         "main",
+		DiffText:       "diff --git a/pkg/parser.go b/pkg/parser.go",
+		Timestamp:      now,
 		IsGudGenerated: true,
 		CodeUnits: []CodeUnitRef{
 			{Name: "ParseInput", Kind: "function", FilePath: "pkg/parser.go", ChangeType: "modified"},
@@ -299,13 +299,13 @@ func TestIntegration_MemoryLifecycleFull(t *testing.T) {
 	// 7. Create Memory v2 (update — extends the trip with timing).
 	memIDv2 := tenant + ":mem-v2"
 	memV2 := MemoryData{
-		MemoryID: memIDv2,
-		Content:  "User is planning a trip to Japan with Maya next April",
-		TenantID: tenant,
-		UserID:   user,
-		Kind:     MemoryEpisode,
-		Salience: 0.85,
-		IsLatest: true,
+		MemoryID:  memIDv2,
+		Content:   "User is planning a trip to Japan with Maya next April",
+		TenantID:  tenant,
+		UserID:    user,
+		Kind:      MemoryEpisode,
+		Salience:  0.85,
+		IsLatest:  true,
 		CreatedAt: now.Add(time.Minute),
 		UpdatedAt: now.Add(time.Minute),
 	}
@@ -389,13 +389,13 @@ func TestIntegration_TenantIsolation(t *testing.T) {
 	// Persist a commit in tenant A with distinctive diff text.
 	shaA := "iso-a-001"
 	cA := CommitData{
-		SHA:       shaA,
-		Message:   "tenant A commit",
-		Author:    "alice@a.com",
-		RepoPath:  tenantA,
-		Branch:    "main",
-		DiffText:  "TENANT_A_SPECIFIC_FEATURE_XYZ",
-		Timestamp: now,
+		SHA:            shaA,
+		Message:        "tenant A commit",
+		Author:         "alice@a.com",
+		RepoPath:       tenantA,
+		Branch:         "main",
+		DiffText:       "TENANT_A_SPECIFIC_FEATURE_XYZ",
+		Timestamp:      now,
 		IsGudGenerated: true,
 	}
 	if err := db.Exec(ctx, BuildPersistCommitQuery(cA), nil); err != nil {
@@ -405,13 +405,13 @@ func TestIntegration_TenantIsolation(t *testing.T) {
 	// Persist a commit in tenant B.
 	shaB := "iso-b-001"
 	cB := CommitData{
-		SHA:       shaB,
-		Message:   "tenant B commit",
-		Author:    "bob@b.com",
-		RepoPath:  tenantB,
-		Branch:    "main",
-		DiffText:  "TENANT_B_SPECIFIC_FEATURE_XYZ",
-		Timestamp: now,
+		SHA:            shaB,
+		Message:        "tenant B commit",
+		Author:         "bob@b.com",
+		RepoPath:       tenantB,
+		Branch:         "main",
+		DiffText:       "TENANT_B_SPECIFIC_FEATURE_XYZ",
+		Timestamp:      now,
 		IsGudGenerated: true,
 	}
 	if err := db.Exec(ctx, BuildPersistCommitQuery(cB), nil); err != nil {
@@ -454,15 +454,15 @@ func TestIntegration_VectorSearch(t *testing.T) {
 	embedding := createTestVector(42)
 
 	c := CommitData{
-		SHA:       sha,
-		Message:   "feat: add vector search test",
-		Author:    "dev@example.com",
-		RepoPath:  testTenant,
-		Branch:    "main",
-		DiffText:  "diff --git a/search.go b/search.go",
-		Timestamp: now,
+		SHA:            sha,
+		Message:        "feat: add vector search test",
+		Author:         "dev@example.com",
+		RepoPath:       testTenant,
+		Branch:         "main",
+		DiffText:       "diff --git a/search.go b/search.go",
+		Timestamp:      now,
 		IsGudGenerated: true,
-		Embedding: embedding,
+		Embedding:      embedding,
 	}
 	if err := db.Exec(ctx, BuildPersistCommitQuery(c), nil); err != nil {
 		t.Fatalf("persist commit with embedding failed: %v", err)
@@ -524,7 +524,7 @@ func TestIntegration_TopFilesStats(t *testing.T) {
 		{
 			SHA: "tf-001", Message: "first change", Author: "dev@example.com",
 			RepoPath: testTenant, Branch: "main",
-			DiffText: "diff --git a/lib/core.go b/lib/core.go",
+			DiffText:  "diff --git a/lib/core.go b/lib/core.go",
 			Timestamp: now, IsGudGenerated: true,
 			Files: []FileChange{
 				{Path: "lib/core.go", ChangeType: "modified", LinesAdded: 10, LinesDeleted: 2},
@@ -533,7 +533,7 @@ func TestIntegration_TopFilesStats(t *testing.T) {
 		{
 			SHA: "tf-002", Message: "second change", Author: "dev@example.com",
 			RepoPath: testTenant, Branch: "main",
-			DiffText: "diff --git a/lib/core.go b/lib/core.go",
+			DiffText:  "diff --git a/lib/core.go b/lib/core.go",
 			Timestamp: now.Add(time.Second), IsGudGenerated: true,
 			Files: []FileChange{
 				{Path: "lib/core.go", ChangeType: "modified", LinesAdded: 3, LinesDeleted: 1},

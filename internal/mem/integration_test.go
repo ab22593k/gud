@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const testPort = "16969"
+const testPort = "2232"
 
 // TestMain is only responsible for the integration test binary.
 // Unit tests (Test functions without the Integration prefix) run

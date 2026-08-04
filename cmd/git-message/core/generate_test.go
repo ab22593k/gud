@@ -1,6 +1,9 @@
 package core
 
 import (
+	"bytes"
+	"log/slog"
+	"strings"
 	"testing"
 
 	"gud/internal/profile"
@@ -21,6 +24,37 @@ func TestResolveProfileContent_NotFound(t *testing.T) {
 	profileManager = profile.NewManagerWithDir(t.TempDir())
 	if got := resolveProfileContent("nonexistent"); got != "" {
 		t.Errorf("resolveProfileContent('nonexistent') = %q, want ''", got)
+	}
+}
+
+// TestResolveProfileContent_UncachedWarns verifies that a configured but
+// uncached profile logs a warning (not just debug) with an actionable hint,
+// so hook-mode degradation is surfaced to users instead of hiding silently.
+func TestResolveProfileContent_UncachedWarns(t *testing.T) {
+	orig := profileManager
+	t.Cleanup(func() { profileManager = orig })
+	profileManager = profile.NewManagerWithDir(t.TempDir())
+
+	// Capture slog output via a custom default logger.
+	var buf bytes.Buffer
+	origDefault := slog.Default()
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	slog.SetDefault(logger)
+	t.Cleanup(func() { slog.SetDefault(origDefault) })
+
+	got := resolveProfileContent("nonexistent")
+	if got != "" {
+		t.Errorf("resolveProfileContent('nonexistent') = %q, want ''", got)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "level=WARN") {
+		t.Errorf("expected WARN level log, got:\n%s", out)
+	}
+	if !strings.Contains(out, "not cached") ||
+		!strings.Contains(out, "gud profile save") ||
+		!strings.Contains(out, "nonexistent") {
+		t.Errorf("expected warning with profile name and actionable hint, got:\n%s", out)
 	}
 }
 

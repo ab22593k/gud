@@ -45,7 +45,7 @@ isolated per `repo_path` (the tenant key), so project data never mixes.
 
 ```bash
 # Start one HelixDB server with persistent disk storage, once per machine:
-helix start --disk   # or: docker run -d --name helixdb -p 6969:8080 ghcr.io/helixdb/enterprise-dev
+helix start --disk   # or: docker run -d --name helixdb -p 2232:8080 ghcr.io/helixdb/enterprise-dev
 
 gud message
 ```
