@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	helix "github.com/helixdb/helix-db/sdks/go"
@@ -29,11 +30,20 @@ type Options struct {
 }
 
 // DB wraps a helix.Client with lifecycle management and degraded-mode support.
+// DB must always be used as a pointer: it embeds a sync.Once, so copying by
+// value would break the availability memoisation.
 type DB struct {
 	client  *helix.Client
 	baseURL string
 	apiKey  string
 	enabled bool
+
+	// availability memoises the result of the first health check. Server
+	// state cannot change within a single invocation, so repeated IsAvailable
+	// calls must not each pay the 2s health timeout (a down server would
+	// otherwise add up to ~6s of worst-case latency per invocation).
+	availOnce   sync.Once
+	availResult bool
 }
 
 // NewDB creates a new DB wrapper. If opts.Enabled is false, the client is nil
@@ -73,11 +83,25 @@ func (db *DB) APIKey() string { return db.apiKey }
 // Enabled returns whether HelixDB integration is enabled.
 func (db *DB) Enabled() bool { return db.enabled && db.client != nil }
 
-// IsAvailable checks if the HelixDB server is reachable via its health endpoint.
-func (db *DB) IsAvailable(ctx context.Context) bool {
+// IsAvailable checks if the HelixDB server is reachable via its health
+// endpoint. The first call performs the actual health probe (2s timeout);
+// the result is cached for the lifetime of the DB so subsequent calls within
+// the same invocation are free. The probe is independent of the caller's
+// context (the 2s timeout in checkHealth bounds it) so a short-lived or
+// cancelled context can never poison the cache.
+func (db *DB) IsAvailable(_ context.Context) bool {
 	if !db.enabled || db.client == nil {
 		return false
 	}
+	db.availOnce.Do(func() {
+		db.availResult = db.checkHealth(context.Background())
+	})
+
+	return db.availResult
+}
+
+// checkHealth probes the server health endpoint with a 2-second timeout.
+func (db *DB) checkHealth(ctx context.Context) bool {
 	healthCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
