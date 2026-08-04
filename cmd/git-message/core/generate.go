@@ -306,9 +306,9 @@ func joinContexts(a, b string) string {
 // history is optional context for the AI prompt and should never block generation.
 func buildHistoryContext(ctx context.Context, app *AppContext) string {
 	var history string
-	if app.Config().History > 0 {
+	if n := app.Config().HistoryValue(); n > 0 {
 		var err error
-		history, err = git.GetRecentCommits(ctx, app.Config().History)
+		history, err = git.GetRecentCommits(ctx, n)
 		if err != nil {
 			slog.Debug("failed to get recent commits, proceeding without history", "error", err)
 			history = ""

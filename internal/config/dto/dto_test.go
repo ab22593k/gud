@@ -3,6 +3,7 @@ package dto
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 
 	"gud/internal/config"
@@ -21,7 +22,7 @@ func TestToEntity(t *testing.T) {
 				Profile:     "computer-scientist",
 				Model:       "gemini-flash-latest",
 				Hint:        "focus on security",
-				History:     10,
+				History:     config.Ptr(10),
 				APIKey:      "sk-test",
 				WrapLine:    100,
 			},
@@ -30,7 +31,7 @@ func TestToEntity(t *testing.T) {
 				Profile:     config.ProfileName("computer-scientist"),
 				Model:       "gemini-flash-latest",
 				Hint:        "focus on security",
-				History:     10,
+				History:     config.Ptr(10),
 				APIKey:      "sk-test",
 				WrapLine:    100,
 			},
@@ -56,7 +57,7 @@ func TestToEntity(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := tt.dto.ToEntity()
-			if got != tt.want {
+			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("ToEntity() = %+v, want %+v", got, tt.want)
 			}
 		})
@@ -76,7 +77,7 @@ func TestFromEntity(t *testing.T) {
 				Profile:     config.ProfileName("astrophysicist"),
 				Model:       "gemini-flash-lite-latest",
 				Hint:        "explain physics",
-				History:     3,
+				History:     config.Ptr(3),
 				APIKey:      "sk-123",
 				WrapLine:    72,
 			},
@@ -85,7 +86,7 @@ func TestFromEntity(t *testing.T) {
 				Profile:     "astrophysicist",
 				Model:       "gemini-flash-lite-latest",
 				Hint:        "explain physics",
-				History:     3,
+				History:     config.Ptr(3),
 				APIKey:      "sk-123",
 				WrapLine:    72,
 			},
@@ -100,7 +101,7 @@ func TestFromEntity(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := FromEntity(tt.entity)
-			if got != tt.want {
+			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("FromEntity() = %+v, want %+v", got, tt.want)
 			}
 		})
@@ -113,7 +114,7 @@ func TestRoundTrip(t *testing.T) {
 		Profile:     config.ProfileName("chemist"),
 		Model:       "gemini-flash-latest",
 		Hint:        "mention reaction mechanisms",
-		History:     8,
+		History:     config.Ptr(8),
 		APIKey:      "sk-roundtrip",
 		WrapLine:    80,
 	}
@@ -121,7 +122,7 @@ func TestRoundTrip(t *testing.T) {
 	dto := FromEntity(original)
 	entity := dto.ToEntity()
 
-	if entity != original {
+	if !reflect.DeepEqual(entity, original) {
 		t.Errorf("Round-trip failed:\ngot  %+v\nwant %+v", entity, original)
 	}
 }
@@ -131,7 +132,7 @@ func TestJSONRoundTrip(t *testing.T) {
 		DetailLevel: "standard",
 		Profile:     "biologist",
 		Model:       "gemini-flash-lite-latest",
-		History:     5,
+		History:     config.Ptr(5),
 		WrapLine:    72,
 	}
 
@@ -146,7 +147,7 @@ func TestJSONRoundTrip(t *testing.T) {
 		t.Fatalf("json.Unmarshal failed: %v", err)
 	}
 
-	if restored != original {
+	if !reflect.DeepEqual(restored, original) {
 		t.Errorf("JSON round-trip failed:\ngot  %+v\nwant %+v", restored, original)
 	}
 
@@ -160,6 +161,37 @@ func TestJSONRoundTrip(t *testing.T) {
 	}
 	if _, exists := raw["api_key"]; exists {
 		t.Errorf("api_key should be omitted when empty, got %v", raw)
+	}
+}
+
+// TestJSONRoundTripHistoryZero is the DTO-level regression: an explicit
+// "history": 0 must serialize (not be omitted by omitempty) and survive a JSON
+// round-trip as a set pointer, so file config can disable history.
+func TestJSONRoundTripHistoryZero(t *testing.T) {
+	original := ConfigDTO{History: config.Ptr(0)}
+
+	//nolint:gosec // Test data, not real credentials.
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("json.Unmarshal to map failed: %v", err)
+	}
+	if v, exists := raw["history"]; !exists {
+		t.Errorf("history should be serialized when explicitly 0, got %v", raw)
+	} else if v != float64(0) {
+		t.Errorf("history = %v, want 0", v)
+	}
+
+	var restored ConfigDTO
+	if err := json.Unmarshal(data, &restored); err != nil {
+		t.Fatalf("json.Unmarshal failed: %v", err)
+	}
+	if restored.History == nil || *restored.History != 0 {
+		t.Errorf("round-tripped History = %v, want pointer to 0", restored.History)
 	}
 }
 
@@ -195,6 +227,9 @@ func TestEmptyDTO(t *testing.T) {
 
 	if entity.DetailLevel != "" {
 		t.Errorf("empty DTO: DetailLevel = %q", entity.DetailLevel)
+	}
+	if entity.History != nil {
+		t.Errorf("empty DTO: History = %v, want nil", entity.History)
 	}
 	if entity.WrapLine != 0 {
 		t.Errorf("empty DTO: WrapLine = %d", entity.WrapLine)

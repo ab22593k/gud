@@ -565,7 +565,7 @@ func TestOracle_Aspirations_ValidateSpeed(t *testing.T) {
 	cfg := config.Config{
 		DetailLevel: config.DetailDetailed,
 		Profile:     testAstrophysicist,
-		History:     10,
+		History:     config.Ptr(10),
 		WrapLine:    100,
 	}
 

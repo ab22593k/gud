@@ -138,10 +138,10 @@ func TestValidateConfig(t *testing.T) {
 
 	for _, tt := range historyTests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := config.Config{History: tt.inputHist}
+			cfg := config.Config{History: config.Ptr(tt.inputHist)}
 			got := cfg.Validate()
-			if got.History != tt.wantHist {
-				t.Errorf("History = %d, want %d", got.History, tt.wantHist)
+			if got.HistoryValue() != tt.wantHist {
+				t.Errorf("History = %d, want %d", got.HistoryValue(), tt.wantHist)
 			}
 		})
 	}
@@ -180,7 +180,7 @@ func TestMediatorPriorityChain(t *testing.T) {
 	if err := xdgP.Save(config.Config{
 		DetailLevel: config.DetailDetailed,
 		Model:       "xdg-model",
-		History:     20,
+		History:     config.Ptr(20),
 	}); err != nil {
 		t.Fatalf("save XDG config: %v", err)
 	}
@@ -189,7 +189,7 @@ func TestMediatorPriorityChain(t *testing.T) {
 	cwdP := provider.NewFileProvider(filepath.Join(cwdDir, "gud.json"))
 	if err := cwdP.Save(config.Config{
 		Model:   "cwd-model",
-		History: 10,
+		History: config.Ptr(10),
 		APIKey:  "cwd-key",
 	}); err != nil {
 		t.Fatalf("save CWD config: %v", err)
@@ -216,8 +216,8 @@ func TestMediatorPriorityChain(t *testing.T) {
 	if cfg.Model != "env-model" {
 		t.Errorf("Model (env) = %q, want env-model", cfg.Model)
 	}
-	if cfg.History != 3 {
-		t.Errorf("History (env) = %d, want 3", cfg.History)
+	if cfg.HistoryValue() != 3 {
+		t.Errorf("History (env) = %d, want 3", cfg.HistoryValue())
 	}
 
 	if cfg.APIKey != "cwd-key" {
@@ -258,7 +258,7 @@ func TestMediatorOnlyCLI(t *testing.T) {
 	cliCfg := config.Config{
 		DetailLevel: config.DetailMinimal,
 		Model:       "cli-model",
-		History:     1,
+		History:     config.Ptr(1),
 		WrapLine:    50,
 	}
 
@@ -273,8 +273,8 @@ func TestMediatorOnlyCLI(t *testing.T) {
 	if cfg.Model != "cli-model" {
 		t.Errorf("Model = %q, want cli-model", cfg.Model)
 	}
-	if cfg.History != 1 {
-		t.Errorf("History = %d, want 1", cfg.History)
+	if cfg.HistoryValue() != 1 {
+		t.Errorf("History = %d, want 1", cfg.HistoryValue())
 	}
 	if cfg.WrapLine != 50 {
 		t.Errorf("WrapLine = %d, want 50", cfg.WrapLine)
@@ -292,6 +292,7 @@ func flagCommand(t *testing.T, args ...string) *cobra.Command {
 	if err := cmd.ParseFlags(args); err != nil {
 		t.Fatalf("ParseFlags(%q): %v", args, err)
 	}
+
 	return cmd
 }
 
@@ -315,8 +316,8 @@ func TestConfigFromCmdChangedFlags(t *testing.T) {
 	if cfg.DetailLevel != config.DetailDetailed {
 		t.Errorf("DetailLevel = %q, want detailed", cfg.DetailLevel)
 	}
-	if cfg.History != 8 {
-		t.Errorf("History = %d, want 8", cfg.History)
+	if cfg.HistoryValue() != 8 {
+		t.Errorf("History = %d, want 8", cfg.HistoryValue())
 	}
 	if cfg.WrapLine != 90 {
 		t.Errorf("WrapLine = %d, want 90", cfg.WrapLine)
@@ -324,6 +325,48 @@ func TestConfigFromCmdChangedFlags(t *testing.T) {
 	// Unchanged flags stay zero so they don't override lower priorities.
 	if cfg.Profile != "" || cfg.Model != "" || cfg.Hint != "" {
 		t.Errorf("unchanged string flags set: %+v (want all empty)", cfg)
+	}
+}
+
+// TestConfigFromCmdHistoryZero is the CLI-layer regression: --history 0 must
+// produce an explicit History=0 (pointer set), not a zero-value History that
+// Merge would interpret as "not set".
+func TestConfigFromCmdHistoryZero(t *testing.T) {
+	cfg := configFromCmd(flagCommand(t, "--history", "0"))
+
+	if cfg.History == nil {
+		t.Fatal("configFromCmd(--history 0) left History unset (nil)")
+	}
+	if *cfg.History != 0 {
+		t.Errorf("History = %d, want 0", *cfg.History)
+	}
+}
+
+// TestMediatorCliHistoryZeroOverridesGudJSON is the end-to-end regression for
+// the bug report: gud.json sets history: 10, but an explicit --history 0 must
+// still disable history, not be silently ignored.
+func TestMediatorCliHistoryZeroOverridesGudJSON(t *testing.T) {
+	xdgP := provider.NewFileProvider(filepath.Join(t.TempDir(), "missing.json"))
+	cwdP := provider.NewFileProvider(filepath.Join(t.TempDir(), "gud.json"))
+	if err := cwdP.Save(config.Config{
+		History: config.Ptr(10),
+	}); err != nil {
+		t.Fatalf("save gud.json: %v", err)
+	}
+
+	cliCfg := configFromCmd(flagCommand(t, "--history", "0"))
+
+	m := &mediator.Mediator{XDGProvider: xdgP, CWDProvider: cwdP}
+	cfg, err := m.Load(cliCfg)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if cfg.History == nil {
+		t.Fatal("Load lost explicit History=0 (treated as not set)")
+	}
+	if cfg.HistoryValue() != 0 {
+		t.Errorf("History = %d, want 0 (CLI --history 0 must override gud.json history: 10)", cfg.HistoryValue())
 	}
 }
 
@@ -339,7 +382,7 @@ func TestMediatorPreservesGudJSONWhenFlagsUnchanged(t *testing.T) {
 	if err := cwdP.Save(config.Config{
 		DetailLevel: config.DetailDetailed,
 		WrapLine:    100,
-		History:     20,
+		History:     config.Ptr(20),
 	}); err != nil {
 		t.Fatalf("save gud.json: %v", err)
 	}
@@ -360,8 +403,8 @@ func TestMediatorPreservesGudJSONWhenFlagsUnchanged(t *testing.T) {
 	if cfg.WrapLine != 100 {
 		t.Errorf("WrapLine = %d, want 100 (gud.json preserved, not flag default 72)", cfg.WrapLine)
 	}
-	if cfg.History != 20 {
-		t.Errorf("History = %d, want 20 (gud.json preserved, not flag default 5)", cfg.History)
+	if cfg.HistoryValue() != 20 {
+		t.Errorf("History = %d, want 20 (gud.json preserved, not flag default 5)", cfg.HistoryValue())
 	}
 }
 
@@ -373,7 +416,7 @@ func TestMediatorCliOverridesGudJSON(t *testing.T) {
 	if err := cwdP.Save(config.Config{
 		DetailLevel: config.DetailDetailed,
 		WrapLine:    100,
-		History:     20,
+		History:     config.Ptr(20),
 	}); err != nil {
 		t.Fatalf("save gud.json: %v", err)
 	}
@@ -396,8 +439,8 @@ func TestMediatorCliOverridesGudJSON(t *testing.T) {
 	if cfg.WrapLine != 120 {
 		t.Errorf("WrapLine = %d, want 120 (explicit CLI wins)", cfg.WrapLine)
 	}
-	if cfg.History != 2 {
-		t.Errorf("History = %d, want 2 (explicit CLI wins)", cfg.History)
+	if cfg.HistoryValue() != 2 {
+		t.Errorf("History = %d, want 2 (explicit CLI wins)", cfg.HistoryValue())
 	}
 }
 

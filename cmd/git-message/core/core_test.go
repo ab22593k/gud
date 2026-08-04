@@ -54,8 +54,11 @@ func TestBuildHistoryContext_Disabled(t *testing.T) {
 		name string
 		app  *AppContext
 	}{
-		{name: "zero history", app: &AppContext{cfg: config.Config{History: 0}}},
-		{name: "negative history", app: &AppContext{cfg: config.Config{History: -1}}},
+		// Explicit History=0 disables history context.
+		{name: "zero history", app: &AppContext{cfg: config.Config{History: config.Ptr(0)}}},
+		{name: "negative history", app: &AppContext{cfg: config.Config{History: config.Ptr(-1)}}},
+		// Unset History (nil) also disables history context.
+		{name: "unset history", app: &AppContext{cfg: config.Config{}}},
 	}
 
 	for _, tt := range tests {

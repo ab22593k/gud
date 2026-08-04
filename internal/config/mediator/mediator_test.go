@@ -35,8 +35,8 @@ func TestConfigFromEnv(t *testing.T) {
 	if cfg.Hint != "env-hint" {
 		t.Errorf("Hint = %q", cfg.Hint)
 	}
-	if cfg.History != 7 {
-		t.Errorf("History = %d", cfg.History)
+	if cfg.HistoryValue() != 7 {
+		t.Errorf("History = %d", cfg.HistoryValue())
 	}
 	if cfg.APIKey != testAPIKey {
 		t.Errorf("APIKey = %q", cfg.APIKey)
@@ -62,8 +62,8 @@ func TestConfigFromEnvUnset(t *testing.T) {
 	if cfg.Hint != "" {
 		t.Errorf("Hint = %q, want empty", cfg.Hint)
 	}
-	if cfg.History != 0 {
-		t.Errorf("History = %d, want 0", cfg.History)
+	if cfg.HistoryValue() != 0 {
+		t.Errorf("History = %d, want 0", cfg.HistoryValue())
 	}
 	if cfg.APIKey != "" {
 		t.Errorf("APIKey = %q, want empty", cfg.APIKey)
@@ -80,7 +80,7 @@ func TestMediatorLoad(t *testing.T) {
 	if err := xdgP.Save(config.Config{
 		DetailLevel: config.DetailDetailed,
 		Model:       "xdg-model",
-		History:     20,
+		History:     config.Ptr(20),
 	}); err != nil {
 		t.Fatalf("save XDG config: %v", err)
 	}
@@ -89,7 +89,7 @@ func TestMediatorLoad(t *testing.T) {
 	cwdP := provider.NewFileProvider(filepath.Join(cwdDir, "gud.json"))
 	if err := cwdP.Save(config.Config{
 		Model:   "cwd-model",
-		History: 10,
+		History: config.Ptr(10),
 		APIKey:  "cwd-key",
 	}); err != nil {
 		t.Fatalf("save CWD config: %v", err)
@@ -118,8 +118,8 @@ func TestMediatorLoad(t *testing.T) {
 	if cfg.Model != "env-model" {
 		t.Errorf("Model (env) = %q, want env-model", cfg.Model)
 	}
-	if cfg.History != 3 {
-		t.Errorf("History (env) = %d, want 3", cfg.History)
+	if cfg.HistoryValue() != 3 {
+		t.Errorf("History (env) = %d, want 3", cfg.HistoryValue())
 	}
 
 	// CWD overrides XDG but not env/CLI
@@ -161,7 +161,7 @@ func TestMediatorOnlyCLI(t *testing.T) {
 	cliCfg := config.Config{
 		DetailLevel: config.DetailMinimal,
 		Model:       "cli-model",
-		History:     1,
+		History:     config.Ptr(1),
 		WrapLine:    50,
 	}
 
@@ -177,11 +177,39 @@ func TestMediatorOnlyCLI(t *testing.T) {
 	if cfg.Model != "cli-model" {
 		t.Errorf("Model = %q, want cli-model", cfg.Model)
 	}
-	if cfg.History != 1 {
-		t.Errorf("History = %d, want 1", cfg.History)
+	if cfg.HistoryValue() != 1 {
+		t.Errorf("History = %d, want 1", cfg.HistoryValue())
 	}
 	if cfg.WrapLine != 50 {
 		t.Errorf("WrapLine = %d, want 50", cfg.WrapLine)
+	}
+}
+
+// TestMediatorCLIHistoryZeroDisablesEnv is the regression test for the flag
+// contract "--history 0 to disable": a CLI History of 0 must override an env
+// layer that set a positive GUD_HISTORY, instead of being treated as unset.
+func TestMediatorCLIHistoryZeroDisablesEnv(t *testing.T) {
+	xdgDir := t.TempDir()
+	m := &Mediator{
+		XDGProvider: provider.NewFileProvider(filepath.Join(xdgDir, "missing.json")),
+		CWDProvider: provider.NewFileProvider(filepath.Join(xdgDir, "also-missing.json")),
+	}
+
+	t.Setenv("GUD_HISTORY", "10")
+	t.Setenv("GOOGLE_API_KEY", "")
+
+	cliCfg := config.Config{History: config.Ptr(0)}
+
+	cfg, err := m.Load(cliCfg)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if cfg.History == nil {
+		t.Fatal("Load lost explicit History=0 (treated as not set)")
+	}
+	if cfg.HistoryValue() != 0 {
+		t.Errorf("History = %d, want 0 (CLI --history 0 must win over env GUD_HISTORY)", cfg.HistoryValue())
 	}
 }
 

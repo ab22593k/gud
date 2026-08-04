@@ -113,7 +113,9 @@ func configFromCmd(cmd *cobra.Command) config.Config {
 		cfg.Hint = mustGet(cmd, "hint", flags.GetString)
 	}
 	if flags.Changed("history") {
-		cfg.History = mustGet(cmd, "history", flags.GetInt)
+		// Pointer (not plain int) so --history 0 reliably disables history
+		// instead of being treated as "not set" by config.Config.Merge.
+		cfg.History = config.Ptr(mustGet(cmd, "history", flags.GetInt))
 	}
 	if flags.Changed("model") {
 		cfg.Model = mustGet(cmd, "model", flags.GetString)

@@ -20,6 +20,10 @@ type ProfileName string
 // Zero values represent "not set" and are treated as undefined, allowing
 // layered overrides (file → env → CLI flags).
 //
+// History is the exception: it is a *int because 0 is a meaningful value that
+// disables recent-commit context. nil means "not set" in an override layer; a
+// non-nil pointer — including one pointing to 0 — means "explicitly set".
+//
 // NOTE: Temperature, top_p, and top_k have been deprecated by Google for
 // Gemini 3.6+ models and are no longer sent to the API.
 type Config struct {
@@ -28,9 +32,29 @@ type Config struct {
 	Model          string
 	EmbeddingModel string
 	Hint           string
-	History        int
+	History        *int
 	APIKey         string
 	WrapLine       int
+}
+
+// Ptr returns a pointer to a copy of v, expressing "explicitly set to v" —
+// including v == 0 — in an override layer, as opposed to "not set" (nil).
+// The returned pointer is never written through, only replaced, so sharing it
+// across merged configs is safe.
+func Ptr[T any](v T) *T {
+	x := v
+
+	return &x
+}
+
+// HistoryValue returns the effective History value, treating an unset History
+// as 0 (disabled). It is a nil-safe accessor for consumers.
+func (c Config) HistoryValue() int {
+	if c.History == nil {
+		return 0
+	}
+
+	return *c.History
 }
 
 const (
@@ -50,10 +74,12 @@ func (c Config) Validate() Config {
 		c.DetailLevel = DetailStandard
 	}
 
-	if c.History < 0 {
-		c.History = 0
-	} else if c.History > maxHistory {
-		c.History = maxHistory
+	if c.History != nil {
+		if *c.History < 0 {
+			c.History = Ptr(0)
+		} else if *c.History > maxHistory {
+			c.History = Ptr(maxHistory)
+		}
 	}
 
 	if c.WrapLine < minWrap {
@@ -65,15 +91,14 @@ func (c Config) Validate() Config {
 	return c
 }
 
-// Merge returns a new Config with non-zero fields from override applied on top.
-// Zero-value fields in override are left as-is from the receiver. This allows
-// layering: file config → env overrides → CLI flag overrides.
+// Merge returns a new Config with explicitly-set fields from override applied
+// on top. Zero-value fields in override are left as-is from the receiver. This
+// allows layering: file config → env overrides → CLI flag overrides.
 //
-// CAUTION: Zero is an ambiguous signal — it means "not set" rather than
-// "set to zero". This means you cannot explicitly set History=0
-// or WrapLine=0 via CLI or env overrides; they will be silently
-// ignored. CLI flag defaults should avoid zero for any field that has a
-// meaningful zero value.
+// History is the only field that can be explicitly set to its zero value: a
+// non-nil override.History — including one pointing to 0 (disable history) —
+// always wins. WrapLine keeps zero-as-unset because 0 is meaningless for it
+// and is clamped to minWrap during Validate.
 func (c Config) Merge(override Config) Config {
 	merged := c
 
@@ -92,7 +117,7 @@ func (c Config) Merge(override Config) Config {
 	if override.Hint != "" {
 		merged.Hint = override.Hint
 	}
-	if override.History != 0 {
+	if override.History != nil {
 		merged.History = override.History
 	}
 	if override.APIKey != "" {

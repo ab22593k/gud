@@ -3,6 +3,7 @@ package provider
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"gud/internal/config"
@@ -37,7 +38,7 @@ func TestSaveAndLoad(t *testing.T) {
 		Profile:     config.ProfileName("chemist"),
 		Model:       "gemini-flash-latest",
 		Hint:        "focus on catalysis",
-		History:     10,
+		History:     config.Ptr(10),
 		APIKey:      "sk-test-key",
 		WrapLine:    80,
 	}
@@ -51,7 +52,7 @@ func TestSaveAndLoad(t *testing.T) {
 		t.Fatalf("Load() failed: %v", err)
 	}
 
-	if loaded != original {
+	if !reflect.DeepEqual(loaded, original) {
 		t.Errorf("Save/Load round-trip failed:\ngot  %+v\nwant %+v", loaded, original)
 	}
 }
@@ -106,7 +107,7 @@ func TestSaveAndLoadPartialConfig(t *testing.T) {
 		t.Fatalf("Load() failed: %v", err)
 	}
 
-	if loaded != original {
+	if !reflect.DeepEqual(loaded, original) {
 		t.Errorf("Save/Load partial round-trip failed:\ngot  %+v\nwant %+v", loaded, original)
 	}
 }
@@ -119,7 +120,7 @@ func TestMultipleSaveCycles(t *testing.T) {
 	for i := range 5 {
 		cfg := config.Config{
 			Model:   "model-v1",
-			History: i,
+			History: config.Ptr(i),
 		}
 		if err := p.Save(cfg); err != nil {
 			t.Fatalf("Save cycle %d failed: %v", i, err)
@@ -129,8 +130,8 @@ func TestMultipleSaveCycles(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Load cycle %d failed: %v", i, err)
 		}
-		if loaded.History != i {
-			t.Errorf("Cycle %d: History = %d, want %d", i, loaded.History, i)
+		if loaded.HistoryValue() != i {
+			t.Errorf("Cycle %d: History = %d, want %d", i, loaded.HistoryValue(), i)
 		}
 	}
 }

@@ -4,13 +4,15 @@ import "gud/internal/config"
 
 // ConfigDTO is the JSON-serializable representation of application configuration.
 // An empty string for a field means "not set" — the DTO does not encode defaults.
+// History is a *int so an explicit "history": 0 (disable) survives JSON
+// round-trips; nil means the key is absent and is omitted from output.
 type ConfigDTO struct {
 	DetailLevel string `json:"detail_level,omitempty"`
 	Profile     string `json:"profile,omitempty"`
 	Model       string `json:"model,omitempty"`
 	// Temperature is intentionally omitted — deprecated by Google for Gemini 3.6+
 	Hint           string `json:"hint,omitempty"`
-	History        int    `json:"history,omitempty"`
+	History        *int   `json:"history,omitempty"`
 	APIKey         string `json:"api_key,omitempty"`
 	WrapLine       int    `json:"wrapline,omitempty"`
 	EmbeddingModel string `json:"embedding_model,omitempty"`

@@ -40,6 +40,18 @@ func TestValidateDetailLevel(t *testing.T) {
 	}
 }
 
+func TestValidateHistoryUnset(t *testing.T) {
+	// nil History means "not set" — Validate must leave it nil, and the
+	// effective value is 0 (disabled).
+	got := Config{}.Validate()
+	if got.History != nil {
+		t.Errorf("Validate() on unset History = %v, want nil", got.History)
+	}
+	if got.HistoryValue() != 0 {
+		t.Errorf("HistoryValue() = %d, want 0", got.HistoryValue())
+	}
+}
+
 func TestValidateHistory(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -55,10 +67,10 @@ func TestValidateHistory(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := Config{History: tt.input}
+			cfg := Config{History: Ptr(tt.input)}
 			got := cfg.Validate()
-			if got.History != tt.want {
-				t.Errorf("Validate().History = %d, want %d", got.History, tt.want)
+			if got.HistoryValue() != tt.want {
+				t.Errorf("Validate().History = %d, want %d", got.HistoryValue(), tt.want)
 			}
 		})
 	}
@@ -93,7 +105,7 @@ func TestMerge(t *testing.T) {
 	base := Config{
 		DetailLevel: DetailStandard,
 		Model:       "gemini-flash-lite-latest",
-		History:     5,
+		History:     Ptr(5),
 		WrapLine:    72,
 	}
 
@@ -109,11 +121,40 @@ func TestMerge(t *testing.T) {
 	if merged.Model != "gemini-flash-latest" {
 		t.Errorf("Merge overrode Model = %q, want %q", merged.Model, "gemini-flash-latest")
 	}
-	if merged.History != 5 {
-		t.Errorf("Merge preserved History = %d, want 5", merged.History)
+	if merged.HistoryValue() != 5 {
+		t.Errorf("Merge preserved History = %d, want 5", merged.HistoryValue())
 	}
 	if merged.WrapLine != 72 {
 		t.Errorf("Merge preserved WrapLine = %d, want 72", merged.WrapLine)
+	}
+}
+
+// TestMergeHistoryZeroOverridesBase is the regression test for the flag
+// contract "--history 0 to disable": an explicit override of 0 must win over
+// a base layer that set a positive history, not be treated as "not set".
+func TestMergeHistoryZeroOverridesBase(t *testing.T) {
+	base := Config{History: Ptr(10)}
+	override := Config{History: Ptr(0)}
+
+	merged := base.Merge(override)
+
+	if merged.History == nil {
+		t.Fatal("Merge lost explicit History=0 (treated as not set)")
+	}
+	if merged.HistoryValue() != 0 {
+		t.Errorf("Merge History = %d, want 0 (explicit disable wins)", merged.HistoryValue())
+	}
+}
+
+// TestMergeHistoryUnsetKeepsBase: a nil override History must NOT clobber the
+// base layer's value.
+func TestMergeHistoryUnsetKeepsBase(t *testing.T) {
+	base := Config{History: Ptr(7)}
+
+	merged := base.Merge(Config{})
+
+	if merged.HistoryValue() != 7 {
+		t.Errorf("Merge History = %d, want 7 preserved from base", merged.HistoryValue())
 	}
 }
 

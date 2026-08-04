@@ -192,7 +192,9 @@ func configFromEnv() config.Config {
 	v = os.Getenv("GUD_HISTORY")
 	if v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
-			cfg.History = n
+			// Pointer (not plain int) so GUD_HISTORY=0 reliably disables
+			// history instead of being treated as "not set" by Merge.
+			cfg.History = config.Ptr(n)
 		}
 	}
 
