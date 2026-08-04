@@ -38,7 +38,27 @@ type AppContext struct {
 // environment variables, config files) and returns an AppContext with the
 // resolved config. The request client is NOT created here — call InitClient
 // separately. HelixDB is NOT initialized here — call InitHelixDB separately.
+//
+// A configured profile must be cached locally; if it is not, an error is
+// returned telling the user to download it first (see requireProfile).
 func NewAppContext(cmd *cobra.Command) (*AppContext, error) {
+	return newAppContext(cmd, true)
+}
+
+// NewAppContextTolerant is like NewAppContext but tolerates a configured
+// profile that is not cached: the profile content simply degrades to "" —
+// the same behaviour resolveProfileContent already has — instead of failing.
+// It is used by hook mode, where a hard error would abort the user's git
+// commit.
+func NewAppContextTolerant(cmd *cobra.Command) (*AppContext, error) {
+	return newAppContext(cmd, false)
+}
+
+// newAppContext loads and merges configuration from all sources and returns
+// an AppContext with the resolved config. When requireCachedProfile is true,
+// a configured but uncached profile is a hard error; when false, it degrades
+// gracefully to an empty profile.
+func newAppContext(cmd *cobra.Command, requireCachedProfile bool) (*AppContext, error) {
 	cliCfg := configFromCmd(cmd)
 
 	m, err := mediator.New()
@@ -51,8 +71,10 @@ func NewAppContext(cmd *cobra.Command) (*AppContext, error) {
 		return nil, fmt.Errorf("config: %w", err)
 	}
 
-	if err := requireProfile(string(cfg.Profile)); err != nil {
-		return nil, err
+	if requireCachedProfile {
+		if err := requireProfile(string(cfg.Profile)); err != nil {
+			return nil, err
+		}
 	}
 
 	return &AppContext{

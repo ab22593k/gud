@@ -2,7 +2,53 @@ package core
 
 import (
 	"testing"
+
+	"gud/internal/profile"
+
+	"github.com/spf13/cobra"
 )
+
+// TestHookModeToleratesUncachedProfile verifies that hook mode never blocks a
+// git commit because a configured profile is not cached. The tolerant
+// constructor must succeed and keep the profile name (whose content degrades
+// to "" via resolveProfileContent), while the strict constructor used by
+// normal mode still rejects the missing profile.
+func TestHookModeToleratesUncachedProfile(t *testing.T) {
+	orig := profileManager
+	t.Cleanup(func() { profileManager = orig })
+	profileManager = profile.NewManagerWithDir(t.TempDir())
+
+	t.Setenv("GUD_CONFIG_PATH", t.TempDir()+"/nonexistent.json")
+
+	cmd := &cobra.Command{}
+	addPersistentFlags(cmd)
+	// Parse flags so cobra merges the persistent flags into cmd.Flags(),
+	// mirroring how configFromCmd observes them during a real execution.
+	if err := cmd.ParseFlags([]string{"--profile", "nonexistent-slug-12345"}); err != nil {
+		t.Fatalf("parse flags: %v", err)
+	}
+
+	// Tolerant constructor (hook mode) must succeed despite the uncached profile.
+	app, err := NewAppContextTolerant(cmd)
+	if err != nil {
+		t.Fatalf("NewAppContextTolerant with uncached profile: %v", err)
+	}
+	if app == nil {
+		t.Fatal("NewAppContextTolerant returned nil app")
+	}
+	if got := app.Config().Profile; got != "nonexistent-slug-12345" {
+		t.Errorf("Profile = %q, want %q", got, "nonexistent-slug-12345")
+	}
+	// Content resolution degrades gracefully, matching generate.go behaviour.
+	if got := resolveProfileContent(string(app.Config().Profile)); got != "" {
+		t.Errorf("resolveProfileContent() = %q, want ''", got)
+	}
+
+	// Strict constructor (normal mode) must still reject the missing profile.
+	if _, err := NewAppContext(cmd); err == nil {
+		t.Error("NewAppContext with uncached profile should return an error")
+	}
+}
 
 func TestHasMeaningfulContent(t *testing.T) {
 	t.Parallel()

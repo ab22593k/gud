@@ -107,7 +107,10 @@ func runHookUninstall(global bool) error {
 const hookTimeout = 2 * time.Minute
 
 func runHookMode(cmd *cobra.Command, msgFile string) error {
-	app, err := NewAppContext(cmd)
+	// Hook mode must never block the user's commit. Use the tolerant
+	// constructor: a configured profile that isn't cached degrades to an
+	// empty profile (resolveProfileContent returns "") instead of failing.
+	app, err := NewAppContextTolerant(cmd)
 	if err != nil {
 		return err
 	}
