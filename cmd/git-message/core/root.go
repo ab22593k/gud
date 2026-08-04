@@ -10,13 +10,20 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// The root command is intentionally named "message" (not "gud") so git
+// invokes it as `git message`: the binary is built from cmd/git-message and
+// named git-message, and git runs any git-* executable on PATH as `git <name>`.
+// "gud" is the product name used in version output (gud version X.Y.Z); the
+// two spellings refer to the same command. See README "Naming".
 var rootCmd = &cobra.Command{
 	Use:   "message",
 	Short: "Spontaneously combust commit message",
 	Long: `Tool that generates meaningful git commit messages
 using AI, based on your staged changes.
 
-It supports multiple profiles and detail levels to match your project's style.`,
+It supports multiple profiles and detail levels to match your project's style.
+
+Invoked as 'git message'; 'gud message' is the same command.`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	// Default action: generate a commit message from staged changes

@@ -2,6 +2,20 @@
 
 A CLI tool that generates meaningful git commit messages using AI, based on your staged changes. Supports multiple AI agent profiles and detail levels.
 
+## Naming
+
+This tool has two names that refer to the same binary:
+
+- **`git message`** — the canonical invocation. The binary is built from `cmd/git-message`
+  and named `git-message`, so it lands on your PATH as `git message` (git runs any
+  `git-*` executable as `git <name>`).
+- **`gud message`** — the product name, used in version output (`gud version X.Y.Z`)
+  and some docs. It is the same command; invoke it this way if you install or alias
+  the binary as `gud`.
+
+The root command is registered as `message` (not `gud`) so help output reads
+naturally as `git message ...`. This is intentional git integration.
+
 # Stage some changes
 
 git add .
@@ -47,7 +61,7 @@ isolated per `repo_path` (the tenant key), so project data never mixes.
 # Start one HelixDB server with persistent disk storage, once per machine:
 helix start --disk   # or: docker run -d --name helixdb -p 2232:8080 ghcr.io/helixdb/enterprise-dev
 
-gud message
+git message
 ```
 
 ## License
