@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 )
 
 const (
@@ -26,6 +27,16 @@ const (
 	embedTextLimit = 6000
 )
 
+// withDefaultTimeout returns a context with the given timeout if the caller's
+// context has no deadline. It preserves explicit caller deadlines so a
+// hook-mode or user-visible cancellation is never overridden by the default.
+func withDefaultTimeout(ctx context.Context, d time.Duration) (context.Context, context.CancelFunc) {
+	if _, hasDeadline := ctx.Deadline(); hasDeadline {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, d)
+}
+
 // EmbedText embeds the given text as a float32 vector using the configured
 // Gemini embedding model. Input is trimmed, must be non-empty, and is
 // truncated to embedTextLimit characters to respect model token limits.
@@ -41,6 +52,10 @@ func (c *Client) EmbedText(ctx context.Context, text string) ([]float32, error) 
 	if len(text) > embedTextLimit {
 		text = text[:embedTextLimit]
 	}
+
+	ctx, cancel := withDefaultTimeout(ctx, defaultEmbedTimeout)
+	defer cancel()
+
 	return c.embedFn(ctx, text)
 }
 

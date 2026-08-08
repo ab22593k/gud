@@ -283,7 +283,7 @@ func persistToHelixDB(ctx context.Context, app *AppContext, diff, hash, message 
 	}
 
 	author := git.GetAuthor(ctx)
-	branch := git.GetBranch(ctx)
+	branch := app.Branch(ctx)
 
 	fileChanges := toFileChanges(units)
 	codeUnits := toCodeUnitRefs(units)
@@ -303,13 +303,13 @@ func persistToHelixDB(ctx context.Context, app *AppContext, diff, hash, message 
 
 	// Embed the diff so the hybrid (vector + BM25) recall path can find this
 	// commit semantically. A failed embedding is non-fatal: the commit is
-	// still persisted and remains findable via BM25 and MENTIONS edges.
-	if client := app.Client(); client != nil {
-		if vec, err := client.EmbedText(ctx, diff); err != nil {
-			slog.Debug("helixdb: embedding failed, persisting without", "error", err)
-		} else {
-			commit.Embedding = vec
-		}
+	// still persisted and remains findable via BM25 and MENTIONS edges. The
+	// embedding is memoised per invocation, so recall and persistence never
+	// embed the same diff twice.
+	if vec, err := app.EmbedDiff(ctx, diff); err != nil {
+		slog.Debug("helixdb: embedding failed, persisting without", "error", err)
+	} else {
+		commit.Embedding = vec
 	}
 
 	query := mem.BuildPersistCommitQuery(commit)

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"slices"
 	"strings"
+	"time"
 
 	"google.golang.org/adk/model"
 	"google.golang.org/adk/model/gemini"
@@ -35,7 +36,18 @@ type Client struct {
 	embedFn        func(ctx context.Context, text string) ([]float32, error)
 }
 
-const defaultModel = "gemini-flash-lite-latest"
+const (
+	// defaultModel is the Gemini model used when none is configured.
+	defaultModel = "gemini-flash-lite-latest"
+
+	// defaultGenerateTimeout bounds a single content-generation call when
+	// the caller's context carries no deadline. Without it, a hung API
+	// would stall the CLI (and a prepare-commit-msg hook) indefinitely.
+	defaultGenerateTimeout = 2 * time.Minute
+
+	// defaultEmbedTimeout bounds a single embedding call the same way.
+	defaultEmbedTimeout = 30 * time.Second
+)
 
 // NewClient creates a new request client.
 // The caller is responsible for providing a context that can carry timeouts
@@ -143,6 +155,9 @@ func (c *Client) GenerateCommitMessageWithContent(ctx context.Context, diff, com
 		Contents: genai.Text(prompt),
 		Config:   &genai.GenerateContentConfig{},
 	}
+
+	ctx, cancel := withDefaultTimeout(ctx, defaultGenerateTimeout)
+	defer cancel()
 
 	result, err := generateContent(c, ctx, req)
 	if err != nil {

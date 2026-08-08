@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -32,6 +33,23 @@ type AppContext struct {
 	repoRoot    string
 	repoRootErr error
 	repoRootOK  bool // true once repoRoot has been computed
+
+	// branch is memoised from the first successful git branch lookup. The
+	// branch cannot change within a single invocation, so the MEM recall and
+	// persist paths must not each pay a subprocess spawn for it.
+	branch   string
+	branchOK bool
+	// branchFn is the branch lookup used by Branch. It is swappable in tests
+	// to avoid subprocess spawns; nil means git.GetBranch.
+	branchFn func(context.Context) string
+
+	// embedDiff/embedVec/embedErr memoise the per-invocation diff embedding
+	// so the recall query and the post-commit persistence share one network
+	// call instead of two identical embedding round-trips.
+	embedDiff string
+	embedDone bool
+	embedVec  []float32
+	embedErr  error
 }
 
 // NewAppContext loads and merges configuration from all sources (CLI flags,
@@ -162,4 +180,38 @@ func (a *AppContext) RepoRoot(ctx context.Context) (string, error) {
 	}
 
 	return a.repoRoot, a.repoRootErr
+}
+
+// Branch returns the current git branch, memoised per invocation. The branch
+// cannot change within a single run, so callers pay at most one subprocess
+// spawn even when recall and persistence both need it.
+func (a *AppContext) Branch(ctx context.Context) string {
+	if !a.branchOK {
+		if a.branchFn != nil {
+			a.branch = a.branchFn(ctx)
+		} else {
+			a.branch = git.GetBranch(ctx)
+		}
+		a.branchOK = true
+	}
+
+	return a.branch
+}
+
+// EmbedDiff returns the embedding for the given text, memoised for the
+// lifetime of the invocation. The recall path embeds the diff to query
+// HelixDB, and persistence later embeds the *same* diff to store the commit;
+// sharing the result turns two identical Gemini round-trips into one.
+func (a *AppContext) EmbedDiff(ctx context.Context, diff string) ([]float32, error) {
+	if !a.embedDone || a.embedDiff != diff {
+		a.embedDiff = diff
+		a.embedDone = true
+		if c := a.client; c != nil {
+			a.embedVec, a.embedErr = c.EmbedText(ctx, diff)
+		} else {
+			a.embedVec, a.embedErr = nil, errors.New("request client not initialized")
+		}
+	}
+
+	return a.embedVec, a.embedErr
 }

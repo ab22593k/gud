@@ -5,6 +5,7 @@ import (
 	"errors"
 	"iter"
 	"testing"
+	"time"
 
 	"google.golang.org/adk/model"
 	"google.golang.org/genai"
@@ -24,6 +25,61 @@ func (m *mockLLM) GenerateContent(ctx context.Context, req *model.LLMRequest, st
 	// Return empty response
 	return func(yield func(*model.LLMResponse, error) bool) {
 		yield(&model.LLMResponse{}, nil)
+	}
+}
+
+func TestWithDefaultTimeout_PreservesCallerDeadline(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Hour)
+	defer cancel()
+
+	derived, derivedCancel := withDefaultTimeout(ctx, time.Second)
+	defer derivedCancel()
+
+	deadline, ok := derived.Deadline()
+	if !ok {
+		t.Fatal("withDefaultTimeout dropped the caller's deadline")
+	}
+	// The derived context must carry the caller's deadline (1h), not the 1s default.
+	if time.Until(deadline) < 30*time.Minute {
+		t.Errorf("derived deadline = %v, want the caller's 1h deadline preserved", deadline)
+	}
+}
+
+func TestWithDefaultTimeout_AppliesDefaultWhenNoDeadline(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := withDefaultTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		t.Fatal("withDefaultTimeout did not apply a deadline")
+	}
+	if time.Until(deadline) > time.Second {
+		t.Errorf("deadline = %v, want ~50ms default applied", deadline)
+	}
+}
+
+func TestGenerateCommitMessageWithContent_RespectsCallerDeadline(t *testing.T) {
+	t.Parallel()
+	blocking := make(chan struct{})
+	defer close(blocking)
+
+	c := NewClientWithGenerator(&mockLLM{
+		generateContentFunc: func(ctx context.Context, _ *model.LLMRequest, _ bool) iter.Seq2[*model.LLMResponse, error] {
+			return func(yield func(*model.LLMResponse, error) bool) {
+				<-ctx.Done()
+				yield(nil, ctx.Err())
+			}
+		},
+	}, "mock")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	_, err := c.GenerateCommitMessageWithContent(ctx, "diff", "", DetailLevel("standard"), "", "", "", 72)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("err = %v, want context.DeadlineExceeded", err)
 	}
 }
 

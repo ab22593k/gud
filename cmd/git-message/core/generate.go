@@ -36,19 +36,20 @@ func runGenerate(cmd *cobra.Command, _ []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// Check for staged changes before any interactive flow. A user with
+	// nothing staged should get the "no staged changes" error immediately,
+	// not a HelixDB probe or a profile suggestion that may write
+	// .gud-skip/gud.json. InitHelixDB/InitClient run after this check.
+	diff, err := getStagedDiffOrError(ctx)
+	if err != nil {
+		return err
+	}
+
 	if err := app.InitHelixDB(ctx); err != nil {
 		slog.Debug("helixdb init failed, proceeding without", "error", err)
 	}
 
 	if err := app.InitClient(ctx); err != nil {
-		return err
-	}
-
-	// Check for staged changes before any interactive flow. A user with
-	// nothing staged should get the "no staged changes" error immediately,
-	// not a profile suggestion that may write .gud-skip/gud.json.
-	diff, err := getStagedDiffOrError(ctx)
-	if err != nil {
 		return err
 	}
 
@@ -202,20 +203,24 @@ func maybeAppendMEMContext(
 	}
 
 	// Query embedding for vector recall. A failed embedding call is non-fatal:
-	// retrieval falls back to BM25 and entity recall.
+	// retrieval falls back to BM25 and entity recall. The result is memoised
+	// per invocation and reused by post-commit persistence, so the same diff
+	// is embedded at most once.
 	var queryVec []float32
-	if client := app.Client(); client != nil {
-		if vec, err := client.EmbedText(ctx, diff); err != nil {
-			slog.Debug("helixdb: query embedding failed, falling back to BM25", "error", err)
-		} else {
-			queryVec = vec
-		}
+	if vec, err := app.EmbedDiff(ctx, diff); err != nil {
+		slog.Debug("helixdb: query embedding failed, falling back to BM25", "error", err)
+	} else {
+		queryVec = vec
 	}
+
+	// Branch is memoised per invocation; each query building on it reuses the
+	// single subprocess spawn instead of paying one per query builder.
+	branch := app.Branch(ctx)
 
 	var groups []mem.RankedGroup
 
 	// 1. Hybrid recall: vector + BM25 over diff text + BM25 over messages.
-	query := mem.BuildHybridContextQuery(repoPath, git.GetBranch(ctx), queryVec, diff, filePaths, maxContextRecords)
+	query := mem.BuildHybridContextQuery(repoPath, branch, queryVec, diff, filePaths, maxContextRecords)
 	var rawResp map[string]any
 	if err := db.Exec(ctx, query, &rawResp); err != nil {
 		slog.Debug("helixdb hybrid context query failed", "error", err)
@@ -225,7 +230,7 @@ func maybeAppendMEMContext(
 
 	// 2. Entity-aware recall: find commits mentioning the same code elements.
 	if len(codeElemKeys) > 0 {
-		entityQ := mem.BuildEntityContextQuery(repoPath, git.GetBranch(ctx), codeElemKeys, 3)
+		entityQ := mem.BuildEntityContextQuery(repoPath, branch, codeElemKeys, 3)
 		var rawEntityResp map[string]any
 		if err := db.Exec(ctx, entityQ, &rawEntityResp); err != nil {
 			slog.Debug("helixdb entity context query failed", "error", err)
