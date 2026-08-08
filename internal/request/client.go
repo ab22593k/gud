@@ -18,7 +18,6 @@ type ContentResponse interface {
 }
 
 // ClientConfig holds configuration for creating a Client.
-// Temperature is intentionally omitted — deprecated by Google for Gemini 3.6+.
 type ClientConfig struct {
 	APIKey string
 	Model  string

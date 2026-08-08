@@ -23,9 +23,6 @@ type ProfileName string
 // History is the exception: it is a *int because 0 is a meaningful value that
 // disables recent-commit context. nil means "not set" in an override layer; a
 // non-nil pointer — including one pointing to 0 — means "explicitly set".
-//
-// NOTE: Temperature, top_p, and top_k have been deprecated by Google for
-// Gemini 3.6+ models and are no longer sent to the API.
 type Config struct {
 	DetailLevel    DetailLevel
 	Profile        ProfileName

@@ -173,8 +173,6 @@ func isKnownPlaceholder(s string) bool {
 //	GUD_DETAIL_LEVEL  GUD_PROFILE  GUD_MODEL
 //	GUD_HINT          GUD_HISTORY  GOOGLE_API_KEY GUD_WRAPLINE
 //	GUD_EMBEDDING_MODEL
-//
-// NOTE: GUD_TEMPERATURE is no longer read — Google deprecated the parameter.
 func configFromEnv() config.Config {
 	cfg := config.Config{
 		APIKey:         firstSet("GOOGLE_API_KEY"),

@@ -7,10 +7,9 @@ import "gud/internal/config"
 // History is a *int so an explicit "history": 0 (disable) survives JSON
 // round-trips; nil means the key is absent and is omitted from output.
 type ConfigDTO struct {
-	DetailLevel string `json:"detail_level,omitempty"`
-	Profile     string `json:"profile,omitempty"`
-	Model       string `json:"model,omitempty"`
-	// Temperature is intentionally omitted — deprecated by Google for Gemini 3.6+
+	DetailLevel    string `json:"detail_level,omitempty"`
+	Profile        string `json:"profile,omitempty"`
+	Model          string `json:"model,omitempty"`
 	Hint           string `json:"hint,omitempty"`
 	History        *int   `json:"history,omitempty"`
 	APIKey         string `json:"api_key,omitempty"`

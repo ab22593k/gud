@@ -89,7 +89,6 @@ func addPersistentFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().String("model", "", "Gemini model to use (or use GEMINI_MODEL env)")
 	cmd.PersistentFlags().StringSlice("issue", nil,
 		"Issue numbers this commit fixes (comma-separated, e.g. 123,456; adds a 'Fixes: #N' trailer per issue)")
-	// --temperature removed — deprecated by Google for Gemini 3.6+ models
 	cmd.PersistentFlags().Int("wrapline", 72, "Wrap all lines at this character width")
 }
 
