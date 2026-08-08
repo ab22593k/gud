@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"bytes"
+	"io"
 	"strings"
 	"testing"
 
@@ -150,5 +152,71 @@ func TestCommitReviewRespectsWrapLine(t *testing.T) {
 
 	if m.viewport.Width > 50 {
 		t.Errorf("expected viewport width <= 50, got %d", m.viewport.Width)
+	}
+}
+
+// TestCommitReviewEditConfirmPreservesEdits guards the edit → commit flow:
+// the text typed in the inline editor must survive confirm (ctrl+s or
+// alt+enter) and end up in the message returned by the model. Regresses
+// "edits lost after entering the TUI edit phase".
+func TestCommitReviewEditConfirmPreservesEdits(t *testing.T) {
+	for _, confirmKey := range []struct {
+		msg tea.KeyMsg
+	}{{msg: tea.KeyMsg{Type: tea.KeyCtrlS}}, {msg: tea.KeyMsg{Type: tea.KeyEnter, Alt: true}}} {
+		t.Run(confirmKey.msg.String(), func(t *testing.T) {
+			m := NewCommitReview("fix: hello world", 0)
+			m.ready = true
+
+			// Try to reproduce the user-visible sequence from the report:
+			// e (edit) → ctrl+n (cursor to end) → type → confirm → y (commit).
+			keys := []tea.KeyMsg{
+				{Type: tea.KeyRunes, Runes: []rune("e")},
+				{Type: tea.KeyCtrlN},
+				{Type: tea.KeyRunes, Runes: []rune(" touched")},
+				confirmKey.msg,
+				{Type: tea.KeyRunes, Runes: []rune("y")},
+			}
+
+			for _, k := range keys {
+				updated, _ := m.Update(k)
+				m = updated.(CommitReviewModel)
+			}
+
+			if m.action != ActionCommit {
+				t.Errorf("action = %q, want %q", m.action, ActionCommit)
+			}
+			if !strings.Contains(m.msg, "touched") {
+				t.Errorf("edited message not preserved: msg = %q, want it to contain %q", m.msg, "touched")
+			}
+		})
+	}
+}
+
+// TestCommitReviewProgramLoopPreservesEdits runs the full Bubble Tea program
+// over a raw key stream (edit → type → confirm → commit) and asserts the
+// program's final model still carries the edit. This covers the message loop
+// and renderer paths that pure model tests cannot.
+func TestCommitReviewProgramEditPreservesEdits(t *testing.T) {
+	var input bytes.Buffer
+	input.WriteString("e")
+	input.WriteByte(0x0e) // ctrl+n: cursor to end
+	input.WriteString(" touched")
+	input.WriteByte(0x13)  // ctrl+s: confirm
+	input.WriteString("y") // commit, which quits the program
+
+	p := tea.NewProgram(
+		NewCommitReview("fix: hello world", 0),
+		tea.WithInput(&input),
+		tea.WithOutput(io.Discard),
+	)
+
+	result, err := p.Run()
+	if err != nil {
+		t.Fatalf("program error: %v", err)
+	}
+
+	m := result.(CommitReviewModel)
+	if !strings.Contains(m.msg, "touched") {
+		t.Errorf("edited message not preserved through program loop: msg = %q", m.msg)
 	}
 }

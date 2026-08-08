@@ -241,8 +241,11 @@ func (m CommitReviewModel) handleReviewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 // handleEditKey processes keys in inline edit mode.
 func (m CommitReviewModel) handleEditKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "ctrl+s":
+	case "ctrl+s", "alt+enter":
 		// Confirm edit — apply wrapLine, set content, and return to review.
+		// alt+enter is a second confirm path: some terminals swallow ctrl+s
+		// (XOFF flow control), which would otherwise strand the user in edit
+		// mode with their changes unrecoverable.
 		edited := m.textarea.Value()
 		if m.wrapLine > 0 {
 			edited = wrapText(edited, m.wrapLine)
@@ -255,7 +258,7 @@ func (m CommitReviewModel) handleEditKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "esc":
-		// Cancel edit — restore last confirmed message.
+		// Cancel edit — restore the last confirmed message (discards the draft).
 		m.textarea.SetValue(m.msg)
 		m.editing = false
 		m.textarea.Blur()
@@ -295,7 +298,7 @@ func (m CommitReviewModel) editView() string {
 	header := titleStyle.Render("Edit Commit Message")
 	sep := separatorStyle.Render(strings.Repeat("─", m.textarea.Width()))
 	help := helpStyle.Render(
-		commitKeyStyle.Render("ctrl+s") + " confirm  " +
+		commitKeyStyle.Render("ctrl+s") + "/" + commitKeyStyle.Render("alt+enter") + " confirm  " +
 			commitKeyStyle.Render("esc") + " cancel",
 	)
 
