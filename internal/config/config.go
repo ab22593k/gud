@@ -35,6 +35,9 @@ type Config struct {
 	History        *int
 	APIKey         string
 	WrapLine       int
+	// Issues are the issue-tracker numbers this commit fixes. nil means "not
+	// set"; each number adds a "Fixes: #N" git trailer before "Assisted-by:".
+	Issues []int
 }
 
 // Ptr returns a pointer to a copy of v, expressing "explicitly set to v" —
@@ -88,6 +91,23 @@ func (c Config) Validate() Config {
 		c.WrapLine = maxWrap
 	}
 
+	if c.Issues != nil {
+		// Drop non-positive entries and duplicates, preserving order.
+		seen := make(map[int]struct{}, len(c.Issues))
+		deduped := make([]int, 0, len(c.Issues))
+		for _, n := range c.Issues {
+			if n <= 0 {
+				continue
+			}
+			if _, ok := seen[n]; ok {
+				continue
+			}
+			seen[n] = struct{}{}
+			deduped = append(deduped, n)
+		}
+		c.Issues = deduped
+	}
+
 	return c
 }
 
@@ -125,6 +145,9 @@ func (c Config) Merge(override Config) Config {
 	}
 	if override.WrapLine != 0 {
 		merged.WrapLine = override.WrapLine
+	}
+	if override.Issues != nil {
+		merged.Issues = override.Issues
 	}
 
 	return merged

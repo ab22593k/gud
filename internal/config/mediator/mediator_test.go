@@ -2,6 +2,7 @@ package mediator
 
 import (
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"gud/internal/config"
@@ -148,7 +149,7 @@ func TestMediatorOnlyDefaults(t *testing.T) {
 	defaults := config.DefaultConfig()
 	validated := defaults.Validate()
 
-	if cfg != validated {
+	if !reflect.DeepEqual(cfg, validated) {
 		t.Errorf("only defaults: got %+v, want %+v", cfg, validated)
 	}
 }

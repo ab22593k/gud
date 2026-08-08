@@ -320,6 +320,69 @@ func TestOracle_Image_AssistedByTrailer(t *testing.T) {
 	}
 }
 
+// I: "Fixes:" trailers are inserted, one per issue, just before
+// "Assisted-by:" following git trailer conventions, and are idempotent.
+func TestOracle_Image_IssueTrailer(t *testing.T) {
+	tests := []struct {
+		msg    string
+		issues []int
+		want   string
+		desc   string
+	}{
+		{
+			msg:    "feat: add login\n\nImplement JWT auth\n\nAssisted-by: " + testModelName,
+			issues: []int{123, 456},
+			want:   "feat: add login\n\nImplement JWT auth\n\nFixes: #123\nFixes: #456\n\nAssisted-by: " + testModelName + "\n",
+			desc:   "one Fixes trailer per issue, blank line before Assisted-by",
+		},
+		{
+			msg:    "fix: resolve crash\n\nFixes: #123\nAssisted-by: " + testModelName + "\n",
+			issues: []int{123, 456},
+			want:   "fix: resolve crash\n\nFixes: #123\nFixes: #456\n\nAssisted-by: " + testModelName + "\n",
+			desc:   "idempotent per issue — adds only the missing trailer",
+		},
+		{
+			msg:    "chore: bump deps\n\nAssisted-by: gemini-flash-lite-latest\n",
+			issues: []int{3, 1, 2},
+			want:   "chore: bump deps\n\nFixes: #3\nFixes: #1\nFixes: #2\n\nAssisted-by: gemini-flash-lite-latest\n",
+			desc:   "preserves the flag order",
+		},
+		{
+			msg:    "docs: update README",
+			issues: []int{7, 8},
+			want:   "docs: update README\n\nFixes: #7\nFixes: #8\n",
+			desc:   "appends after body when Assisted-by is absent",
+		},
+		{
+			msg:    "docs: update README",
+			issues: []int{0, -1, 7},
+			want:   "docs: update README\n\nFixes: #7\n",
+			desc:   "non-positive entries are skipped",
+		},
+		{
+			msg:    "docs: update README",
+			issues: nil,
+			want:   "docs: update README",
+			desc:   "nil issues leave the message untouched",
+		},
+		{
+			msg:    "docs: update README",
+			issues: []int{},
+			want:   "docs: update README",
+			desc:   "empty issues leave the message untouched",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			got := appendIssues(tt.msg, tt.issues)
+			if got != tt.want {
+				t.Errorf("[I] appendIssues:\n  got:  %q\n  want: %q", got, tt.want)
+			}
+		})
+	}
+}
+
 // I: spinner writes to stderr, not stdout.
 func TestOracle_Image_SpinnerOnStderr(t *testing.T) {
 	// Verified in progress_test.go via os.Pipe capture.

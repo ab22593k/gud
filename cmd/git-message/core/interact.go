@@ -46,6 +46,7 @@ func interactiveCommit(ctx context.Context, cmd *cobra.Command, app *AppContext,
 		}
 
 		msg = appendAssistedBy(msg, client.ModelName())
+		msg = appendIssues(msg, cfg.Issues)
 
 		// Use TUI in terminal mode, fall back to text prompt otherwise
 		var action string
@@ -72,6 +73,7 @@ func interactiveCommit(ctx context.Context, cmd *cobra.Command, app *AppContext,
 				return fmt.Errorf("failed to edit message: %w", err)
 			}
 			edited = appendAssistedBy(edited, client.ModelName())
+			edited = appendIssues(edited, cfg.Issues)
 
 			return commitFinalized(ctx, app, out, diff, edited, units)
 
@@ -142,6 +144,50 @@ func appendAssistedBy(msg, modelName string) string {
 	}
 
 	return msg + "\n\n" + trailer + "\n"
+}
+
+// appendIssues inserts one "Fixes: <issue>" git trailer per issue number just
+// before the trailing "Assisted-by:" trailer, or after the body if that trailer
+// is absent. It is a no-op for an empty list and idempotent: a "Fixes: #N"
+// trailer already present is not duplicated.
+func appendIssues(msg string, issues []int) string {
+	if len(issues) == 0 {
+		return msg
+	}
+	msg = strings.TrimRight(msg, "\n")
+
+	// Collect the missing trailers, in flag order.
+	block := make([]string, 0, len(issues))
+	for _, n := range issues {
+		if n <= 0 {
+			continue
+		}
+		trailer := fmt.Sprintf("Fixes: #%d", n)
+		if strings.HasSuffix(msg, trailer) || strings.Contains(msg, "\n"+trailer+"\n") {
+			continue
+		}
+		block = append(block, trailer)
+	}
+	if len(block) == 0 {
+		return msg + "\n"
+	}
+
+	trailers := strings.Join(block, "\n")
+
+	// Insert just before the trailing "Assisted-by:" trailer. A blank line
+	// separates the last "Fixes:" trailer from "Assisted-by:". When Fixes
+	// trailers already precede it (e.g. from an editor pass), insert after
+	// them instead of replacing their separator.
+	const sep = "\n\nAssisted-by: "
+	if idx := strings.LastIndex(msg, sep); idx >= 0 {
+		return msg[:idx] + "\n\n" + trailers + "\n\n" + strings.TrimPrefix(msg[idx:], "\n\n") + "\n"
+	}
+	const lineSep = "\nAssisted-by: "
+	if idx := strings.LastIndex(msg, lineSep); idx >= 0 {
+		return msg[:idx] + "\n" + trailers + "\n\n" + strings.TrimPrefix(msg[idx:], "\n") + "\n"
+	}
+
+	return msg + "\n\n" + trailers + "\n"
 }
 
 // editMessage opens the user's $EDITOR with the given message content,

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -244,7 +245,7 @@ func TestMediatorOnlyDefaults(t *testing.T) {
 	defaults := config.DefaultConfig()
 	validated := defaults.Validate()
 
-	if cfg != validated {
+	if !reflect.DeepEqual(cfg, validated) {
 		t.Errorf("only defaults: got %+v, want %+v", cfg, validated)
 	}
 }
@@ -301,7 +302,7 @@ func TestConfigFromCmdUnchangedFlags(t *testing.T) {
 	cfg := configFromCmd(flagCommand(t))
 
 	want := config.Config{}
-	if cfg != want {
+	if !reflect.DeepEqual(cfg, want) {
 		t.Errorf("configFromCmd(default flags) = %+v, want zero-value %+v (no CLI overrides)", cfg, want)
 	}
 }
@@ -311,6 +312,7 @@ func TestConfigFromCmdChangedFlags(t *testing.T) {
 		"--detail-level", "detailed",
 		"--history", "8",
 		"--wrapline", "90",
+		"--issue", "123,456",
 	))
 
 	if cfg.DetailLevel != config.DetailDetailed {
@@ -321,6 +323,9 @@ func TestConfigFromCmdChangedFlags(t *testing.T) {
 	}
 	if cfg.WrapLine != 90 {
 		t.Errorf("WrapLine = %d, want 90", cfg.WrapLine)
+	}
+	if !reflect.DeepEqual(cfg.Issues, []int{123, 456}) {
+		t.Errorf("Issues = %v, want [123 456]", cfg.Issues)
 	}
 	// Unchanged flags stay zero so they don't override lower priorities.
 	if cfg.Profile != "" || cfg.Model != "" || cfg.Hint != "" {
@@ -500,6 +505,9 @@ func TestRootCommandHelp(t *testing.T) {
 	}
 	if !strings.Contains(output, "--wrapline") {
 		t.Errorf("help output should include --wrapline flag, got %q", output)
+	}
+	if !strings.Contains(output, "--issue") {
+		t.Errorf("help output should include --issue flag, got %q", output)
 	}
 }
 

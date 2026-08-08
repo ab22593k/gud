@@ -3,6 +3,7 @@ package core
 import (
 	"log/slog"
 	"os"
+	"strconv"
 	"strings"
 
 	"gud/internal/config"
@@ -86,6 +87,8 @@ func addPersistentFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().String("hint", "", "Focus boundaries for the AI")
 	cmd.PersistentFlags().Int("history", 5, "Number of recent commits to include as context (0 to disable)")
 	cmd.PersistentFlags().String("model", "", "Gemini model to use (or use GEMINI_MODEL env)")
+	cmd.PersistentFlags().StringSlice("issue", nil,
+		"Issue numbers this commit fixes (comma-separated, e.g. 123,456; adds a 'Fixes: #N' trailer per issue)")
 	// --temperature removed — deprecated by Google for Gemini 3.6+ models
 	cmd.PersistentFlags().Int("wrapline", 72, "Wrap all lines at this character width")
 }
@@ -130,6 +133,29 @@ func configFromCmd(cmd *cobra.Command) config.Config {
 	if flags.Changed("wrapline") {
 		cfg.WrapLine = mustGet(cmd, "wrapline", flags.GetInt)
 	}
+	if flags.Changed("issue") {
+		cfg.Issues = parseIssueList(mustGet(cmd, "issue", flags.GetStringSlice))
+	}
 
 	return cfg
+}
+
+// parseIssueList converts --issue flag values (comma-separated via cobra's
+// StringSlice, which also accepts repeated flags) into issue numbers. Empty
+// and non-numeric entries are ignored; the caller's Validate deduplicates.
+func parseIssueList(values []string) []int {
+	var issues []int
+	for _, v := range values {
+		trimmed := strings.TrimSpace(v)
+		if trimmed == "" {
+			continue
+		}
+		n, err := strconv.Atoi(trimmed)
+		if err != nil || n <= 0 {
+			continue
+		}
+		issues = append(issues, n)
+	}
+
+	return issues
 }

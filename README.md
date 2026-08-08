@@ -25,6 +25,7 @@ git add .
 git message                          Generate a commit message from staged changes
 git message --profile <slug>         Use a scientific agent profile
 git message --detail detailed        More verbose commit messages
+git message --issue 123,456          Reference fixed issues (adds "Fixes: #123" trailer per issue)
 git message hook install             Install git prepare-commit-msg hook
 git message profile list --remote    Browse available AI profiles
 git message profile save <slug>      Download a profile

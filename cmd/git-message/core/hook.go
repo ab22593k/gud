@@ -161,6 +161,7 @@ func generateAndWriteMsg(ctx context.Context, app *AppContext, diff, msgFile str
 	}
 
 	msg = appendAssistedBy(msg, app.Client().ModelName())
+	msg = appendIssues(msg, cfg.Issues)
 
 	if err := os.WriteFile(filepath.Clean(msgFile), []byte(msg), 0600); err != nil {
 		return fmt.Errorf("failed to write message file: %w", err)
