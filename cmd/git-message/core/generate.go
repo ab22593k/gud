@@ -81,6 +81,7 @@ func runGenerate(cmd *cobra.Command, _ []string) error {
 
 	promptContext := buildRepoContext(ctx, app)
 	promptContext = joinContexts(promptContext, buildHistoryContext(ctx, app, diff))
+	promptContext = joinContexts(promptContext, buildSubmoduleContext(ctx, app, diff))
 	promptContext = joinContexts(promptContext, buildOperationContext(op))
 
 	// When git is mid-operation it has already prepared the message that
@@ -124,6 +125,28 @@ func buildOperationContext(op git.Operation) string {
 	}
 
 	return ""
+}
+
+// buildSubmoduleContext returns a prompt fragment describing staged gitlink
+// (submodule pointer) changes. A raw 160000 mode change shows the model nothing
+// but two opaque hashes, so the fragment identifies each submodule (name, path,
+// URL) and — when local history is available — the commit subjects in the
+// old→new range. Best-effort and local-only: returns "" when there are no
+// gitlink changes or the repo root cannot be resolved.
+func buildSubmoduleContext(ctx context.Context, app *AppContext, diff string) string {
+	changes := git.ExtractSubmoduleChanges(diff)
+	if len(changes) == 0 {
+		return ""
+	}
+
+	root, err := app.RepoRoot(ctx)
+	if err != nil || root == "" {
+		slog.Debug("submodule context skipped: no repo root", "error", err)
+
+		return ""
+	}
+
+	return git.SubmoduleContext(ctx, root, changes)
 }
 
 // resolveProfileContent returns the AGENTS.md content for a cached profile.

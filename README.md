@@ -40,6 +40,16 @@ generating a fresh standalone one, preserving or combining the prior intent.
 Press `r` to regenerate; a regenerated message is generated with the operation
 fed into the prompt so it stays on-message.
 
+## Submodule-aware enrichment
+
+When the staged change is a submodule (gitlink) pointer update, `git message`
+identifies the submodule from `.gitmodules` (name, path, URL), resolves the old
+and new commits, and feeds the commit subjects in that range into the prompt —
+a raw `160000` mode change alone shows the model nothing but two opaque hashes.
+Enrichment is local-only: it reads the submodule's checked-out history when
+available and degrades to a SHA-only summary otherwise, never touching the
+network.
+
 ## Configuration
 
 Priority (highest to lowest): CLI flags → env vars → `./gud.json` → `~/.config/gud/config.json`
