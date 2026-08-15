@@ -22,18 +22,12 @@ type ContentResponse interface {
 type ClientConfig struct {
 	APIKey string
 	Model  string
-	// EmbeddingModel is the Gemini model used to embed diffs for vector
-	// retrieval. When empty, defaultEmbeddingModel is used.
-	EmbeddingModel string
 }
 
-// Client wraps an ADK model.LLM for generating commit messages and, when
-// available, a Gemini client for text embeddings (hybrid memory retrieval).
+// Client wraps an ADK model.LLM for generating commit messages.
 type Client struct {
-	modelImpl      model.LLM
-	model          string
-	embeddingModel string
-	embedFn        func(ctx context.Context, text string) ([]float32, error)
+	modelImpl model.LLM
+	model     string
 }
 
 const (
@@ -44,9 +38,6 @@ const (
 	// the caller's context carries no deadline. Without it, a hung API
 	// would stall the CLI (and a prepare-commit-msg hook) indefinitely.
 	defaultGenerateTimeout = 2 * time.Minute
-
-	// defaultEmbedTimeout bounds a single embedding call the same way.
-	defaultEmbedTimeout = 30 * time.Second
 )
 
 // NewClient creates a new request client.
@@ -72,51 +63,12 @@ func newGeminiClient(ctx context.Context, cfg ClientConfig) (*Client, error) {
 		return nil, fmt.Errorf("failed to create gemini model: %w", err)
 	}
 
-	embeddingModel := cfg.EmbeddingModel
-	if embeddingModel == "" {
-		embeddingModel = defaultEmbeddingModel
-	}
+	slog.Debug("created gemini client via ADK", "model", cfg.Model)
 
-	// A separate genai client powers embeddings; the ADK model handles content
-	// generation. Sharing the API key keeps a single credential in config.
-	gClient, err := genai.NewClient(ctx, &genai.ClientConfig{APIKey: cfg.APIKey})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create genai client: %w", err)
-	}
-
-	slog.Debug("created gemini client via ADK", "model", cfg.Model, "embeddingModel", embeddingModel)
-
-	c := &Client{
-		modelImpl:      adkModel,
-		model:          cfg.Model,
-		embeddingModel: embeddingModel,
-	}
-	// gemini-embedding-2 does not accept task_type (Google's newer embedding
-	// models steer retrieval via prompt instructions instead). Output
-	// dimensionality is pinned to embeddingDimensions so vectors keep matching
-	// the existing HelixDB 768-dim index.
-	c.embedFn = func(ctx context.Context, text string) ([]float32, error) {
-		resp, err := gClient.Models.EmbedContent(ctx, embeddingModel,
-			genai.Text(text), &genai.EmbedContentConfig{
-				OutputDimensionality: genai.Ptr(int32(embeddingDimensions)),
-			})
-		if err != nil {
-			return nil, fmt.Errorf("embed content: %w", err)
-		}
-		if len(resp.Embeddings) == 0 || resp.Embeddings[0] == nil {
-			return nil, fmt.Errorf("embed content: empty response")
-		}
-		values := resp.Embeddings[0].Values
-		// Guard against a misconfigured embedding model returning a different
-		// dimension (e.g. one that ignores output_dimensionality): such vectors
-		// would silently corrupt the HelixDB 768-dim index.
-		if len(values) != embeddingDimensions {
-			return nil, fmt.Errorf("embed content: got %d-dim vector, want %d", len(values), embeddingDimensions)
-		}
-		return values, nil
-	}
-
-	return c, nil
+	return &Client{
+		modelImpl: adkModel,
+		model:     cfg.Model,
+	}, nil
 }
 
 // ModelName returns the model name used by this client.
@@ -133,6 +85,16 @@ func NewClientWithGenerator(llm model.LLM, modelName string) *Client {
 		modelImpl: llm,
 		model:     modelName,
 	}
+}
+
+// withDefaultTimeout returns a context with the given timeout if the caller's
+// context has no deadline. It preserves explicit caller deadlines so a
+// hook-mode or user-visible cancellation is never overridden by the default.
+func withDefaultTimeout(ctx context.Context, d time.Duration) (context.Context, context.CancelFunc) {
+	if _, hasDeadline := ctx.Deadline(); hasDeadline {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, d)
 }
 
 // GenerateCommitMessage generates a commit message based on the provided diff.

@@ -18,7 +18,7 @@ The repository is a Go workspace using Go 1.26.3:
 - `internal/mem`: HelixDB-backed commit memory; separate workspace module.
 - `internal/pipeline`: commit-message generation pipeline.
 - `internal/profile`: profile catalog and cache management.
-- `internal/request`: model and embedding requests; separate workspace module.
+- `internal/request`: model requests; separate workspace module.
 - `internal/tui`: terminal interfaces.
 
 ## Efficient Workflow

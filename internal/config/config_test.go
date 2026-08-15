@@ -1,4 +1,6 @@
-//nolint:goconst // Test fixtures use repeated strings for readability.
+// Test fixtures use repeated strings for readability.
+
+//nolint:goconst
 package config
 
 import (
@@ -176,13 +178,13 @@ func TestMergeEmptyOverride(t *testing.T) {
 
 func TestMergeOverrideEmptyBase(t *testing.T) {
 	override := Config{
-		Model:    "claude-4-opus",
+		Model:    "gemini-flash-latest",
 		WrapLine: 80,
 	}
 
 	merged := Config{}.Merge(override)
 
-	if merged.Model != "claude-4-opus" {
+	if merged.Model != "gemini-flash-latest" {
 		t.Errorf("Merge from zero value: Model = %q", merged.Model)
 	}
 	if merged.WrapLine != 80 {

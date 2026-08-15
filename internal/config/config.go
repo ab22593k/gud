@@ -24,14 +24,13 @@ type ProfileName string
 // disables recent-commit context. nil means "not set" in an override layer; a
 // non-nil pointer — including one pointing to 0 — means "explicitly set".
 type Config struct {
-	DetailLevel    DetailLevel
-	Profile        ProfileName
-	Model          string
-	EmbeddingModel string
-	Hint           string
-	History        *int
-	APIKey         string
-	WrapLine       int
+	DetailLevel DetailLevel
+	Profile     ProfileName
+	Model       string
+	Hint        string
+	History     *int
+	APIKey      string
+	WrapLine    int
 	// Issues are the issue-tracker numbers this commit fixes. nil means "not
 	// set"; each number adds a "Fixes: #N" git trailer before "Assisted-by:".
 	Issues []int
@@ -127,9 +126,6 @@ func (c Config) Merge(override Config) Config {
 	}
 	if override.Model != "" {
 		merged.Model = override.Model
-	}
-	if override.EmbeddingModel != "" {
-		merged.EmbeddingModel = override.EmbeddingModel
 	}
 	if override.Hint != "" {
 		merged.Hint = override.Hint

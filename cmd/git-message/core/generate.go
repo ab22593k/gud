@@ -12,7 +12,6 @@ import (
 
 	"gud/internal/detect"
 	"gud/internal/git"
-	"gud/internal/mem"
 
 	"github.com/spf13/cobra"
 )
@@ -20,11 +19,6 @@ import (
 // maxHistory is the maximum number of recent commits the --history flag can request.
 // This prevents accidentally dumping hundreds of commits into the prompt and wasting tokens.
 const maxHistory = git.MaxRecentCommits
-
-// maxContextRecords caps how many related commits HelixDB recall may return to
-// the prompt. Matches the per-source limit used by the mem package so fused
-// results stay within the same token budget.
-const maxContextRecords = 5
 
 // runGenerate is the default action: generate a commit message from staged changes.
 func runGenerate(cmd *cobra.Command, _ []string) error {
@@ -64,7 +58,6 @@ func runGenerate(cmd *cobra.Command, _ []string) error {
 
 	promptContext := buildRepoContext(ctx, app)
 	promptContext = joinContexts(promptContext, buildHistoryContext(ctx, app))
-	promptContext = maybeAppendMEMContext(ctx, app, diff, units, promptContext)
 
 	return interactiveCommit(ctx, cmd, app, diff, promptContext, units)
 }
@@ -168,116 +161,6 @@ func appendDeletedContext(diff, deleted string) string {
 	b.WriteString("\n")
 
 	return b.String()
-}
-
-// maybeAppendMEMContext queries HelixDB for semantically relevant context
-// based on the current diff and appends it to the prompt context string.
-// Retrieval is hybrid: vector similarity over commit embeddings (when a query
-// embedding can be computed), BM25 over diff text and commit messages, and
-// entity-aware recall via MENTIONS edges. Results are fused with reciprocal
-// rank fusion and re-ranked by recency. All errors are logged and silently
-// discarded — HelixDB context is optional.
-func maybeAppendMEMContext(
-	ctx context.Context, app *AppContext, diff string,
-	units []git.CodeUnit, existingContext string,
-) string {
-	db := app.HelixDB()
-	if db == nil || !db.Enabled() || !db.IsAvailable(ctx) {
-		slog.Debug("helixdb: skipping context retrieval, server unavailable")
-
-		return existingContext
-	}
-
-	repoPath, err := app.RepoRoot(ctx)
-	if err != nil || repoPath == "" {
-		slog.Debug("helixdb: failed to get repo root", "error", err)
-
-		return existingContext
-	}
-
-	filePaths := make([]string, 0, len(units))
-	codeElemKeys := make([]string, 0, len(units))
-	for _, u := range units {
-		filePaths = append(filePaths, u.FilePath)
-		codeElemKeys = append(codeElemKeys, fmt.Sprintf("%s:%s:%s", repoPath, u.FilePath, u.Name))
-	}
-
-	// Query embedding for vector recall. A failed embedding call is non-fatal:
-	// retrieval falls back to BM25 and entity recall. The result is memoised
-	// per invocation and reused by post-commit persistence, so the same diff
-	// is embedded at most once.
-	var queryVec []float32
-	if vec, err := app.EmbedDiff(ctx, diff); err != nil {
-		slog.Debug("helixdb: query embedding failed, falling back to BM25", "error", err)
-	} else {
-		queryVec = vec
-	}
-
-	// Branch is memoised per invocation; each query building on it reuses the
-	// single subprocess spawn instead of paying one per query builder.
-	branch := app.Branch(ctx)
-
-	var groups []mem.RankedGroup
-
-	// 1. Hybrid recall: vector + BM25 over diff text + BM25 over messages.
-	query := mem.BuildHybridContextQuery(repoPath, branch, queryVec, diff, filePaths, maxContextRecords)
-	var rawResp map[string]any
-	if err := db.Exec(ctx, query, &rawResp); err != nil {
-		slog.Debug("helixdb hybrid context query failed", "error", err)
-	} else {
-		groups = append(groups, mem.CollectContextGroups(mem.NewResponse(rawResp))...)
-	}
-
-	// 2. Entity-aware recall: find commits mentioning the same code elements.
-	if len(codeElemKeys) > 0 {
-		entityQ := mem.BuildEntityContextQuery(repoPath, branch, codeElemKeys, 3)
-		var rawEntityResp map[string]any
-		if err := db.Exec(ctx, entityQ, &rawEntityResp); err != nil {
-			slog.Debug("helixdb entity context query failed", "error", err)
-		} else {
-			groups = append(groups, mem.CollectContextGroups(mem.NewResponse(rawEntityResp))...)
-		}
-	}
-
-	records := mem.FuseContextRecords(groups, maxContextRecords)
-	if len(records) == 0 {
-		return existingContext
-	}
-
-	logRetrievedRecords(records, repoPath, groups)
-	ctxStr := mem.FormatContextRecords(records)
-	if existingContext != "" {
-		return existingContext + "\n\n" + ctxStr
-	}
-
-	return ctxStr
-}
-
-// logRetrievedRecords logs a debug summary of what HelixDB recall produced.
-func logRetrievedRecords(records []mem.CommitRecord, repoPath string, groups []mem.RankedGroup) {
-	slog.Debug("helixdb: retrieved context records",
-		"count", len(records),
-		"repo", repoPath,
-		"sources", contextGroupKeys(groups),
-		"top", firstLine(records[0].Message),
-	)
-}
-
-// contextGroupKeys returns the retrieval sources that produced ranked results.
-func contextGroupKeys(groups []mem.RankedGroup) []string {
-	keys := make([]string, 0, len(groups))
-	for _, g := range groups {
-		keys = append(keys, g.Key)
-	}
-
-	return keys
-}
-
-// firstLine returns the first line of s, or "" if s is empty.
-func firstLine(s string) string {
-	line, _, _ := strings.Cut(s, "\n")
-
-	return line
 }
 
 // buildRepoContext returns a formatted string of repository file statistics,

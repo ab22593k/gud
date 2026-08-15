@@ -7,14 +7,13 @@ import "gud/internal/config"
 // History is a *int so an explicit "history": 0 (disable) survives JSON
 // round-trips; nil means the key is absent and is omitted from output.
 type ConfigDTO struct {
-	DetailLevel    string `json:"detail_level,omitempty"`
-	Profile        string `json:"profile,omitempty"`
-	Model          string `json:"model,omitempty"`
-	Hint           string `json:"hint,omitempty"`
-	History        *int   `json:"history,omitempty"`
-	APIKey         string `json:"api_key,omitempty"`
-	WrapLine       int    `json:"wrapline,omitempty"`
-	EmbeddingModel string `json:"embedding_model,omitempty"`
+	DetailLevel string `json:"detail_level,omitempty"`
+	Profile     string `json:"profile,omitempty"`
+	Model       string `json:"model,omitempty"`
+	Hint        string `json:"hint,omitempty"`
+	History     *int   `json:"history,omitempty"`
+	APIKey      string `json:"api_key,omitempty"`
+	WrapLine    int    `json:"wrapline,omitempty"`
 }
 
 // ToEntity converts the DTO to a domain Config entity.
@@ -24,11 +23,10 @@ func (d ConfigDTO) ToEntity() config.Config {
 		Profile:     config.ProfileName(d.Profile),
 		Model:       d.Model,
 
-		Hint:           d.Hint,
-		History:        d.History,
-		APIKey:         d.APIKey,
-		WrapLine:       d.WrapLine,
-		EmbeddingModel: d.EmbeddingModel,
+		Hint:     d.Hint,
+		History:  d.History,
+		APIKey:   d.APIKey,
+		WrapLine: d.WrapLine,
 	}
 }
 
@@ -39,10 +37,9 @@ func FromEntity(c config.Config) ConfigDTO {
 		Profile:     string(c.Profile),
 		Model:       c.Model,
 
-		Hint:           c.Hint,
-		History:        c.History,
-		APIKey:         c.APIKey,
-		WrapLine:       c.WrapLine,
-		EmbeddingModel: c.EmbeddingModel,
+		Hint:     c.Hint,
+		History:  c.History,
+		APIKey:   c.APIKey,
+		WrapLine: c.WrapLine,
 	}
 }

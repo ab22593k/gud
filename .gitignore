@@ -1,5 +1,8 @@
+.codegraph/
 .helix/
-target/
 *.log
-!.agents/types/
+
+target/
+
 !.opencode/agents/
+!.agents/types/
