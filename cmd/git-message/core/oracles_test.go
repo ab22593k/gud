@@ -282,76 +282,86 @@ func TestOracle_Image_VersionFormat(t *testing.T) {
 	}
 }
 
-// I: "Assisted-by:" trailer follows git trailer conventions.
+// I: trailer assembly goes through git's interpret-trailers parser, so the
+// "Assisted-by:" trailer follows git's canonical placement and deduplication
+// (addIfDifferent: same key and value is not repeated; a different value is
+// appended at the end of the block).
 func TestOracle_Image_AssistedByTrailer(t *testing.T) {
 	tests := []struct {
-		msg      string
-		model    string
-		wantSuff string
-		desc     string
+		msg   string
+		model string
+		want  string
+		desc  string
 	}{
 		{
-			msg:      "feat: add login\n\nImplement JWT auth",
-			model:    testModelName,
-			wantSuff: "\n\nAssisted-by: " + testModelName + "\n",
-			desc:     "appends trailer with blank line separator",
+			msg:   "feat: add login\n\nImplement JWT auth",
+			model: testModelName,
+			want:  "feat: add login\n\nImplement JWT auth\n\nAssisted-by: " + testModelName + "\n",
+			desc:  "appends trailer with blank line separator",
 		},
 		{
-			msg:      "fix: resolve crash\n\nAssisted-by: gemini-flash-latest\n",
-			model:    testModelName,
-			wantSuff: "Assisted-by: gemini-flash-latest\n",
-			desc:     "idempotent — no duplicate trailer",
+			msg:   "fix: resolve crash\n\nAssisted-by: gemini-flash-latest\n",
+			model: testModelName,
+			want:  "fix: resolve crash\n\nAssisted-by: gemini-flash-latest\n",
+			desc:  "idempotent — no duplicate trailer",
 		},
 		{
-			msg:      "chore: bump deps\n\nAssisted-by: gemini-flash-lite-latest\n",
-			model:    "gemini-flash-lite-latest",
-			wantSuff: "Assisted-by: gemini-flash-lite-latest\n",
-			desc:     "preserves existing trailer with same model",
+			msg:   "chore: bump deps\n\nAssisted-by: gemini-flash-latest\n",
+			model: "gemini-flash-lite-latest",
+			want:  "chore: bump deps\n\nAssisted-by: gemini-flash-latest\nAssisted-by: gemini-flash-lite-latest\n",
+			desc:  "duplicate key with different value is appended at block end",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			got := appendAssistedBy(tt.msg, tt.model)
-			if !strings.HasSuffix(strings.TrimSpace(got), strings.TrimSpace(tt.wantSuff)) {
-				t.Errorf("[I] appendAssistedBy:\n  got:  %q\n  want suffix: %q", got, tt.wantSuff)
+			got, err := assembleTrailers(t.Context(), tt.msg, nil, tt.model)
+			if err != nil {
+				t.Fatalf("[I] assembleTrailers: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("[I] assembleTrailers:\n  got:  %q\n  want: %q", got, tt.want)
 			}
 		})
 	}
 }
 
-// I: "Fixes:" trailers are inserted, one per issue, just before
-// "Assisted-by:" following git trailer conventions, and are idempotent.
+// Use trailers through git's interpret-trailers parser — one per
+// issue in flag order, idempotent per issue, and new trailers land at the end
+// of the existing trailer block (git-canonical reordering).
 func TestOracle_Image_IssueTrailer(t *testing.T) {
 	tests := []struct {
 		msg    string
 		issues []int
+		model  string
 		want   string
 		desc   string
 	}{
 		{
-			msg:    "feat: add login\n\nImplement JWT auth\n\nAssisted-by: " + testModelName,
+			msg:    "feat: add login\n\nImplement JWT auth",
 			issues: []int{123, 456},
-			want:   "feat: add login\n\nImplement JWT auth\n\nFixes: #123\nFixes: #456\n\nAssisted-by: " + testModelName + "\n",
-			desc:   "one Fixes trailer per issue, blank line before Assisted-by",
+			model:  testModelName,
+			want:   "feat: add login\n\nImplement JWT auth\n\nFixes: #123\nFixes: #456\nAssisted-by: " + testModelName + "\n",
+			desc:   "one Fixes trailer per issue before Assisted-by",
 		},
 		{
 			msg:    "fix: resolve crash\n\nFixes: #123\nAssisted-by: " + testModelName + "\n",
 			issues: []int{123, 456},
-			want:   "fix: resolve crash\n\nFixes: #123\nFixes: #456\n\nAssisted-by: " + testModelName + "\n",
-			desc:   "idempotent per issue — adds only the missing trailer",
+			model:  testModelName,
+			want:   "fix: resolve crash\n\nFixes: #123\nAssisted-by: " + testModelName + "\nFixes: #456\n",
+			desc:   "idempotent per issue — missing trailer appended at block end",
 		},
 		{
-			msg:    "chore: bump deps\n\nAssisted-by: gemini-flash-lite-latest\n",
+			msg:    "chore: bump deps",
 			issues: []int{3, 1, 2},
-			want:   "chore: bump deps\n\nFixes: #3\nFixes: #1\nFixes: #2\n\nAssisted-by: gemini-flash-lite-latest\n",
+			want:   "chore: bump deps\n\nFixes: #3\nFixes: #1\nFixes: #2\n",
 			desc:   "preserves the flag order",
 		},
 		{
 			msg:    "docs: update README",
 			issues: []int{7, 8},
 			want:   "docs: update README\n\nFixes: #7\nFixes: #8\n",
-			desc:   "appends after body when Assisted-by is absent",
+			desc:   "creates trailer block when none exists",
 		},
 		{
 			msg:    "docs: update README",
@@ -375,9 +385,12 @@ func TestOracle_Image_IssueTrailer(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			got := appendIssues(tt.msg, tt.issues)
+			got, err := assembleTrailers(t.Context(), tt.msg, tt.issues, tt.model)
+			if err != nil {
+				t.Fatalf("[I] assembleTrailers: %v", err)
+			}
 			if got != tt.want {
-				t.Errorf("[I] appendIssues:\n  got:  %q\n  want: %q", got, tt.want)
+				t.Errorf("[I] assembleTrailers:\n  got:  %q\n  want: %q", got, tt.want)
 			}
 		})
 	}
@@ -639,21 +652,6 @@ func TestOracle_Aspirations_ValidateSpeed(t *testing.T) {
 	avg := time.Since(start) / 1000
 	if avg > 1*time.Microsecond {
 		t.Errorf("[A] average Validate = %v, aspiration is < 1µs", avg)
-	}
-}
-
-// A: appendAssistedBy should be allocation‑friendly (runs on hot path).
-func TestOracle_Aspirations_AssistedBySpeed(t *testing.T) {
-	msg := "feat: add login\n\nImplement JWT auth with refresh tokens."
-	model := testModelName
-
-	start := time.Now()
-	for range 1000 {
-		_ = appendAssistedBy(msg, model)
-	}
-	avg := time.Since(start) / 1000
-	if avg > 5*time.Microsecond {
-		t.Errorf("[A] appendAssistedBy avg = %v, aspiration is < 5µs", avg)
 	}
 }
 

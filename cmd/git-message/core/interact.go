@@ -47,17 +47,16 @@ func interactiveCommit(ctx context.Context, cmd *cobra.Command, app *AppContext,
 		// preserved marks the current message as git's own (not AI-generated)
 		// so the edit path skips the Assisted-by trailer for it.
 		preserved := prepared != ""
-		var msg string
+		msg := prepared
+		prepared = ""
+		var err error
 		if preserved {
-			msg = prepared
-			prepared = ""
-			msg = appendIssues(msg, cfg.Issues)
+			msg, err = assembleTrailers(ctx, msg, cfg.Issues, "")
 		} else {
-			var err error
 			msg, err = generateCommitMessage(ctx, app, diff, promptContext)
-			if err != nil {
-				return err
-			}
+		}
+		if err != nil {
+			return err
 		}
 
 		action, edited := reviewMessage(cmd, scanner, out, msg, cfg.WrapLine)
@@ -75,10 +74,14 @@ func interactiveCommit(ctx context.Context, cmd *cobra.Command, app *AppContext,
 			}
 			// A preserved (git-drafted) message that the user then edits is
 			// still not AI-generated, so no Assisted-by trailer is added.
+			model := ""
 			if !preserved {
-				edited = appendAssistedBy(edited, client.ModelName())
+				model = client.ModelName()
 			}
-			edited = appendIssues(edited, cfg.Issues)
+			edited, err = assembleTrailers(ctx, edited, cfg.Issues, model)
+			if err != nil {
+				return err
+			}
 
 			return commitFinalized(ctx, app, out, diff, edited, units)
 
@@ -118,9 +121,7 @@ func generateCommitMessage(ctx context.Context, app *AppContext, diff, promptCon
 		return "", fmt.Errorf("failed to generate commit message: %w", err)
 	}
 
-	msg = appendAssistedBy(msg, app.Client().ModelName())
-
-	return appendIssues(msg, cfg.Issues), nil
+	return assembleTrailers(ctx, msg, cfg.Issues, app.Client().ModelName())
 }
 
 // reviewMessage runs the commit-message review: the TUI in a terminal, the
@@ -183,64 +184,23 @@ func promptAction(scanner *bufio.Scanner, out io.Writer) string {
 	}
 }
 
-// appendAssistedBy appends an "Assisted-by: <model>" git trailer to the message.
-// It ensures a blank line separator before the trailer, following git trailer conventions.
-// It is idempotent: calling it multiple times with the same model name does nothing.
-func appendAssistedBy(msg, modelName string) string {
-	trailer := "Assisted-by: " + modelName
-
-	msg = strings.TrimRight(msg, "\n")
-
-	// Already has this trailer — no-op aside from trailing newline.
-	if strings.HasSuffix(msg, trailer) {
-		return msg + "\n"
-	}
-
-	return msg + "\n\n" + trailer + "\n"
-}
-
-// appendIssues inserts one "Fixes: <issue>" git trailer per issue number just
-// before the trailing "Assisted-by:" trailer, or after the body if that trailer
-// is absent. It is a no-op for an empty list and idempotent: a "Fixes: #N"
-// trailer already present is not duplicated.
-func appendIssues(msg string, issues []int) string {
-	if len(issues) == 0 {
-		return msg
-	}
-	msg = strings.TrimRight(msg, "\n")
-
-	// Collect the missing trailers, in flag order.
-	block := make([]string, 0, len(issues))
+// assembleTrailers applies the Fixes trailers (one per issue, in flag order)
+// and the optional Assisted-by trailer through git's own interpret-trailers
+// parser, so ordering, deduplication, separators, and messages without a body
+// all follow git's canonical rules instead of string heuristics. An empty
+// model omits the Assisted-by trailer (e.g. for a preserved git message).
+func assembleTrailers(ctx context.Context, msg string, issues []int, model string) (string, error) {
+	var trailers []git.Trailer
 	for _, n := range issues {
-		if n <= 0 {
-			continue
+		if n > 0 {
+			trailers = append(trailers, git.Trailer{Key: "Fixes", Value: fmt.Sprintf("#%d", n)})
 		}
-		trailer := fmt.Sprintf("Fixes: #%d", n)
-		if strings.HasSuffix(msg, trailer) || strings.Contains(msg, "\n"+trailer+"\n") {
-			continue
-		}
-		block = append(block, trailer)
 	}
-	if len(block) == 0 {
-		return msg + "\n"
+	if model != "" {
+		trailers = append(trailers, git.Trailer{Key: "Assisted-by", Value: model})
 	}
 
-	trailers := strings.Join(block, "\n")
-
-	// Insert just before the trailing "Assisted-by:" trailer. A blank line
-	// separates the last "Fixes:" trailer from "Assisted-by:". When Fixes
-	// trailers already precede it (e.g. from an editor pass), insert after
-	// them instead of replacing their separator.
-	const sep = "\n\nAssisted-by: "
-	if idx := strings.LastIndex(msg, sep); idx >= 0 {
-		return msg[:idx] + "\n\n" + trailers + "\n\n" + strings.TrimPrefix(msg[idx:], "\n\n") + "\n"
-	}
-	const lineSep = "\nAssisted-by: "
-	if idx := strings.LastIndex(msg, lineSep); idx >= 0 {
-		return msg[:idx] + "\n" + trailers + "\n\n" + strings.TrimPrefix(msg[idx:], "\n") + "\n"
-	}
-
-	return msg + "\n\n" + trailers + "\n"
+	return git.AppendTrailers(ctx, msg, trailers)
 }
 
 // editMessage opens the user's $EDITOR with the given message content,

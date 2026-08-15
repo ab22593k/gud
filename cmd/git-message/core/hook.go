@@ -160,8 +160,10 @@ func generateAndWriteMsg(ctx context.Context, app *AppContext, diff, msgFile str
 		return fmt.Errorf("failed to generate commit message: %w", err)
 	}
 
-	msg = appendAssistedBy(msg, app.Client().ModelName())
-	msg = appendIssues(msg, cfg.Issues)
+	msg, err = assembleTrailers(ctx, msg, cfg.Issues, app.Client().ModelName())
+	if err != nil {
+		return fmt.Errorf("failed to apply trailers: %w", err)
+	}
 
 	if err := os.WriteFile(filepath.Clean(msgFile), []byte(msg), 0600); err != nil {
 		return fmt.Errorf("failed to write message file: %w", err)
