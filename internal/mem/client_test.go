@@ -14,27 +14,27 @@ func TestNewDB_DefaultURL(t *testing.T) {
 	if db == nil {
 		t.Fatal("expected non-nil DB")
 	}
-	if db.BaseURL() != "http://localhost:2232" {
+	if db.BaseURL() != "http://localhost:3223" {
 		t.Errorf("expected default URL, got %q", db.BaseURL())
 	}
 }
 
 func TestNewDB_CustomURL(t *testing.T) {
-	db := NewDB(Options{BaseURL: "http://helix-cloud:2232"})
-	if db.BaseURL() != "http://helix-cloud:2232" {
+	db := NewDB(Options{BaseURL: "http://helix-cloud:3223"})
+	if db.BaseURL() != "http://helix-cloud:3223" {
 		t.Errorf("expected custom URL, got %q", db.BaseURL())
 	}
 }
 
 func TestNewDB_WithAPIKey(t *testing.T) {
-	db := NewDB(Options{BaseURL: "http://localhost:2232", APIKey: "hx_test_key"})
+	db := NewDB(Options{BaseURL: "http://localhost:3223", APIKey: "hx_test_key"})
 	if db.APIKey() != "hx_test_key" {
 		t.Errorf("expected API key to be set, got %q", db.APIKey())
 	}
 }
 
 func TestDB_IsAvailable_NoConnection(t *testing.T) {
-	db := NewDB(Options{BaseURL: "http://localhost:2232"})
+	db := NewDB(Options{BaseURL: "http://localhost:3223"})
 	// Should not panic; returns false gracefully
 	available := db.IsAvailable(context.Background())
 	if available {

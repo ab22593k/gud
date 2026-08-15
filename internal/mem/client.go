@@ -51,7 +51,7 @@ type DB struct {
 func NewDB(opts Options) *DB {
 	baseURL := opts.BaseURL
 	if baseURL == "" {
-		baseURL = "http://localhost:2232"
+		baseURL = "http://localhost:3223"
 	}
 
 	db := &DB{

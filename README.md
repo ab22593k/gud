@@ -1,23 +1,12 @@
 # gud
 
-A CLI tool that generates meaningful git commit messages using AI, based on your staged changes. Supports multiple AI agent profiles and detail levels.
+concisely describe code changes in natural language
 
 ## Naming
-
-This tool has two names that refer to the same binary:
 
 - **`git message`** — the canonical invocation. The binary is built from `cmd/git-message`
   and named `git-message`, so it lands on your PATH as `git message` (git runs any
   `git-*` executable as `git <name>`).
-- **`gud message`** — the product name, used in version output (`gud version X.Y.Z`).
-  It is the same command; invoke it this way if you install or alias the binary as `gud`.
-
-The root command is registered as `message` (not `gud`) so help output reads
-naturally as `git message ...`. This is intentional git integration.
-
-# Stage some changes
-
-git add .
 
 ## Usage
 
@@ -71,14 +60,14 @@ git message --profile astrophysicist
 ## Memory
 
 gud persists commit history to HelixDB for context-aware generation. Memory is
-always on and connects to the default server at `http://localhost:2232`; gud
+always on and connects to the default server at `http://localhost:3223`; gud
 never starts or stops a HelixDB server itself — it connects to one shared
 server, so a single database is reused across all your projects. Repos are
 isolated per `repo_path` (the tenant key), so project data never mixes.
 
 ```bash
 # Start one HelixDB server with persistent disk storage, once per machine:
-helix start --disk   # or: docker run -d --name helixdb -p 2232:8080 ghcr.io/helixdb/enterprise-dev
+helix start --disk   # or: docker run -d --name helixdb -p 3223:8080 ghcr.io/helixdb/enterprise-dev
 
 git message
 ```
