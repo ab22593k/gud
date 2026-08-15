@@ -3,10 +3,9 @@ name = "gud"
 queries = "db"
 container_runtime = "docker"
 
-[local.disk]
-port = 2232
-image = "ghcr.io/helixdb/enterprise-dev"
-tag = "latest"
-storage = "disk"
+[local.dev]
+port = 3223
+image = "ghcr.io/helixdb/helixdb"
+tag = "v0.0.3"
 
 [enterprise]

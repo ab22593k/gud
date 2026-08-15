@@ -3,6 +3,7 @@ package core
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -27,41 +28,41 @@ const (
 	actionAbort      = "abort"
 )
 
-// interactiveCommit runs the generate → review → commit loop.
+// interactiveCommit runs the generate → review → commit loop. When prepared is
+// non-empty (a git operation is in progress and git already drafted a message)
+// the first pass presents it instead of generating a fresh standalone message.
 func interactiveCommit(ctx context.Context, cmd *cobra.Command, app *AppContext,
-	diff, promptContext string, units []git.CodeUnit) error {
+	diff, promptContext string, units []git.CodeUnit, op git.Operation, prepared string) error {
 	scanner := bufio.NewScanner(cmd.InOrStdin())
 	out := cmd.OutOrStdout()
+
+	if prepared != "" {
+		_, _ = fmt.Fprintf(out, "Git %s in progress — using git's prepared message (press [r] to regenerate).\n", op)
+	}
 
 	for {
 		cfg := app.Config()
 		client := app.Client()
-		profileContent := resolveProfileContent(string(cfg.Profile))
-		msg, err := showProgress(ctx, "Rolling in, obscuring the landscape of the codebase...", func() (string, error) {
-			return client.GenerateCommitMessageWithContent(ctx, diff, promptContext, request.DetailLevel(cfg.DetailLevel),
-				cfg.Hint, request.ProfileName(cfg.Profile), profileContent, cfg.WrapLine)
-		})
-		if err != nil {
-			return fmt.Errorf("failed to generate commit message: %w", err)
+
+		// preserved marks the current message as git's own (not AI-generated)
+		// so the edit path skips the Assisted-by trailer for it.
+		preserved := prepared != ""
+		var msg string
+		if preserved {
+			msg = prepared
+			prepared = ""
+			msg = appendIssues(msg, cfg.Issues)
+		} else {
+			var err error
+			msg, err = generateCommitMessage(ctx, app, diff, promptContext)
+			if err != nil {
+				return err
+			}
 		}
 
-		msg = appendAssistedBy(msg, client.ModelName())
-		msg = appendIssues(msg, cfg.Issues)
-
-		// Use TUI in terminal mode, fall back to text prompt otherwise
-		var action string
-		if file, ok := cmd.InOrStdin().(*os.File); ok && isTerminal(file) {
-			var edited string
-			action, edited, err = tui.RunCommitReview(msg, cfg.WrapLine)
-			if err != nil {
-				action = actionAbort
-			}
-			// If the user edited inline, use the TUI's version.
-			if action == actionCommit && edited != "" {
-				msg = edited
-			}
-		} else {
-			action = promptAction(scanner, out)
+		action, edited := reviewMessage(cmd, scanner, out, msg, cfg.WrapLine)
+		if action == actionCommit && edited != "" {
+			msg = edited
 		}
 		switch action {
 		case actionCommit:
@@ -72,12 +73,22 @@ func interactiveCommit(ctx context.Context, cmd *cobra.Command, app *AppContext,
 			if err != nil {
 				return fmt.Errorf("failed to edit message: %w", err)
 			}
-			edited = appendAssistedBy(edited, client.ModelName())
+			// A preserved (git-drafted) message that the user then edits is
+			// still not AI-generated, so no Assisted-by trailer is added.
+			if !preserved {
+				edited = appendAssistedBy(edited, client.ModelName())
+			}
 			edited = appendIssues(edited, cfg.Issues)
 
 			return commitFinalized(ctx, app, out, diff, edited, units)
 
 		case actionRegenerate:
+			if client == nil {
+				_, _ = fmt.Fprintln(out, "Regeneration requires GOOGLE_API_KEY — aborting; git's prepared message is unchanged.")
+
+				return nil
+			}
+
 			continue
 
 		case actionAbort:
@@ -86,6 +97,48 @@ func interactiveCommit(ctx context.Context, cmd *cobra.Command, app *AppContext,
 			return nil
 		}
 	}
+}
+
+// generateCommitMessage runs the model and returns the message with the
+// Assisted-by and issue trailers applied. It errors when no request client is
+// available (no API key configured) so a preserved git message can be used
+// without one.
+func generateCommitMessage(ctx context.Context, app *AppContext, diff, promptContext string) (string, error) {
+	if app.Client() == nil {
+		return "", errors.New("failed to generate commit message: request client is unavailable (set GOOGLE_API_KEY)")
+	}
+
+	cfg := app.Config()
+	profileContent := resolveProfileContent(string(cfg.Profile))
+	msg, err := showProgress(ctx, "Rolling in, obscuring the landscape of the codebase...", func() (string, error) {
+		return app.Client().GenerateCommitMessageWithContent(ctx, diff, promptContext, request.DetailLevel(cfg.DetailLevel),
+			cfg.Hint, request.ProfileName(cfg.Profile), profileContent, cfg.WrapLine)
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to generate commit message: %w", err)
+	}
+
+	msg = appendAssistedBy(msg, app.Client().ModelName())
+
+	return appendIssues(msg, cfg.Issues), nil
+}
+
+// reviewMessage runs the commit-message review: the TUI in a terminal, the
+// plain-text prompt otherwise. It returns the chosen action and any inline
+// edit the TUI produced.
+func reviewMessage(cmd *cobra.Command, scanner *bufio.Scanner, out io.Writer,
+	msg string, wrapLine int) (action, edited string) {
+	if file, ok := cmd.InOrStdin().(*os.File); ok && isTerminal(file) {
+		var err error
+		action, edited, err = tui.RunCommitReview(msg, wrapLine)
+		if err != nil {
+			return actionAbort, ""
+		}
+
+		return action, edited
+	}
+
+	return promptAction(scanner, out), ""
 }
 
 // commitFinalized runs the git commit, reports success, and persists the

@@ -31,6 +31,15 @@ git message profile list --remote    Browse available AI profiles
 git message profile save <slug>      Download a profile
 ```
 
+## Operation-aware generation
+
+When git is mid-operation — a merge, cherry-pick, revert, rebase (including
+`squash` and `fixup` stops) — `git message` detects the in-progress state
+before prompting and presents the message git already prepared instead of
+generating a fresh standalone one, preserving or combining the prior intent.
+Press `r` to regenerate; a regenerated message is generated with the operation
+fed into the prompt so it stays on-message.
+
 ## Configuration
 
 Priority (highest to lowest): CLI flags → env vars → `./gud.json` → `~/.config/gud/config.json`

@@ -30,13 +30,27 @@ func runGenerate(cmd *cobra.Command, _ []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// Detect the in-progress git operation (merge, cherry-pick, revert,
+	// rebase, squash, fixup) before checking staged changes: during an
+	// operation stop the message may come from git's prepared message
+	// instead of the staged diff, and some stops (e.g. a reword or a clean
+	// squash message edit) have no staged changes at all.
+	op := app.Operation(ctx)
+
 	// Check for staged changes before any interactive flow. A user with
 	// nothing staged should get the "no staged changes" error immediately,
 	// not a HelixDB probe or a profile suggestion that may write
 	// .gud-skip/gud.json. InitHelixDB/InitClient run after this check.
 	diff, err := getStagedDiffOrError(ctx)
 	if err != nil {
-		return err
+		if op == git.OperationNone {
+			return err
+		}
+		// A git operation stop without staged changes is expected (e.g. a
+		// reword stop): the commit message is git's prepared one, not
+		// derived from a diff.
+		slog.Debug("no staged changes while a git operation is in progress; using prepared message", "operation", op)
+		diff = ""
 	}
 
 	if err := app.InitHelixDB(ctx); err != nil {
@@ -44,11 +58,20 @@ func runGenerate(cmd *cobra.Command, _ []string) error {
 	}
 
 	if err := app.InitClient(ctx); err != nil {
-		return err
+		// During an operation stop the message is git's prepared one, so an
+		// API key is only needed if the user asks to regenerate. Completing
+		// a merge or squash must not fail just because no key is configured.
+		if op != git.OperationNone {
+			slog.Debug("no request client while a git operation is in progress; regeneration will be unavailable", "error", err)
+		} else {
+			return err
+		}
 	}
 
 	// Suggest a profile if none is configured (first invocation in this repo).
-	if app.Config().Profile == "" {
+	// Skipped during an operation stop: completing a merge must not be
+	// interrupted by a first-run profile prompt.
+	if app.Config().Profile == "" && op == git.OperationNone {
 		if err := suggestProfileIfNeeded(ctx, cmd, app); err != nil {
 			slog.Debug("profile suggestion skipped", "error", err)
 		}
@@ -58,8 +81,49 @@ func runGenerate(cmd *cobra.Command, _ []string) error {
 
 	promptContext := buildRepoContext(ctx, app)
 	promptContext = joinContexts(promptContext, buildHistoryContext(ctx, app))
+	promptContext = joinContexts(promptContext, buildOperationContext(op))
 
-	return interactiveCommit(ctx, cmd, app, diff, promptContext, units)
+	// When git is mid-operation it has already prepared the message that
+	// preserves (merge, cherry-pick, revert, rebase, fixup) or combines
+	// (squash) prior intent. Present that message instead of generating a
+	// normal standalone one; the review loop can still regenerate with the
+	// operation context above.
+	prepared := ""
+	if op != git.OperationNone {
+		prepared = git.PreparedMessage(ctx, op)
+	}
+
+	return interactiveCommit(ctx, cmd, app, diff, promptContext, units, op, prepared)
+}
+
+// buildOperationContext returns a prompt fragment describing the in-progress
+// git operation, or "" for an ordinary commit. It lets a regenerated message
+// (or any generation that happens mid-operation) respect what git is asking
+// for instead of producing a standalone message out of context.
+func buildOperationContext(op git.Operation) string {
+	switch op {
+	case git.OperationMerge:
+		return "Git operation in progress: merge. This commit completes an in-progress merge; " +
+			"it should summarise the merge (for example \"Merge branch 'X' into Y\") " +
+			"and any conflict resolution."
+	case git.OperationCherryPick:
+		return "Git operation in progress: cherry-pick. This commit re-applies an existing commit; " +
+			"preserve the original commit's subject and intent."
+	case git.OperationRevert:
+		return "Git operation in progress: revert. This commit reverts an earlier change; " +
+			"the message should identify the commit being reverted."
+	case git.OperationRebase:
+		return "Git operation in progress: rebase. This commit continues a rebase by re-applying " +
+			"a commit; preserve the original commit's message and intent."
+	case git.OperationSquash:
+		return "Git operation in progress: squash. This commit combines several commits into one; " +
+			"the message should merge the subjects and intent of the combined commits."
+	case git.OperationFixup:
+		return "Git operation in progress: fixup. This commit folds changes into an earlier commit; " +
+			"preserve the target commit's message and intent."
+	}
+
+	return ""
 }
 
 // resolveProfileContent returns the AGENTS.md content for a cached profile.

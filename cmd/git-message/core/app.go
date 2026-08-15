@@ -41,6 +41,16 @@ type AppContext struct {
 	// branchFn is the branch lookup used by Branch. It is swappable in tests
 	// to avoid subprocess spawns; nil means git.GetBranch.
 	branchFn func(context.Context) string
+
+	// operation is memoised from the first git operation detection. The
+	// in-progress operation (merge, cherry-pick, revert, rebase, squash,
+	// fixup) cannot change within a single invocation, so detection runs at
+	// most one subprocess probe.
+	operation   git.Operation
+	operationOK bool
+	// operationFn is the operation lookup used by Operation. It is swappable
+	// in tests to avoid subprocess spawns; nil means git.DetectOperation.
+	operationFn func(context.Context) git.Operation
 }
 
 // NewAppContext loads and merges configuration from all sources (CLI flags,
@@ -186,4 +196,21 @@ func (a *AppContext) Branch(ctx context.Context) string {
 	}
 
 	return a.branch
+}
+
+// Operation returns the git operation the current commit completes (merge,
+// cherry-pick, revert, rebase, squash, fixup), memoised per invocation so the
+// state-file probe runs at most once. Returns git.OperationNone for ordinary
+// commits or when git state cannot be read.
+func (a *AppContext) Operation(ctx context.Context) git.Operation {
+	if !a.operationOK {
+		if a.operationFn != nil {
+			a.operation = a.operationFn(ctx)
+		} else {
+			a.operation = git.DetectOperation(ctx)
+		}
+		a.operationOK = true
+	}
+
+	return a.operation
 }

@@ -6,3 +6,4 @@ target/
 
 !.opencode/agents/
 !.agents/types/
+.env
