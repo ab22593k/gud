@@ -80,7 +80,7 @@ func runGenerate(cmd *cobra.Command, _ []string) error {
 	units := git.ExtractCodeUnits(diff)
 
 	promptContext := buildRepoContext(ctx, app)
-	promptContext = joinContexts(promptContext, buildHistoryContext(ctx, app))
+	promptContext = joinContexts(promptContext, buildHistoryContext(ctx, app, diff))
 	promptContext = joinContexts(promptContext, buildOperationContext(op))
 
 	// When git is mid-operation it has already prepared the message that
@@ -262,23 +262,45 @@ func joinContexts(a, b string) string {
 	}
 }
 
-// buildHistoryContext returns a formatted string of recent commit history, or
-// empty string if --history is disabled or there are no recent commits.
-// Errors from git are logged at debug level and silently discarded —
-// history is optional context for the AI prompt and should never block generation.
-func buildHistoryContext(ctx context.Context, app *AppContext) string {
-	var history string
-	if n := app.Config().HistoryValue(); n > 0 {
-		var err error
-		history, err = git.GetRecentCommits(ctx, n)
-		if err != nil {
-			slog.Debug("failed to get recent commits, proceeding without history", "error", err)
-			history = ""
-		}
-	}
-	if history != "" {
-		history = "Recent commits:\n" + history
+// buildHistoryContext returns commit-history context for the prompt, or empty
+// string if --history is disabled or no history is available.
+//
+// History is graph-relative when possible: with a configured upstream it lists
+// commits on the current topic since divergence (merge-base .. HEAD), limited
+// to the staged paths when a diff is available; without an upstream it falls
+// back to the n most recent commits. Errors are logged at debug level and
+// silently discarded — history is optional context and should never block
+// generation.
+func buildHistoryContext(ctx context.Context, app *AppContext, diff string) string {
+	n := app.Config().HistoryValue()
+	if n <= 0 {
+		return ""
 	}
 
-	return history
+	if upstream := git.GetUpstreamBranch(ctx); upstream != "" {
+		paths := git.ExtractChangedPaths(diff)
+		history, err := git.GetTopicHistory(ctx, upstream, n, paths)
+		if err == nil && strings.TrimSpace(history) != "" {
+			label := fmt.Sprintf("Commits on %s since diverging from %s:", app.Branch(ctx), upstream)
+			if len(paths) > 0 {
+				label += " (staged files)"
+			}
+
+			return label + "\n" + strings.TrimRight(history, "\n")
+		}
+		// No divergence yet or upstream unreachable — fall back to recent
+		// commits below.
+	}
+
+	history, err := git.GetRecentCommits(ctx, n)
+	if err != nil {
+		slog.Debug("failed to get recent commits, proceeding without history", "error", err)
+
+		return ""
+	}
+	if strings.TrimSpace(history) == "" {
+		return ""
+	}
+
+	return "Recent commits:\n" + strings.TrimRight(history, "\n")
 }

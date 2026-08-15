@@ -85,7 +85,7 @@ func addPersistentFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().String("detail-level", "standard", "Set the detail level (minimal, standard, detailed)")
 	cmd.PersistentFlags().String("profile", "", "AI agent profile slug (download with 'git message profile save <slug>')")
 	cmd.PersistentFlags().String("hint", "", "Focus boundaries for the AI")
-	cmd.PersistentFlags().Int("history", 5, "Number of recent commits to include as context (0 to disable)")
+	cmd.PersistentFlags().Int("history", 5, "Number of topic commits since diverging from upstream (0 to disable)")
 	cmd.PersistentFlags().String("model", "", "Gemini model to use (or use GEMINI_MODEL env)")
 	cmd.PersistentFlags().StringSlice("issue", nil,
 		"Issue numbers this commit fixes (comma-separated, e.g. 123,456; adds a 'Fixes: #N' trailer per issue)")
