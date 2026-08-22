@@ -9,6 +9,10 @@ import (
 const (
 	// DefaultTenantProperty is the canonical property name for tenant isolation.
 	DefaultTenantProperty = "tenantId"
+
+	// DefaultEmbeddingDimension is the vector dimension used for embedding
+	// indexes (text-embedding-3-small, 1536 dimensions).
+	DefaultEmbeddingDimension = 1536
 )
 
 // FileChange represents a single file modified in a commit.
@@ -133,10 +137,10 @@ func BuildCommitNodeQuery(repoPath, branch string) *helix.Traversal {
 type MemoryKind string
 
 const (
-	MemoryFact      MemoryKind = "fact"
+	MemoryFact       MemoryKind = "fact"
 	MemoryPreference MemoryKind = "preference"
-	MemoryEpisode   MemoryKind = "episode"
-	MemoryProcedure MemoryKind = "procedure"
+	MemoryEpisode    MemoryKind = "episode"
+	MemoryProcedure  MemoryKind = "procedure"
 )
 
 // MemoryData represents a general memory node beyond commits.
@@ -155,10 +159,10 @@ type MemoryData struct {
 	DeletedAt *time.Time
 	ExpiresAt *time.Time
 
-	EventStartAt  *time.Time
-	EventEndAt    *time.Time
-	TemporalText  string
-	Timezone      string
+	EventStartAt *time.Time
+	EventEndAt   *time.Time
+	TemporalText string
+	Timezone     string
 
 	CreatedAt time.Time
 	UpdatedAt time.Time

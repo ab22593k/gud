@@ -143,8 +143,12 @@ func (db *DB) EnsureSchema(ctx context.Context) error {
 		helix.G().CreateTextIndexNodes("Memory", "content", DefaultTenantProperty),
 
 		// Tenant-partitioned vector index for Commit embeddings.
-		helix.G().CreateVectorIndexNodes("Commit", "embedding", DefaultTenantProperty),
-		helix.G().CreateVectorIndexNodes("Memory", "embedding", DefaultTenantProperty),
+		helix.G().CreateVectorIndexNodes(
+			"Commit", "embedding", DefaultEmbeddingDimension, helix.VectorDistanceCosine, DefaultTenantProperty,
+		),
+		helix.G().CreateVectorIndexNodes(
+			"Memory", "embedding", DefaultEmbeddingDimension, helix.VectorDistanceCosine, DefaultTenantProperty,
+		),
 
 		// Commit equality indexes.
 		helix.G().CreateIndexIfNotExists(helix.NodeEqualityIndex("Commit", "id")),
