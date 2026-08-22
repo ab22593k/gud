@@ -101,9 +101,11 @@ func TestSuggestProfile_Top3ByScore(t *testing.T) {
 	if len(got) != 2 {
 		t.Errorf("SuggestProfile = %d results, want 2", len(got))
 	}
+
 	if len(got) >= 1 && got[0].Slug != "fullstack" {
 		t.Errorf("suggestion[0] = %q, want %q", got[0].Slug, "fullstack")
 	}
+
 	if len(got) >= 2 && got[1].Slug != "go-dev" {
 		t.Errorf("suggestion[1] = %q, want %q", got[1].Slug, "go-dev")
 	}
@@ -115,6 +117,7 @@ func TestFormatSuggestionMessage_Empty(t *testing.T) {
 	if got := FormatSuggestionMessage(nil); got != "" {
 		t.Errorf("FormatSuggestionMessage(nil) = %q, want ''", got)
 	}
+
 	if got := FormatSuggestionMessage([]profile.CatalogEntry{}); got != "" {
 		t.Errorf("FormatSuggestionMessage(empty) = %q, want ''", got)
 	}
@@ -137,9 +140,11 @@ func TestFormatSuggestionMessage_HappyPath(t *testing.T) {
 	if !strings.Contains(got, "go-developer") {
 		t.Errorf("FormatSuggestionMessage missing 'go-developer', got:\n%s", got)
 	}
+
 	if !strings.Contains(got, "ts-developer") {
 		t.Errorf("FormatSuggestionMessage missing 'ts-developer', got:\n%s", got)
 	}
+
 	if !strings.Contains(got, "Select a profile") {
 		t.Errorf("FormatSuggestionMessage missing prompt, got:\n%s", got)
 	}

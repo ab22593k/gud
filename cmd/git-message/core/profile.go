@@ -22,7 +22,9 @@ func initProfileManager() {
 	if profileManager != nil {
 		return
 	}
+
 	var err error
+
 	profileManager, err = profile.NewManager()
 	if err != nil {
 		panic(fmt.Sprintf("init profile manager: %v", err))
@@ -92,10 +94,12 @@ func runLocalTUIPicker(cmd *cobra.Command, profiles []profile.Profile) error {
 
 	for i, p := range profiles {
 		cached[p.Slug] = true
+
 		workMode := p.WorkMode
 		if workMode == "" {
 			workMode = "Cached"
 		}
+
 		entries[i] = profile.CatalogEntry{
 			Slug:       p.Slug,
 			Profession: p.Profession,
@@ -108,6 +112,7 @@ func runLocalTUIPicker(cmd *cobra.Command, profiles []profile.Profile) error {
 	if err != nil {
 		return fmt.Errorf("picker: %w", err)
 	}
+
 	if selected != nil {
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(),
 			"\nProfile %q selected. Use: git message --profile %s\n",
@@ -152,6 +157,7 @@ func listRemoteProfiles(cmd *cobra.Command) error {
 func runTUIPicker(cmd *cobra.Command, entries []profile.CatalogEntry) error {
 	// Build the set of already-cached slugs for cache indicators in the TUI.
 	cached := make(map[string]bool)
+
 	if cachedList, err := profileManager.List(); err == nil {
 		for _, p := range cachedList {
 			cached[p.Slug] = true
@@ -168,6 +174,7 @@ func runTUIPicker(cmd *cobra.Command, entries []profile.CatalogEntry) error {
 	if err != nil {
 		return fmt.Errorf("picker: %w", err)
 	}
+
 	if selected != nil {
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(),
 			"\nProfile %q saved. Use: git message --profile %s\n",
@@ -229,6 +236,7 @@ func categorizeByWorkMode(entries []profile.CatalogEntry) []category {
 	for name, list := range catMap {
 		cats = append(cats, category{name, len(list)})
 	}
+
 	sort.Slice(cats, func(i, j int) bool { return cats[i].name < cats[j].name })
 
 	return cats
@@ -259,6 +267,7 @@ func printDetailedEntries(w io.Writer, entries []profile.CatalogEntry) {
 			currentWorkMode = e.WorkMode
 			_, _ = fmt.Fprintf(w, "\n  [%s]\n", currentWorkMode)
 		}
+
 		_, _ = fmt.Fprintf(w, "    %-50s %s\n", e.Slug, truncate(e.Summary, 70))
 	}
 }
@@ -277,6 +286,7 @@ Run 'git message profile list --remote' to see all available slugs.`,
   git message profile save molecular-biologist`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		initProfileManager()
+
 		slug := args[0]
 
 		if profileManager.IsCached(slug) {
@@ -304,6 +314,7 @@ var profileRemoveCmd = &cobra.Command{
 	Example: `  git message profile remove astrophysicist`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		initProfileManager()
+
 		slug := args[0]
 
 		if err := profileManager.Remove(slug); err != nil {
@@ -325,16 +336,19 @@ var profileShowCmd = &cobra.Command{
   git message profile show astrophysicist --remote`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		initProfileManager()
+
 		slug := args[0]
 
 		showRemote, _ := cmd.Flags().GetBool("remote")
 
 		if showRemote {
 			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Fetching profile %q from remote...\n", slug)
+
 			content, err := profileManager.FetchProfile(context.Background(), slug)
 			if err != nil {
 				return fmt.Errorf("fetch remote: %w", err)
 			}
+
 			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Profile: %s (remote)\n", slug)
 			_, _ = fmt.Fprintln(cmd.OutOrStdout())
 			_, _ = fmt.Fprintln(cmd.OutOrStdout(), content)
@@ -350,6 +364,7 @@ var profileShowCmd = &cobra.Command{
 		}
 
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Profile: %s (cached)\n", p.Slug)
+
 		_, _ = fmt.Fprintln(cmd.OutOrStdout())
 		if p.Content != "" {
 			_, _ = fmt.Fprintln(cmd.OutOrStdout(), truncate(p.Content, 2000))

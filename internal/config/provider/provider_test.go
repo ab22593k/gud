@@ -16,6 +16,7 @@ func TestDefaultConfigPath(t *testing.T) {
 	}
 
 	home, _ := os.UserHomeDir()
+
 	expected := filepath.Join(home, ".config", "gud", "config.json")
 	if path != expected {
 		t.Errorf("DefaultConfigPath() = %q, want %q", path, expected)
@@ -66,6 +67,7 @@ func TestLoadFileNotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal("Load() should fail for nonexistent file")
 	}
+
 	if !os.IsNotExist(err) {
 		t.Errorf("Load() error should be IsNotExist, got %v", err)
 	}
@@ -130,6 +132,7 @@ func TestMultipleSaveCycles(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Load cycle %d failed: %v", i, err)
 		}
+
 		if loaded.HistoryValue() != i {
 			t.Errorf("Cycle %d: History = %d, want %d", i, loaded.HistoryValue(), i)
 		}

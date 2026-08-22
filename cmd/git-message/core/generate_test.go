@@ -19,6 +19,7 @@ func TestResolveProfileContent_EmptyProfile(t *testing.T) {
 
 func TestResolveProfileContent_NotFound(t *testing.T) {
 	orig := profileManager
+
 	t.Cleanup(func() { profileManager = orig })
 
 	profileManager = profile.NewManagerWithDir(t.TempDir())
@@ -32,11 +33,13 @@ func TestResolveProfileContent_NotFound(t *testing.T) {
 // so hook-mode degradation is surfaced to users instead of hiding silently.
 func TestResolveProfileContent_UncachedWarns(t *testing.T) {
 	orig := profileManager
+
 	t.Cleanup(func() { profileManager = orig })
 	profileManager = profile.NewManagerWithDir(t.TempDir())
 
 	// Capture slog output via a custom default logger.
 	var buf bytes.Buffer
+
 	origDefault := slog.Default()
 	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	slog.SetDefault(logger)
@@ -51,6 +54,7 @@ func TestResolveProfileContent_UncachedWarns(t *testing.T) {
 	if !strings.Contains(out, "level=WARN") {
 		t.Errorf("expected WARN level log, got:\n%s", out)
 	}
+
 	if !strings.Contains(out, "not cached") ||
 		!strings.Contains(out, "git message profile save") ||
 		!strings.Contains(out, "nonexistent") {
@@ -60,15 +64,18 @@ func TestResolveProfileContent_UncachedWarns(t *testing.T) {
 
 func TestResolveProfileContent_Found(t *testing.T) {
 	orig := profileManager
+
 	t.Cleanup(func() { profileManager = orig })
 
 	tmpDir := t.TempDir()
+
 	m := profile.NewManagerWithDir(tmpDir)
 	if err := m.Save("test-agent", profile.Profile{
 		Content: "You are a test agent.",
 	}); err != nil {
 		t.Fatalf("Save() error = %v", err)
 	}
+
 	profileManager = m
 
 	got := resolveProfileContent("test-agent")
@@ -123,6 +130,7 @@ func TestAppendDeletedContext(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got := appendDeletedContext(tt.diff, tt.deleted)
 			if got != tt.want {
 				t.Errorf("appendDeletedContext():\n  got:  %q\n  want: %q", got, tt.want)

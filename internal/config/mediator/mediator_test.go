@@ -11,8 +11,10 @@ import (
 
 func TestConfigFromEnv(t *testing.T) {
 	//nolint:gosec // Test uses fake credentials.
-	const testAPIKey = "test-env-api-key"
-	const testModel = "test-env-model"
+	const (
+		testAPIKey = "test-env-api-key"
+		testModel  = "test-env-model"
+	)
 
 	t.Setenv("GUD_DETAIL_LEVEL", "minimal")
 	t.Setenv("GUD_PROFILE", "env-profile")
@@ -27,21 +29,27 @@ func TestConfigFromEnv(t *testing.T) {
 	if cfg.DetailLevel != config.DetailMinimal {
 		t.Errorf("DetailLevel = %q, want %q", cfg.DetailLevel, config.DetailMinimal)
 	}
+
 	if cfg.Profile != config.ProfileName("env-profile") {
 		t.Errorf("Profile = %q", cfg.Profile)
 	}
+
 	if cfg.Model != testModel {
 		t.Errorf("Model = %q", cfg.Model)
 	}
+
 	if cfg.Hint != "env-hint" {
 		t.Errorf("Hint = %q", cfg.Hint)
 	}
+
 	if cfg.HistoryValue() != 7 {
 		t.Errorf("History = %d", cfg.HistoryValue())
 	}
+
 	if cfg.APIKey != testAPIKey {
 		t.Errorf("APIKey = %q", cfg.APIKey)
 	}
+
 	if cfg.WrapLine != 100 {
 		t.Errorf("WrapLine = %d", cfg.WrapLine)
 	}
@@ -49,26 +57,33 @@ func TestConfigFromEnv(t *testing.T) {
 
 func TestConfigFromEnvUnset(t *testing.T) {
 	t.Setenv("GOOGLE_API_KEY", "")
+
 	cfg := configFromEnv()
 
 	if cfg.DetailLevel != "" {
 		t.Errorf("DetailLevel = %q, want empty", cfg.DetailLevel)
 	}
+
 	if cfg.Profile != "" {
 		t.Errorf("Profile = %q, want empty", cfg.Profile)
 	}
+
 	if cfg.Model != "" {
 		t.Errorf("Model = %q, want empty", cfg.Model)
 	}
+
 	if cfg.Hint != "" {
 		t.Errorf("Hint = %q, want empty", cfg.Hint)
 	}
+
 	if cfg.HistoryValue() != 0 {
 		t.Errorf("History = %d, want 0", cfg.HistoryValue())
 	}
+
 	if cfg.APIKey != "" {
 		t.Errorf("APIKey = %q, want empty", cfg.APIKey)
 	}
+
 	if cfg.WrapLine != 0 {
 		t.Errorf("WrapLine = %d, want 0", cfg.WrapLine)
 	}
@@ -77,6 +92,7 @@ func TestConfigFromEnvUnset(t *testing.T) {
 func TestMediatorLoad(t *testing.T) {
 	xdgDir := t.TempDir()
 	xdgPath := filepath.Join(xdgDir, "config.json")
+
 	xdgP := provider.NewFileProvider(xdgPath)
 	if err := xdgP.Save(config.Config{
 		DetailLevel: config.DetailDetailed,
@@ -87,6 +103,7 @@ func TestMediatorLoad(t *testing.T) {
 	}
 
 	cwdDir := t.TempDir()
+
 	cwdP := provider.NewFileProvider(filepath.Join(cwdDir, "gud.json"))
 	if err := cwdP.Save(config.Config{
 		Model:   "cwd-model",
@@ -105,6 +122,7 @@ func TestMediatorLoad(t *testing.T) {
 	}
 
 	m := &Mediator{XDGProvider: xdgP, CWDProvider: cwdP}
+
 	cfg, err := m.Load(cliCfg)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
@@ -119,6 +137,7 @@ func TestMediatorLoad(t *testing.T) {
 	if cfg.Model != "env-model" {
 		t.Errorf("Model (env) = %q, want env-model", cfg.Model)
 	}
+
 	if cfg.HistoryValue() != 3 {
 		t.Errorf("History (env) = %d, want 3", cfg.HistoryValue())
 	}
@@ -141,6 +160,7 @@ func TestMediatorOnlyDefaults(t *testing.T) {
 	cwdP := provider.NewFileProvider(filepath.Join(xdgDir, "also-missing.json"))
 
 	m := &Mediator{XDGProvider: xdgP, CWDProvider: cwdP}
+
 	cfg, err := m.Load(config.Config{})
 	if err != nil {
 		t.Fatalf("Load: %v", err)
@@ -167,6 +187,7 @@ func TestMediatorOnlyCLI(t *testing.T) {
 	}
 
 	m := &Mediator{XDGProvider: xdgP, CWDProvider: cwdP}
+
 	cfg, err := m.Load(cliCfg)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
@@ -175,12 +196,15 @@ func TestMediatorOnlyCLI(t *testing.T) {
 	if cfg.DetailLevel != config.DetailMinimal {
 		t.Errorf("DetailLevel = %q, want minimal", cfg.DetailLevel)
 	}
+
 	if cfg.Model != "cli-model" {
 		t.Errorf("Model = %q, want cli-model", cfg.Model)
 	}
+
 	if cfg.HistoryValue() != 1 {
 		t.Errorf("History = %d, want 1", cfg.HistoryValue())
 	}
+
 	if cfg.WrapLine != 50 {
 		t.Errorf("WrapLine = %d, want 50", cfg.WrapLine)
 	}
@@ -209,6 +233,7 @@ func TestMediatorCLIHistoryZeroDisablesEnv(t *testing.T) {
 	if cfg.History == nil {
 		t.Fatal("Load lost explicit History=0 (treated as not set)")
 	}
+
 	if cfg.HistoryValue() != 0 {
 		t.Errorf("History = %d, want 0 (CLI --history 0 must win over env GUD_HISTORY)", cfg.HistoryValue())
 	}
@@ -283,6 +308,7 @@ func TestValidateStrictKnownPlaceholder(t *testing.T) {
 	for _, tt := range tests {
 		cfg := config.Config{APIKey: tt.apiKey}
 		err := validateStrict(cfg)
+
 		gotOK := err == nil
 		if gotOK != tt.wantOK {
 			t.Errorf("validateStrict(APIKey=%q): ok=%v, want %v (err=%v)", tt.apiKey, gotOK, tt.wantOK, err)

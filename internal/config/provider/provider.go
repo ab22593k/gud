@@ -35,6 +35,7 @@ func DefaultConfigPath() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("home dir: %w", err)
 	}
+
 	dir := filepath.Join(home, ".config", "gud")
 	if err := os.MkdirAll(dir, 0750); err != nil {
 		return "", fmt.Errorf("create config dir: %w", err)

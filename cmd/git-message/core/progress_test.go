@@ -20,6 +20,7 @@ func TestShowProgress_ReturnsValue(t *testing.T) {
 	if err != nil {
 		t.Errorf("showProgress() returned error: %v", err)
 	}
+
 	if got != expected {
 		t.Errorf("showProgress() = %q, want %q", got, expected)
 	}
@@ -36,6 +37,7 @@ func TestShowProgress_ReturnsError(t *testing.T) {
 	if err == nil {
 		t.Fatal("showProgress() expected error, got nil")
 	}
+
 	if !errors.Is(err, expectedErr) {
 		t.Errorf("showProgress() error = %v, want %v", err, expectedErr)
 	}
@@ -50,6 +52,7 @@ func TestShowProgress_WithIntType(t *testing.T) {
 	if err != nil {
 		t.Errorf("showProgress() returned error: %v", err)
 	}
+
 	if got != 42 {
 		t.Errorf("showProgress() = %d, want %d", got, 42)
 	}
@@ -64,6 +67,7 @@ func TestShowProgress_CompletesImmediately(t *testing.T) {
 	if err != nil {
 		t.Errorf("showProgress() returned error: %v", err)
 	}
+
 	if got != testDoneStr {
 		t.Errorf("showProgress() = %q, want %q", got, testDoneStr)
 	}
@@ -80,10 +84,13 @@ func TestShowProgress_WritesToStderr(t *testing.T) {
 	os.Stderr = w
 
 	done := make(chan struct{})
+
 	var captured string
+
 	go func() {
 		data, _ := io.ReadAll(r)
 		captured = string(data)
+
 		close(done)
 	}()
 
@@ -93,7 +100,9 @@ func TestShowProgress_WritesToStderr(t *testing.T) {
 	})
 
 	_ = w.Close()
+
 	<-done
+
 	os.Stderr = savedStderr
 
 	if fnErr != nil {
@@ -103,9 +112,11 @@ func TestShowProgress_WritesToStderr(t *testing.T) {
 	if captured == "" {
 		t.Error("showProgress() did not write anything to stderr")
 	}
+
 	if !strings.Contains(captured, msg) {
 		t.Errorf("showProgress() stderr output = %q, want it to contain %q", captured, msg)
 	}
+
 	if !strings.Contains(captured, "✓") {
 		t.Errorf("showProgress() stderr output = %q, want it to contain checkmark", captured)
 	}

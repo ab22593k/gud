@@ -119,6 +119,7 @@ func TestValidateConfig(t *testing.T) {
 			if got.DetailLevel != tt.wantDetail {
 				t.Errorf("DetailLevel = %q, want %q", got.DetailLevel, tt.wantDetail)
 			}
+
 			if got.Profile != tt.wantProfile {
 				t.Errorf("Profile = %q, want %q", got.Profile, tt.wantProfile)
 			}
@@ -140,6 +141,7 @@ func TestValidateConfig(t *testing.T) {
 	for _, tt := range historyTests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := config.Config{History: config.Ptr(tt.inputHist)}
+
 			got := cfg.Validate()
 			if got.HistoryValue() != tt.wantHist {
 				t.Errorf("History = %d, want %d", got.HistoryValue(), tt.wantHist)
@@ -163,6 +165,7 @@ func TestValidateConfig(t *testing.T) {
 	for _, tt := range wrapLineTests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := config.Config{WrapLine: tt.input}
+
 			got := cfg.Validate()
 			if got.WrapLine != tt.output {
 				t.Errorf("WrapLine = %d, want %d", got.WrapLine, tt.output)
@@ -173,10 +176,12 @@ func TestValidateConfig(t *testing.T) {
 
 func TestMediatorPriorityChain(t *testing.T) {
 	xdgDir := t.TempDir()
+
 	xdgCfgPath := filepath.Join(xdgDir, ".config", "gud", "config.json")
 	if err := os.MkdirAll(filepath.Dir(xdgCfgPath), 0750); err != nil {
 		t.Fatalf("mkdir XDG: %v", err)
 	}
+
 	xdgP := provider.NewFileProvider(xdgCfgPath)
 	if err := xdgP.Save(config.Config{
 		DetailLevel: config.DetailDetailed,
@@ -187,6 +192,7 @@ func TestMediatorPriorityChain(t *testing.T) {
 	}
 
 	cwdDir := t.TempDir()
+
 	cwdP := provider.NewFileProvider(filepath.Join(cwdDir, "gud.json"))
 	if err := cwdP.Save(config.Config{
 		Model:   "cwd-model",
@@ -205,6 +211,7 @@ func TestMediatorPriorityChain(t *testing.T) {
 	}
 
 	m := &mediator.Mediator{XDGProvider: xdgP, CWDProvider: cwdP}
+
 	cfg, err := m.Load(cliCfg)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
@@ -217,6 +224,7 @@ func TestMediatorPriorityChain(t *testing.T) {
 	if cfg.Model != "env-model" {
 		t.Errorf("Model (env) = %q, want env-model", cfg.Model)
 	}
+
 	if cfg.HistoryValue() != 3 {
 		t.Errorf("History (env) = %d, want 3", cfg.HistoryValue())
 	}
@@ -237,6 +245,7 @@ func TestMediatorOnlyDefaults(t *testing.T) {
 		XDGProvider: provider.NewFileProvider(filepath.Join(td, "missing.json")),
 		CWDProvider: provider.NewFileProvider(filepath.Join(td, "also-missing.json")),
 	}
+
 	cfg, err := m.Load(config.Config{})
 	if err != nil {
 		t.Fatalf("Load: %v", err)
@@ -271,12 +280,15 @@ func TestMediatorOnlyCLI(t *testing.T) {
 	if cfg.DetailLevel != config.DetailMinimal {
 		t.Errorf("DetailLevel = %q, want minimal", cfg.DetailLevel)
 	}
+
 	if cfg.Model != "cli-model" {
 		t.Errorf("Model = %q, want cli-model", cfg.Model)
 	}
+
 	if cfg.HistoryValue() != 1 {
 		t.Errorf("History = %d, want 1", cfg.HistoryValue())
 	}
+
 	if cfg.WrapLine != 50 {
 		t.Errorf("WrapLine = %d, want 50", cfg.WrapLine)
 	}
@@ -288,8 +300,10 @@ func TestMediatorOnlyCLI(t *testing.T) {
 // mutating the package-level rootCmd shared by other tests.
 func flagCommand(t *testing.T, args ...string) *cobra.Command {
 	t.Helper()
+
 	cmd := &cobra.Command{Use: "test"}
 	addPersistentFlags(cmd)
+
 	if err := cmd.ParseFlags(args); err != nil {
 		t.Fatalf("ParseFlags(%q): %v", args, err)
 	}
@@ -318,12 +332,15 @@ func TestConfigFromCmdChangedFlags(t *testing.T) {
 	if cfg.DetailLevel != config.DetailDetailed {
 		t.Errorf("DetailLevel = %q, want detailed", cfg.DetailLevel)
 	}
+
 	if cfg.HistoryValue() != 8 {
 		t.Errorf("History = %d, want 8", cfg.HistoryValue())
 	}
+
 	if cfg.WrapLine != 90 {
 		t.Errorf("WrapLine = %d, want 90", cfg.WrapLine)
 	}
+
 	if !reflect.DeepEqual(cfg.Issues, []int{123, 456}) {
 		t.Errorf("Issues = %v, want [123 456]", cfg.Issues)
 	}
@@ -342,6 +359,7 @@ func TestConfigFromCmdHistoryZero(t *testing.T) {
 	if cfg.History == nil {
 		t.Fatal("configFromCmd(--history 0) left History unset (nil)")
 	}
+
 	if *cfg.History != 0 {
 		t.Errorf("History = %d, want 0", *cfg.History)
 	}
@@ -352,6 +370,7 @@ func TestConfigFromCmdHistoryZero(t *testing.T) {
 // still disable history, not be silently ignored.
 func TestMediatorCliHistoryZeroOverridesGudJSON(t *testing.T) {
 	xdgP := provider.NewFileProvider(filepath.Join(t.TempDir(), "missing.json"))
+
 	cwdP := provider.NewFileProvider(filepath.Join(t.TempDir(), "gud.json"))
 	if err := cwdP.Save(config.Config{
 		History: config.Ptr(10),
@@ -362,6 +381,7 @@ func TestMediatorCliHistoryZeroOverridesGudJSON(t *testing.T) {
 	cliCfg := configFromCmd(flagCommand(t, "--history", "0"))
 
 	m := &mediator.Mediator{XDGProvider: xdgP, CWDProvider: cwdP}
+
 	cfg, err := m.Load(cliCfg)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
@@ -370,6 +390,7 @@ func TestMediatorCliHistoryZeroOverridesGudJSON(t *testing.T) {
 	if cfg.History == nil {
 		t.Fatal("Load lost explicit History=0 (treated as not set)")
 	}
+
 	if cfg.HistoryValue() != 0 {
 		t.Errorf("History = %d, want 0 (CLI --history 0 must override gud.json history: 10)", cfg.HistoryValue())
 	}
@@ -383,6 +404,7 @@ func TestMediatorCliHistoryZeroOverridesGudJSON(t *testing.T) {
 // full file → env → CLI pipeline when the user passes no flags.
 func TestMediatorPreservesGudJSONWhenFlagsUnchanged(t *testing.T) {
 	xdgP := provider.NewFileProvider(filepath.Join(t.TempDir(), "missing.json"))
+
 	cwdP := provider.NewFileProvider(filepath.Join(t.TempDir(), "gud.json"))
 	if err := cwdP.Save(config.Config{
 		DetailLevel: config.DetailDetailed,
@@ -397,6 +419,7 @@ func TestMediatorPreservesGudJSONWhenFlagsUnchanged(t *testing.T) {
 	cliCfg := configFromCmd(flagCommand(t))
 
 	m := &mediator.Mediator{XDGProvider: xdgP, CWDProvider: cwdP}
+
 	cfg, err := m.Load(cliCfg)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
@@ -405,9 +428,11 @@ func TestMediatorPreservesGudJSONWhenFlagsUnchanged(t *testing.T) {
 	if cfg.DetailLevel != config.DetailDetailed {
 		t.Errorf("DetailLevel = %q, want detailed (gud.json preserved, not flag default)", cfg.DetailLevel)
 	}
+
 	if cfg.WrapLine != 100 {
 		t.Errorf("WrapLine = %d, want 100 (gud.json preserved, not flag default 72)", cfg.WrapLine)
 	}
+
 	if cfg.HistoryValue() != 20 {
 		t.Errorf("History = %d, want 20 (gud.json preserved, not flag default 5)", cfg.HistoryValue())
 	}
@@ -417,6 +442,7 @@ func TestMediatorPreservesGudJSONWhenFlagsUnchanged(t *testing.T) {
 // wins over gud.json, per documented priority "CLI flags → env → gud.json".
 func TestMediatorCliOverridesGudJSON(t *testing.T) {
 	xdgP := provider.NewFileProvider(filepath.Join(t.TempDir(), "missing.json"))
+
 	cwdP := provider.NewFileProvider(filepath.Join(t.TempDir(), "gud.json"))
 	if err := cwdP.Save(config.Config{
 		DetailLevel: config.DetailDetailed,
@@ -433,6 +459,7 @@ func TestMediatorCliOverridesGudJSON(t *testing.T) {
 	))
 
 	m := &mediator.Mediator{XDGProvider: xdgP, CWDProvider: cwdP}
+
 	cfg, err := m.Load(cliCfg)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
@@ -441,9 +468,11 @@ func TestMediatorCliOverridesGudJSON(t *testing.T) {
 	if cfg.DetailLevel != config.DetailMinimal {
 		t.Errorf("DetailLevel = %q, want minimal (explicit CLI wins)", cfg.DetailLevel)
 	}
+
 	if cfg.WrapLine != 120 {
 		t.Errorf("WrapLine = %d, want 120 (explicit CLI wins)", cfg.WrapLine)
 	}
+
 	if cfg.HistoryValue() != 2 {
 		t.Errorf("History = %d, want 2 (explicit CLI wins)", cfg.HistoryValue())
 	}
@@ -451,6 +480,7 @@ func TestMediatorCliOverridesGudJSON(t *testing.T) {
 
 func TestVersionCommand(t *testing.T) {
 	origOut := rootCmd.OutOrStdout()
+
 	t.Cleanup(func() {
 		rootCmd.SetOut(origOut)
 		rootCmd.SetArgs(nil)
@@ -473,6 +503,7 @@ func TestVersionCommand(t *testing.T) {
 
 func TestRootCommandHelp(t *testing.T) {
 	origOut := rootCmd.OutOrStdout()
+
 	t.Cleanup(func() {
 		rootCmd.SetOut(origOut)
 		rootCmd.SetArgs(nil)
@@ -491,21 +522,27 @@ func TestRootCommandHelp(t *testing.T) {
 	if !strings.Contains(output, "Usage:") {
 		t.Errorf("help output should contain 'Usage:', got %q", output)
 	}
+
 	if !strings.Contains(output, "hook") {
 		t.Errorf("help output should list 'hook' subcommand, got %q", output)
 	}
+
 	if !strings.Contains(output, "profile") {
 		t.Errorf("help output should list 'profile' subcommand, got %q", output)
 	}
+
 	if !strings.Contains(output, "version") {
 		t.Errorf("help output should list 'version' subcommand, got %q", output)
 	}
+
 	if !strings.Contains(output, "--history") {
 		t.Errorf("help output should include --history flag, got %q", output)
 	}
+
 	if !strings.Contains(output, "--wrapline") {
 		t.Errorf("help output should include --wrapline flag, got %q", output)
 	}
+
 	if !strings.Contains(output, "--issue") {
 		t.Errorf("help output should include --issue flag, got %q", output)
 	}
@@ -513,6 +550,7 @@ func TestRootCommandHelp(t *testing.T) {
 
 func TestProfileCommandHelp(t *testing.T) {
 	origOut := rootCmd.OutOrStdout()
+
 	t.Cleanup(func() {
 		rootCmd.SetOut(origOut)
 		rootCmd.SetArgs(nil)
@@ -531,12 +569,15 @@ func TestProfileCommandHelp(t *testing.T) {
 	if !strings.Contains(output, "list") {
 		t.Errorf("profile help should contain 'list', got %q", output)
 	}
+
 	if !strings.Contains(output, "save") {
 		t.Errorf("profile help should contain 'save', got %q", output)
 	}
+
 	if !strings.Contains(output, "remove") {
 		t.Errorf("profile help should contain 'remove', got %q", output)
 	}
+
 	if !strings.Contains(output, "show") {
 		t.Errorf("profile help should contain 'show', got %q", output)
 	}
@@ -545,6 +586,7 @@ func TestProfileCommandHelp(t *testing.T) {
 func TestProfileListCommand(t *testing.T) {
 	origOut := rootCmd.OutOrStdout()
 	origIn := rootCmd.InOrStdin()
+
 	t.Cleanup(func() {
 		rootCmd.SetOut(origOut)
 		rootCmd.SetIn(origIn)
@@ -569,6 +611,7 @@ func TestProfileListCommand(t *testing.T) {
 
 func TestHookCommandHelp(t *testing.T) {
 	origOut := rootCmd.OutOrStdout()
+
 	t.Cleanup(func() {
 		rootCmd.SetOut(origOut)
 		rootCmd.SetArgs(nil)
@@ -587,9 +630,11 @@ func TestHookCommandHelp(t *testing.T) {
 	if !strings.Contains(output, "install") {
 		t.Errorf("hook help output should contain 'install', got %q", output)
 	}
+
 	if !strings.Contains(output, "uninstall") {
 		t.Errorf("hook help output should contain 'uninstall', got %q", output)
 	}
+
 	if !strings.Contains(output, "run") {
 		t.Errorf("hook help output should contain 'run', got %q", output)
 	}

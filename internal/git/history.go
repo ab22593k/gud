@@ -25,6 +25,7 @@ func GetTopicHistory(ctx context.Context, upstream string, n int, paths []string
 	if n <= 0 || upstream == "" {
 		return "", nil
 	}
+
 	if n > MaxRecentCommits {
 		n = MaxRecentCommits
 	}
@@ -41,7 +42,7 @@ func GetTopicHistory(ctx context.Context, upstream string, n int, paths []string
 		return "", fmt.Errorf("merge base with %s: %w", upstream, err)
 	}
 
-	args := []string{"log", "--oneline", "--no-decorate", fmt.Sprintf("-%d", n), strings.TrimSpace(mergeBase) + "..HEAD"}
+	args := []string{cmdLog, flagOneline, "--no-decorate", fmt.Sprintf("-%d", n), strings.TrimSpace(mergeBase) + "..HEAD"}
 	if len(paths) > 0 {
 		args = append(args, "--")
 		args = append(args, paths...)
@@ -63,7 +64,9 @@ func runGitDir(ctx context.Context, dir string, args ...string) (string, error) 
 	// internal callers, not user input.
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
+
 	var out bytes.Buffer
+
 	cmd.Stdout = &out
 
 	if err := cmd.Run(); err != nil {
@@ -80,6 +83,7 @@ func runGitDir(ctx context.Context, dir string, args ...string) (string, error) 
 // unquoted only at the outer level.
 func ExtractChangedPaths(diff string) []string {
 	var paths []string
+
 	seen := make(map[string]bool)
 
 	for line := range strings.SplitSeq(diff, "\n") {
@@ -91,13 +95,16 @@ func ExtractChangedPaths(diff string) []string {
 		if len(rest) >= 2 && strings.HasPrefix(rest, `"`) && strings.HasSuffix(rest, `"`) {
 			rest = rest[1 : len(rest)-1]
 		}
+
 		rest, ok = strings.CutPrefix(rest, "b/")
 		if !ok || rest == "" || rest == "/dev/null" {
 			continue
 		}
+
 		if seen[rest] {
 			continue
 		}
+
 		seen[rest] = true
 		paths = append(paths, rest)
 	}

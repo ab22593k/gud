@@ -8,6 +8,9 @@ import (
 
 const (
 	// DefaultTenantProperty is the canonical property name for tenant isolation.
+	// DefaultBaseURL is the HelixDB server URL used when none is configured.
+	DefaultBaseURL = "http://localhost:3223"
+
 	DefaultTenantProperty = "tenantId"
 
 	// DefaultEmbeddingDimension is the vector dimension used for embedding
@@ -72,9 +75,11 @@ func (c *CommitData) ToProps() helix.Props {
 	if len(c.Embedding) > 0 {
 		props = append(props, helix.Prop("embedding", helix.F32Array(c.Embedding...)))
 	}
+
 	if c.DeletedAt != nil {
 		props = append(props, helix.Prop("deletedAt", helix.DateTimeMillis(c.DeletedAt.UnixMilli())))
 	}
+
 	if c.ExpiresAt != nil {
 		props = append(props, helix.Prop("expiresAt", helix.DateTimeMillis(c.ExpiresAt.UnixMilli())))
 	}
@@ -187,27 +192,35 @@ func (m *MemoryData) ToProps() helix.Props {
 	if len(m.Embedding) > 0 {
 		props = append(props, helix.Prop("embedding", helix.F32Array(m.Embedding...)))
 	}
+
 	if m.ValidFrom != nil {
 		props = append(props, helix.Prop("validFrom", helix.DateTimeMillis(m.ValidFrom.UnixMilli())))
 	}
+
 	if m.ValidTo != nil {
 		props = append(props, helix.Prop("validTo", helix.DateTimeMillis(m.ValidTo.UnixMilli())))
 	}
+
 	if m.DeletedAt != nil {
 		props = append(props, helix.Prop("deletedAt", helix.DateTimeMillis(m.DeletedAt.UnixMilli())))
 	}
+
 	if m.ExpiresAt != nil {
 		props = append(props, helix.Prop("expiresAt", helix.DateTimeMillis(m.ExpiresAt.UnixMilli())))
 	}
+
 	if m.EventStartAt != nil {
 		props = append(props, helix.Prop("eventStartAt", helix.DateTimeMillis(m.EventStartAt.UnixMilli())))
 	}
+
 	if m.EventEndAt != nil {
 		props = append(props, helix.Prop("eventEndAt", helix.DateTimeMillis(m.EventEndAt.UnixMilli())))
 	}
+
 	if m.TemporalText != "" {
 		props = append(props, helix.Prop("temporalText", helix.String(m.TemporalText)))
 	}
+
 	if m.Timezone != "" {
 		props = append(props, helix.Prop("timezone", helix.String(m.Timezone)))
 	}

@@ -52,6 +52,7 @@ func TestOracle_Familiarity_HelpFlags(t *testing.T) {
 			if err != nil {
 				t.Fatalf("[F] %s returned error: %v", flag, err)
 			}
+
 			got := buf.String()
 			if !strings.Contains(got, "Usage:") {
 				t.Errorf("[F] %s output missing 'Usage:', got %q", flag, got)
@@ -76,6 +77,7 @@ func TestOracle_Familiarity_UnknownFlag(t *testing.T) {
 	if err == nil {
 		t.Fatal("[F] expected error for unknown flag, got nil")
 	}
+
 	if !strings.Contains(err.Error(), "bogus-flag-xyz") {
 		t.Errorf("[F] error should mention the unknown flag name, got: %v", err)
 	}
@@ -120,6 +122,7 @@ func TestOracle_Familiarity_NoGitRepo(t *testing.T) {
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("[F] --help should always work, even outside git repo: %v", err)
 	}
+
 	if !strings.Contains(buf.String(), "Usage:") {
 		t.Errorf("[F] --help output should contain Usage:")
 	}
@@ -145,6 +148,7 @@ func TestOracle_Explainability_ProfileNotFound(t *testing.T) {
 	if got == nil {
 		t.Skip("[E] requireProfile passed (unexpected) — skipping")
 	}
+
 	if !strings.Contains(got.Error(), "git message profile save") {
 		t.Errorf("[E] error should suggest how to fix it, got: %v", got)
 	}
@@ -163,10 +167,12 @@ func TestOracle_Explainability_NoStagedDiff(t *testing.T) {
 // E: config placeholders are detected and reported clearly.
 func TestOracle_Explainability_ConfigPlaceholder(t *testing.T) {
 	td := t.TempDir()
+
 	cfgPath := filepath.Join(td, "config.json")
 	if err := os.MkdirAll(filepath.Dir(cfgPath), 0750); err != nil {
 		t.Fatal(err)
 	}
+
 	p := provider.NewFileProvider(cfgPath)
 	//nolint:gosec // test-only placeholder value, not a real credential
 	if err := p.Save(config.Config{APIKey: "${SOME_VAR}"}); err != nil {
@@ -176,6 +182,7 @@ func TestOracle_Explainability_ConfigPlaceholder(t *testing.T) {
 	// Construct mediator directly to control file paths.
 	notFound := provider.NewFileProvider(filepath.Join(td, "notfound.json"))
 	m := &mediator.Mediator{XDGProvider: p, CWDProvider: notFound}
+
 	_, err := m.Load(config.Config{})
 	if err == nil {
 		// The mediator might log a warning rather than failing; either is fine.
@@ -194,6 +201,7 @@ func TestOracle_Explainability_ConfigPlaceholder(t *testing.T) {
 func TestOracle_World_ConfigFilePermissions(t *testing.T) {
 	td := t.TempDir()
 	cfgPath := filepath.Join(td, "gud.json")
+
 	p := provider.NewFileProvider(cfgPath)
 	if err := p.Save(config.DefaultConfig()); err != nil {
 		t.Fatal(err)
@@ -203,6 +211,7 @@ func TestOracle_World_ConfigFilePermissions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	mode := info.Mode().Perm()
 	if mode&0o077 != 0 {
 		t.Errorf("[W] config file permissions %o should not allow group/other access", mode)
@@ -234,6 +243,7 @@ func TestOracle_History_HelpTextSmoke(t *testing.T) {
 		rootCmd.SetOut(os.Stdout)
 		rootCmd.SetArgs(nil)
 	})
+
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
@@ -270,6 +280,7 @@ func TestOracle_Image_VersionFormat(t *testing.T) {
 		rootCmd.SetOut(os.Stdout)
 		rootCmd.SetArgs(nil)
 	})
+
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
@@ -317,6 +328,7 @@ func TestOracle_Image_AssistedByTrailer(t *testing.T) {
 			if err != nil {
 				t.Fatalf("[I] assembleTrailers: %v", err)
 			}
+
 			if got != tt.want {
 				t.Errorf("[I] assembleTrailers:\n  got:  %q\n  want: %q", got, tt.want)
 			}
@@ -387,6 +399,7 @@ func TestOracle_Image_IssueTrailer(t *testing.T) {
 			if err != nil {
 				t.Fatalf("[I] assembleTrailers: %v", err)
 			}
+
 			if got != tt.want {
 				t.Errorf("[I] assembleTrailers:\n  got:  %q\n  want: %q", got, tt.want)
 			}
@@ -435,6 +448,7 @@ func TestOracle_Claims_LongDescription(t *testing.T) {
 		rootCmd.SetOut(os.Stdout)
 		rootCmd.SetArgs(nil)
 	})
+
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
@@ -454,6 +468,7 @@ func TestOracle_Claims_ProfileCommands(t *testing.T) {
 		rootCmd.SetOut(os.Stdout)
 		rootCmd.SetArgs(nil)
 	})
+
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
@@ -476,6 +491,7 @@ func TestOracle_Claims_HookCommands(t *testing.T) {
 		rootCmd.SetOut(os.Stdout)
 		rootCmd.SetArgs(nil)
 	})
+
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
@@ -503,9 +519,11 @@ func TestOracle_UserExpectations_VersionInstant(t *testing.T) {
 	start := time.Now()
 	err := rootCmd.Execute()
 	elapsed := time.Since(start)
+
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if elapsed > 100*time.Millisecond {
 		t.Errorf("[U] version took %v — user expects instant response", elapsed)
 	}
@@ -525,9 +543,11 @@ func TestOracle_UserExpectations_HelpOffline(t *testing.T) {
 	start := time.Now()
 	err := rootCmd.Execute()
 	elapsed := time.Since(start)
+
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if elapsed > 200*time.Millisecond {
 		t.Errorf("[U] --help took %v — should be near-instant", elapsed)
 	}
@@ -546,6 +566,7 @@ func TestOracle_Purpose_ProfileListStructure(t *testing.T) {
 		rootCmd.SetIn(os.Stdin)
 		rootCmd.SetArgs(nil)
 	})
+
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
@@ -567,6 +588,7 @@ func TestOracle_Purpose_VersionReportsVersion(t *testing.T) {
 		rootCmd.SetOut(os.Stdout)
 		rootCmd.SetArgs(nil)
 	})
+
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
@@ -584,6 +606,7 @@ func TestOracle_Standards_CobraSilence(t *testing.T) {
 	if !rootCmd.SilenceErrors {
 		t.Error("[S] SilenceErrors should be true — prevents duplicate error printing")
 	}
+
 	if !rootCmd.SilenceUsage {
 		t.Error("[S] SilenceUsage should be true — prevents usage on error")
 	}
@@ -604,6 +627,7 @@ func TestOracle_Standards_InitNotBlocking(t *testing.T) {
 
 	start := time.Now()
 	_ = rootCmd.Execute()
+
 	if elapsed := time.Since(start); elapsed > 50*time.Millisecond {
 		t.Errorf("[S] cold execution took %v — init may be doing I/O", elapsed)
 	}
@@ -621,13 +645,16 @@ func TestOracle_Aspirations_ConfigLoadSpeed(t *testing.T) {
 	}
 
 	start := time.Now()
+
 	for range 100 {
 		cfg, err := m.Load(config.Config{})
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		_ = cfg
 	}
+
 	avg := time.Since(start) / 100
 	if avg > 500*time.Microsecond {
 		t.Errorf("[A] average config load = %v, aspiration is < 500µs", avg)
@@ -644,9 +671,11 @@ func TestOracle_Aspirations_ValidateSpeed(t *testing.T) {
 	}
 
 	start := time.Now()
+
 	for range 1000 {
 		_ = cfg.Validate()
 	}
+
 	avg := time.Since(start) / 1000
 	if avg > 1*time.Microsecond {
 		t.Errorf("[A] average Validate = %v, aspiration is < 1µs", avg)
@@ -664,6 +693,7 @@ func TestOracle_Aspirations_SpinnerNoGoroutineLeak(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		if result != testDoneStr {
 			t.Fatalf("unexpected result: %q", result)
 		}
@@ -671,6 +701,7 @@ func TestOracle_Aspirations_SpinnerNoGoroutineLeak(t *testing.T) {
 	// We expect some allocations (spinner, ticker, channel), but they should
 	// be bounded. This is a smoke check.
 	_ = before
+
 	t.Log("[A] showProgress completed without hang")
 }
 

@@ -29,6 +29,7 @@ func SuggestProfile(stats *RepoStats, catalog []profile.CatalogEntry) []profile.
 		entry profile.CatalogEntry
 		score int
 	}
+
 	var scoredEntries []scored
 
 	for _, entry := range catalog {
@@ -51,6 +52,7 @@ func SuggestProfile(stats *RepoStats, catalog []profile.CatalogEntry) []profile.
 	})
 
 	n := min(3, len(scoredEntries))
+
 	result := make([]profile.CatalogEntry, n)
 	for i := range n {
 		result[i] = scoredEntries[i].entry
@@ -65,10 +67,12 @@ func topExtensionKeywords(stats *RepoStats) []string {
 		ext   string
 		count int
 	}
+
 	exts := make([]extItem, 0, len(stats.FilesByExtension))
 	for ext, count := range stats.FilesByExtension {
 		exts = append(exts, extItem{ext, count})
 	}
+
 	sort.Slice(exts, func(i, j int) bool {
 		if exts[i].count != exts[j].count {
 			return exts[i].count > exts[j].count
@@ -78,6 +82,7 @@ func topExtensionKeywords(stats *RepoStats) []string {
 	})
 
 	var keywords []string
+
 	for i := 0; i < 3 && i < len(exts); i++ {
 		kw := strings.TrimPrefix(exts[i].ext, ".")
 		if kw != "" {
@@ -92,6 +97,7 @@ func topExtensionKeywords(stats *RepoStats) []string {
 func scoreEntry(entry profile.CatalogEntry, keywords []string) int {
 	entryText := strings.ToLower(entry.Profession + " " + entry.Summary + " " + entry.WorkMode)
 	score := 0
+
 	for _, kw := range keywords {
 		if strings.Contains(entryText, kw) {
 			score++
@@ -114,10 +120,12 @@ func FormatSuggestionMessage(suggestions []profile.CatalogEntry) string {
 
 	for i, s := range suggestions {
 		summary := s.Summary
+
 		const maxSummary = 60
 		if len(summary) > maxSummary {
 			summary = summary[:maxSummary-3] + "..."
 		}
+
 		fmt.Fprintf(&sb, "  [%d] %-35s %s\n", i+1, s.Slug, summary)
 	}
 

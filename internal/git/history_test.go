@@ -62,10 +62,12 @@ func TestExtractChangedPaths(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got := ExtractChangedPaths(tt.diff)
 			if len(got) != len(tt.want) {
 				t.Fatalf("ExtractChangedPaths() = %v, want %v", got, tt.want)
 			}
+
 			for i := range got {
 				if got[i] != tt.want[i] {
 					t.Errorf("ExtractChangedPaths()[%d] = %q, want %q", i, got[i], tt.want[i])
@@ -87,7 +89,9 @@ func newHistoryTestRepo(t *testing.T) {
 
 	run := func(args ...string) {
 		t.Helper()
+
 		cmd := exec.CommandContext(context.Background(), "git", args...)
+
 		cmd.Dir = dir
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("git %v failed: %v\n%s", args, err, out)
@@ -95,6 +99,7 @@ func newHistoryTestRepo(t *testing.T) {
 	}
 	write := func(name, content string) {
 		t.Helper()
+
 		if err := os.WriteFile(dir+"/"+name, []byte(content), 0600); err != nil {
 			t.Fatalf("write %s: %v", name, err)
 		}
@@ -139,6 +144,7 @@ func TestGetUpstreamBranch(t *testing.T) {
 	}
 
 	ctx := context.Background()
+
 	newHistoryTestRepo(t)
 
 	if got := GetUpstreamBranch(ctx); got != "origin/main" {
@@ -154,7 +160,9 @@ func TestGetUpstreamBranch_None(t *testing.T) {
 	dir := t.TempDir()
 	run := func(args ...string) {
 		t.Helper()
+
 		cmd := exec.CommandContext(context.Background(), "git", args...)
+
 		cmd.Dir = dir
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("git %v failed: %v\n%s", args, err, out)
@@ -163,9 +171,11 @@ func TestGetUpstreamBranch_None(t *testing.T) {
 	run("init", "-q", "-b", "main")
 	run("config", "user.name", "Test")
 	run("config", "user.email", "test@example.com")
+
 	if err := os.WriteFile(dir+"/f.txt", []byte("x\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
+
 	run("add", ".")
 	run("commit", "-q", "-m", "init")
 
@@ -182,6 +192,7 @@ func TestGetTopicHistory(t *testing.T) {
 	}
 
 	ctx := context.Background()
+
 	newHistoryTestRepo(t)
 
 	t.Run("commits since divergence", func(t *testing.T) {
@@ -189,6 +200,7 @@ func TestGetTopicHistory(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GetTopicHistory() error = %v", err)
 		}
+
 		if !strings.Contains(got, "feat: change file2") || !strings.Contains(got, "feat: change file1") {
 			t.Errorf("GetTopicHistory() should contain both topic commits, got:\n%s", got)
 		}
@@ -197,6 +209,7 @@ func TestGetTopicHistory(t *testing.T) {
 		if len(lines) != 2 {
 			t.Errorf("GetTopicHistory() = %d commits, want 2 (since divergence), got:\n%s", len(lines), got)
 		}
+
 		if !strings.HasSuffix(lines[0], "feat: change file2") {
 			t.Errorf("newest commit should come first, got: %q", lines[0])
 		}
@@ -207,6 +220,7 @@ func TestGetTopicHistory(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GetTopicHistory() error = %v", err)
 		}
+
 		lines := strings.Split(strings.TrimSpace(got), "\n")
 		if len(lines) != 1 || !strings.Contains(lines[0], "feat: change file2") {
 			t.Errorf("GetTopicHistory(1) = %q, want only the newest topic commit", got)
@@ -218,9 +232,11 @@ func TestGetTopicHistory(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GetTopicHistory() error = %v", err)
 		}
+
 		if strings.Contains(got, "feat: change file2") {
 			t.Errorf("path-limited history should exclude commits not touching file1.txt, got:\n%s", got)
 		}
+
 		if !strings.Contains(got, "feat: change file1") {
 			t.Errorf("path-limited history should include commits touching file1.txt, got:\n%s", got)
 		}

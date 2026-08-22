@@ -1,3 +1,6 @@
+// Package request implements LLM-backed commit message generation on top of
+// the Gemini model: prompt construction, streaming generation, and response
+// post-processing.
 package request
 
 import (
@@ -48,6 +51,7 @@ func NewClient(ctx context.Context, cfg ClientConfig) (*Client, error) {
 	if cfg.APIKey == "" {
 		return nil, errors.New("API key is required")
 	}
+
 	if cfg.Model == "" {
 		cfg.Model = defaultModel
 	}
@@ -129,7 +133,7 @@ func (c *Client) GenerateCommitMessageWithContent(
 	ctx, cancel := withDefaultTimeout(ctx, defaultGenerateTimeout)
 	defer cancel()
 
-	result, err := generateContent(c, ctx, req)
+	result, err := generateContent(ctx, c, req)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate content: %w", err)
 	}
@@ -141,21 +145,26 @@ func (c *Client) GenerateCommitMessageWithContent(
 	return result, nil
 }
 
-func generateContent(c *Client, ctx context.Context, req *model.LLMRequest) (string, error) {
+func generateContent(ctx context.Context, c *Client, req *model.LLMRequest) (string, error) {
 	var response *model.LLMResponse
+
 	for resp, err := range c.modelImpl.GenerateContent(ctx, req, false) {
 		if err != nil {
 			return "", fmt.Errorf("model error: %w", err)
 		}
+
 		if resp == nil {
 			return "", errors.New("model returned nil response")
 		}
+
 		if resp.ErrorMessage != "" {
 			return "", fmt.Errorf("model error: %s", resp.ErrorMessage)
 		}
+
 		if resp.ErrorCode != "" {
 			return "", fmt.Errorf("model error code: %s", resp.ErrorCode)
 		}
+
 		response = resp
 	}
 
@@ -171,11 +180,14 @@ func extractText(content *genai.Content) (string, error) {
 	if content == nil {
 		return "", errors.New("content is nil")
 	}
+
 	var sb strings.Builder
+
 	for _, part := range content.Parts {
 		if part == nil {
 			continue
 		}
+
 		sb.WriteString(part.Text)
 	}
 
@@ -244,6 +256,7 @@ func stripPreamble(text string) string {
 		firstLower := strings.ToLower(firstLine)
 
 		matched := false
+
 		for _, prefix := range preamblePrefixes {
 			if strings.HasPrefix(firstLower, prefix) {
 				text = strings.TrimSpace(lines[1])
@@ -252,6 +265,7 @@ func stripPreamble(text string) string {
 				break
 			}
 		}
+
 		if !matched {
 			break
 		}
@@ -300,12 +314,15 @@ const (
 // of text. A longer or multi-line block is treated as commit body content.
 func isShortCommentaryTail(lines []string) bool {
 	nonBlank, total := 0, 0
+
 	for _, line := range lines {
 		if line = strings.TrimSpace(line); line == "" {
 			continue
 		}
+
 		nonBlank++
 		total += len(line)
+
 		if nonBlank > maxCommentaryLines {
 			return false
 		}

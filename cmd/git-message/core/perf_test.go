@@ -20,9 +20,11 @@ func TestBranchMemoisesPerInvocation(t *testing.T) {
 	if got := app.Branch(context.Background()); got != "main" {
 		t.Fatalf("Branch() = %q, want main", got)
 	}
+
 	if got := app.Branch(context.Background()); got != "main" {
 		t.Fatalf("second Branch() = %q, want main", got)
 	}
+
 	if calls != 1 {
 		t.Errorf("branch lookup ran %d times, want 1 (memoised)", calls)
 	}

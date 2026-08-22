@@ -52,7 +52,7 @@ type DB struct {
 func NewDB(opts Options) *DB {
 	baseURL := opts.BaseURL
 	if baseURL == "" {
-		baseURL = "http://localhost:3223"
+		baseURL = DefaultBaseURL
 	}
 
 	db := &DB{
@@ -114,11 +114,13 @@ func (db *DB) checkHealth(ctx context.Context) bool {
 	if err != nil {
 		return false
 	}
+
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return false
 	}
-	defer resp.Body.Close()
+
+	defer func() { _ = resp.Body.Close() }() // read-only probe: close error irrelevant
 
 	return resp.StatusCode == http.StatusOK
 }

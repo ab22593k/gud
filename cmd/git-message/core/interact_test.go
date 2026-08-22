@@ -20,6 +20,7 @@ func TestEditMessage(t *testing.T) {
 		if err != nil {
 			t.Fatalf("editMessage() error = %v", err)
 		}
+
 		if got != "modified content" {
 			t.Errorf("editMessage() = %q, want %q", got, "modified content")
 		}
@@ -33,6 +34,7 @@ func TestEditMessage(t *testing.T) {
 		if err != nil {
 			t.Fatalf("editMessage() error = %v", err)
 		}
+
 		if got != msgHello {
 			t.Errorf("editMessage() = %q, want %q", got, msgHello)
 		}
@@ -56,6 +58,7 @@ func TestEditMessage(t *testing.T) {
 		if err != nil {
 			t.Fatalf("editMessage() error = %v", err)
 		}
+
 		if got != "hello world" {
 			t.Errorf("editMessage() = %q, want %q", got, "hello world")
 		}
@@ -129,10 +132,12 @@ func TestToFileChanges(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got := toFileChanges(tt.units)
 			if len(got) != len(tt.want) {
 				t.Fatalf("toFileChanges() returned %d items, want %d", len(got), len(tt.want))
 			}
+
 			for i := range got {
 				if got[i].Path != tt.want[i].Path || got[i].ChangeType != tt.want[i].ChangeType {
 					t.Errorf("toFileChanges()[%d] = {Path:%q, ChangeType:%q}, want {Path:%q, ChangeType:%q}",
@@ -179,10 +184,12 @@ func TestToCodeUnitRefs(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got := toCodeUnitRefs(tt.units)
 			if len(got) != len(tt.want) {
 				t.Fatalf("toCodeUnitRefs() returned %d items, want %d", len(got), len(tt.want))
 			}
+
 			for i := range got {
 				if got[i] != tt.want[i] {
 					t.Errorf("toCodeUnitRefs()[%d] = %+v, want %+v", i, got[i], tt.want[i])

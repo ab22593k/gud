@@ -27,6 +27,7 @@ func (r *Response) Raw() map[string]any {
 // {"properties": [...]} wrapped results (e.g. ValueMap traversals).
 func (r *Response) Nodes(key string) []Node {
 	items := extractResultItems(r.raw[key])
+
 	nodes := make([]Node, 0, len(items))
 	for _, item := range items {
 		if m, ok := item.(map[string]any); ok {
@@ -44,6 +45,7 @@ func (r *Response) Count(key string) int {
 	if !ok {
 		return 0
 	}
+
 	count, _ := obj["count"].(float64)
 
 	return int(count)

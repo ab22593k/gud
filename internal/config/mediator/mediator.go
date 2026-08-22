@@ -55,6 +55,7 @@ func New() (*Mediator, error) {
 	xdgPath := os.Getenv("GUD_CONFIG_PATH")
 	if xdgPath == "" {
 		var err error
+
 		xdgPath, err = provider.DefaultConfigPath()
 		if err != nil {
 			return nil, fmt.Errorf("resolve xdg config path: %w", err)
@@ -65,6 +66,7 @@ func New() (*Mediator, error) {
 	if err != nil {
 		return nil, fmt.Errorf("resolve cwd: %w", err)
 	}
+
 	cwdPath := filepath.Join(cwd, "gud.json")
 
 	return &Mediator{

@@ -23,6 +23,7 @@ func TestBuildPersistQuery_Valid(t *testing.T) {
 	if q == nil {
 		t.Fatal("expected non-nil query")
 	}
+
 	err := q.Validate()
 	if err != nil {
 		t.Errorf("query validation failed: %v", err)
@@ -51,6 +52,7 @@ func TestBuildPersistQuery_WithFiles(t *testing.T) {
 	if q == nil {
 		t.Fatal("expected non-nil query")
 	}
+
 	err := q.Validate()
 	if err != nil {
 		t.Errorf("query validation failed: %v", err)
@@ -77,6 +79,7 @@ func TestBuildPersistCommitQuery_WithCodeUnits(t *testing.T) {
 	if q == nil {
 		t.Fatal("expected non-nil query")
 	}
+
 	err := q.Validate()
 	if err != nil {
 		t.Errorf("query validation failed: %v", err)
@@ -102,6 +105,7 @@ func TestBuildPersistMemoryQuery_Valid(t *testing.T) {
 	if q == nil {
 		t.Fatal("expected non-nil query")
 	}
+
 	err := q.Validate()
 	if err != nil {
 		t.Errorf("query validation failed: %v", err)
@@ -113,6 +117,7 @@ func TestBuildCategorizeMemoryQuery_Valid(t *testing.T) {
 	if q == nil {
 		t.Fatal("expected non-nil query")
 	}
+
 	err := q.Validate()
 	if err != nil {
 		t.Errorf("query validation failed: %v", err)
@@ -124,6 +129,7 @@ func TestBuildMentionEntityQuery_Valid(t *testing.T) {
 	if q == nil {
 		t.Fatal("expected non-nil query")
 	}
+
 	err := q.Validate()
 	if err != nil {
 		t.Errorf("query validation failed: %v", err)
@@ -146,6 +152,7 @@ func TestBuildUpdateMemoryQuery_Valid(t *testing.T) {
 	if q == nil {
 		t.Fatal("expected non-nil query")
 	}
+
 	err := q.Validate()
 	if err != nil {
 		t.Errorf("query validation failed: %v", err)
@@ -157,6 +164,7 @@ func TestBuildSoftDeleteMemoryQuery_Valid(t *testing.T) {
 	if q == nil {
 		t.Fatal("expected non-nil query")
 	}
+
 	err := q.Validate()
 	if err != nil {
 		t.Errorf("query validation failed: %v", err)
@@ -175,13 +183,16 @@ func TestFormatDiffStat_NotEmpty(t *testing.T) {
 		{Path: "main.go", ChangeType: "modified", LinesAdded: 5, LinesDeleted: 3},
 		{Path: "helper.go", ChangeType: "added", LinesAdded: 20, LinesDeleted: 0},
 	}
+
 	result := FormatDiffStat(files)
 	if result == "" {
 		t.Fatal("expected non-empty result")
 	}
+
 	if !contains(result, "main.go") {
 		t.Errorf("expected main.go in output")
 	}
+
 	if !contains(result, "helper.go") {
 		t.Errorf("expected helper.go in output")
 	}

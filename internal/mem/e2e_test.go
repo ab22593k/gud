@@ -45,7 +45,7 @@ func TestIntegration_BM25ContextQueryByDiff(t *testing.T) {
 	}
 
 	mgr, db := startManagedContainer(t)
-	defer mgr.Stop(context.Background())
+	defer func() { _ = mgr.Stop(context.Background()) }() // best-effort teardown
 
 	ctx := context.Background()
 	if err := db.EnsureSchema(ctx); err != nil {
@@ -57,22 +57,26 @@ func TestIntegration_BM25ContextQueryByDiff(t *testing.T) {
 	// Persist two commits with distinct diff text.
 	for _, c := range []CommitData{
 		{
-			SHA:            "bm25-a",
-			Message:        "feat: add login handler",
-			Author:         "dev@example.com",
-			RepoPath:       testTenant,
-			Branch:         "main",
-			DiffText:       "diff --git a/auth/login.go b/auth/login.go\n@@ -0,0 +1,30 @@\n+package auth\n+\n+func Login(w http.ResponseWriter, r *http.Request) {\n+    // authenticate user\n+}",
+			SHA:      "bm25-a",
+			Message:  "feat: add login handler",
+			Author:   "dev@example.com",
+			RepoPath: testTenant,
+			Branch:   "main",
+			DiffText: "diff --git a/auth/login.go b/auth/login.go\n@@ -0,0 +1,30 @@\n" +
+				"+package auth\n+\n+func Login(w http.ResponseWriter, r *http.Request) {\n" +
+				"+    // authenticate user\n+}",
 			Timestamp:      now,
 			IsGudGenerated: true,
 		},
 		{
-			SHA:            "bm25-b",
-			Message:        "fix: correct db connection leak",
-			Author:         "dev@example.com",
-			RepoPath:       testTenant,
-			Branch:         "main",
-			DiffText:       "diff --git a/internal/db/pool.go b/internal/db/pool.go\n@@ -15,7 +15,9 @@ func getConn() *sql.Conn {\n-    return pool.Get()\n+    conn := pool.Get()\n+    conn.SetMaxLifetime(5 * time.Minute)\n+    return conn",
+			SHA:      "bm25-b",
+			Message:  "fix: correct db connection leak",
+			Author:   "dev@example.com",
+			RepoPath: testTenant,
+			Branch:   "main",
+			DiffText: "diff --git a/internal/db/pool.go b/internal/db/pool.go\n" +
+				"@@ -15,7 +15,9 @@ func getConn() *sql.Conn {\n-    return pool.Get()\n" +
+				"+    conn := pool.Get()\n+    conn.SetMaxLifetime(5 * time.Minute)\n+    return conn",
 			Timestamp:      now.Add(time.Second),
 			IsGudGenerated: true,
 		},
@@ -86,14 +90,17 @@ func TestIntegration_BM25ContextQueryByDiff(t *testing.T) {
 	// Search by login-related diff — should find bm25-a.
 	q := BuildContextQuery(testTenant, "main", nil,
 		"func Login(w http.ResponseWriter")
+
 	var rawResp map[string]any
 	if err := db.Exec(ctx, q, &rawResp); err != nil {
 		t.Fatalf("BuildContextQuery failed: %v", err)
 	}
+
 	records := ParseContextResults(NewResponse(rawResp))
 	if !findSHAInResults(records, "bm25-a") {
 		t.Errorf("expected bm25-a in BM25 diff results, got %d records", len(records))
 	}
+
 	t.Logf("BM25 diff query returned %d records (expected bm25-a)", len(records))
 }
 
@@ -105,7 +112,7 @@ func TestIntegration_BM25ContextQueryByFiles(t *testing.T) {
 	}
 
 	mgr, db := startManagedContainer(t)
-	defer mgr.Stop(context.Background())
+	defer func() { _ = mgr.Stop(context.Background()) }() // best-effort teardown
 
 	ctx := context.Background()
 	if err := db.EnsureSchema(ctx); err != nil {
@@ -128,6 +135,7 @@ func TestIntegration_BM25ContextQueryByFiles(t *testing.T) {
 			{Path: "auth/login.go", ChangeType: "modified", LinesAdded: 5, LinesDeleted: 3},
 		},
 	}
+
 	q := BuildPersistCommitQuery(c)
 	if err := db.Exec(ctx, q, nil); err != nil {
 		t.Fatalf("persist commit failed: %v", err)
@@ -135,14 +143,17 @@ func TestIntegration_BM25ContextQueryByFiles(t *testing.T) {
 
 	// Search by file name — should find the commit via message BM25.
 	q2 := BuildContextQuery(testTenant, "main", []string{"auth/login.go"}, "")
+
 	var rawResp map[string]any
 	if err := db.Exec(ctx, q2, &rawResp); err != nil {
 		t.Fatalf("BuildContextQuery failed: %v", err)
 	}
+
 	records := ParseContextResults(NewResponse(rawResp))
 	if !findSHAInResults(records, commitSHA) {
 		t.Errorf("expected %s in BM25 file results, got %d records", commitSHA, len(records))
 	}
+
 	t.Logf("BM25 file query returned %d records (expected %s)", len(records), commitSHA)
 }
 
@@ -154,7 +165,7 @@ func TestIntegration_EntityAwareRecall(t *testing.T) {
 	}
 
 	mgr, db := startManagedContainer(t)
-	defer mgr.Stop(context.Background())
+	defer func() { _ = mgr.Stop(context.Background()) }() // best-effort teardown
 
 	ctx := context.Background()
 	if err := db.EnsureSchema(ctx); err != nil {
@@ -178,6 +189,7 @@ func TestIntegration_EntityAwareRecall(t *testing.T) {
 			{Name: "ParseInput", Kind: "function", FilePath: "pkg/parser.go", ChangeType: "modified"},
 		},
 	}
+
 	q := BuildPersistCommitQuery(c)
 	if err := db.Exec(ctx, q, nil); err != nil {
 		t.Fatalf("persist commit failed: %v", err)
@@ -185,14 +197,17 @@ func TestIntegration_EntityAwareRecall(t *testing.T) {
 
 	// Query by code element key, scoped to the persisted commit's branch.
 	q2 := BuildEntityContextQuery(testTenant, "main", []string{elementKey}, 10)
+
 	var rawResp map[string]any
 	if err := db.Exec(ctx, q2, &rawResp); err != nil {
 		t.Fatalf("BuildEntityContextQuery failed: %v", err)
 	}
+
 	records := ParseContextResults(NewResponse(rawResp))
 	if !findSHAInResults(records, commitSHA) {
 		t.Errorf("expected %s in entity context results, got %d records", commitSHA, len(records))
 	}
+
 	t.Logf("Entity context query returned %d records (expected %s)", len(records), commitSHA)
 }
 
@@ -205,7 +220,7 @@ func TestIntegration_MemoryLifecycleFull(t *testing.T) {
 	}
 
 	mgr, db := startManagedContainer(t)
-	defer mgr.Stop(context.Background())
+	defer func() { _ = mgr.Stop(context.Background()) }() // best-effort teardown
 
 	ctx := context.Background()
 	if err := db.EnsureSchema(ctx); err != nil {
@@ -226,6 +241,7 @@ func TestIntegration_MemoryLifecycleFull(t *testing.T) {
 			helix.Prop("name", helix.String("Travel Plans")),
 			helix.Prop("description", helix.String("User travel preferences and itineraries")),
 		}))
+
 	if err := db.Exec(ctx, createCat.Returning("cat"), nil); err != nil {
 		t.Fatalf("create Category failed: %v", err)
 	}
@@ -241,6 +257,7 @@ func TestIntegration_MemoryLifecycleFull(t *testing.T) {
 			helix.Prop("kind", helix.String("country")),
 			helix.Prop("metadata", helix.String(`{"type":"destination"}`)),
 		}))
+
 	if err := db.Exec(ctx, createEnt.Returning("ent"), nil); err != nil {
 		t.Fatalf("create Entity failed: %v", err)
 	}
@@ -258,6 +275,7 @@ func TestIntegration_MemoryLifecycleFull(t *testing.T) {
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
+
 	q1 := BuildPersistMemoryQuery(memV1)
 	if err := db.Exec(ctx, q1, nil); err != nil {
 		t.Fatalf("persist memory v1 failed: %v", err)
@@ -277,15 +295,19 @@ func TestIntegration_MemoryLifecycleFull(t *testing.T) {
 
 	// 6. Query by category — verify v1 appears.
 	qCatMem := BuildCategoryMemoriesQuery(catKey, tenant, 10)
+
 	var catResp map[string]any
 	if err := db.Exec(ctx, qCatMem, &catResp); err != nil {
 		t.Fatalf("BuildCategoryMemoriesQuery failed: %v", err)
 	}
+
 	catItems := extractResultItems(catResp["memories"])
 	if len(catItems) == 0 {
 		t.Fatal("expected at least 1 memory in category results")
 	}
+
 	foundV1 := false
+
 	for _, item := range catItems {
 		if m, ok := item.(map[string]any); ok {
 			if mid, _ := m["memoryId"].(string); mid == memIDv1 {
@@ -293,6 +315,7 @@ func TestIntegration_MemoryLifecycleFull(t *testing.T) {
 			}
 		}
 	}
+
 	if !foundV1 {
 		t.Errorf("expected memory %s in category results", memIDv1)
 	}
@@ -310,6 +333,7 @@ func TestIntegration_MemoryLifecycleFull(t *testing.T) {
 		CreatedAt: now.Add(time.Minute),
 		UpdatedAt: now.Add(time.Minute),
 	}
+
 	qUpdate := BuildUpdateMemoryQuery(memIDv1, tenant, memV2)
 	if err := db.Exec(ctx, qUpdate, nil); err != nil {
 		t.Fatalf("update memory failed: %v", err)
@@ -317,10 +341,12 @@ func TestIntegration_MemoryLifecycleFull(t *testing.T) {
 
 	// 8. Query memory context — should only return v2 (latest).
 	memCtx := BuildMemoryContextQuery(tenant, user, "Japan", 10)
+
 	var mcResp map[string]any
 	if err := db.Exec(ctx, memCtx, &mcResp); err != nil {
 		t.Fatalf("BuildMemoryContextQuery failed: %v", err)
 	}
+
 	mcItems := extractResultItems(mcResp["memories"])
 
 	// Ensure v1 is never returned as latest.
@@ -334,6 +360,7 @@ func TestIntegration_MemoryLifecycleFull(t *testing.T) {
 
 	// Ensure v2 is present.
 	foundV2 := false
+
 	for _, item := range mcItems {
 		if m, ok := item.(map[string]any); ok {
 			if mid, _ := m["memoryId"].(string); mid == memIDv2 {
@@ -341,6 +368,7 @@ func TestIntegration_MemoryLifecycleFull(t *testing.T) {
 			}
 		}
 	}
+
 	if !foundV2 {
 		t.Errorf("expected memory %s in memory context results", memIDv2)
 	}
@@ -353,10 +381,12 @@ func TestIntegration_MemoryLifecycleFull(t *testing.T) {
 
 	// 10. Query memory context again — v2 should be excluded.
 	memCtx2 := BuildMemoryContextQuery(tenant, user, "Japan", 10)
+
 	var mcResp2 map[string]any
 	if err := db.Exec(ctx, memCtx2, &mcResp2); err != nil {
 		t.Fatalf("BuildMemoryContextQuery (post-delete) failed: %v", err)
 	}
+
 	mcItems2 := extractResultItems(mcResp2["memories"])
 	for _, item := range mcItems2 {
 		if m, ok := item.(map[string]any); ok {
@@ -365,6 +395,7 @@ func TestIntegration_MemoryLifecycleFull(t *testing.T) {
 			}
 		}
 	}
+
 	t.Logf("Memory lifecycle test passed: created, categorized, linked, updated, and soft-deleted")
 }
 
@@ -376,7 +407,7 @@ func TestIntegration_TenantIsolation(t *testing.T) {
 	}
 
 	mgr, db := startManagedContainer(t)
-	defer mgr.Stop(context.Background())
+	defer func() { _ = mgr.Stop(context.Background()) }() // best-effort teardown
 
 	ctx := context.Background()
 	if err := db.EnsureSchema(ctx); err != nil {
@@ -389,6 +420,7 @@ func TestIntegration_TenantIsolation(t *testing.T) {
 
 	// Persist a commit in tenant A with distinctive diff text.
 	shaA := "iso-a-001"
+
 	cA := CommitData{
 		SHA:            shaA,
 		Message:        "tenant A commit",
@@ -405,6 +437,7 @@ func TestIntegration_TenantIsolation(t *testing.T) {
 
 	// Persist a commit in tenant B.
 	shaB := "iso-b-001"
+
 	cB := CommitData{
 		SHA:            shaB,
 		Message:        "tenant B commit",
@@ -421,17 +454,21 @@ func TestIntegration_TenantIsolation(t *testing.T) {
 
 	// Query context for tenant A — should NOT find tenant B's commit.
 	q := BuildContextQuery(tenantA, "main", nil, "TENANT_A_SPECIFIC_FEATURE_XYZ")
+
 	var rawResp map[string]any
 	if err := db.Exec(ctx, q, &rawResp); err != nil {
 		t.Fatalf("BuildContextQuery for tenant A failed: %v", err)
 	}
+
 	records := ParseContextResults(NewResponse(rawResp))
 	if findSHAInResults(records, shaB) {
 		t.Errorf("tenant B commit leaked into tenant A results")
 	}
+
 	if !findSHAInResults(records, shaA) {
 		t.Errorf("expected tenant A commit %s in own context", shaA)
 	}
+
 	t.Logf("Tenant isolation verified: A has %d records, none from B", len(records))
 }
 
@@ -443,7 +480,7 @@ func TestIntegration_VectorSearch(t *testing.T) {
 	}
 
 	mgr, db := startManagedContainer(t)
-	defer mgr.Stop(context.Background())
+	defer func() { _ = mgr.Stop(context.Background()) }() // best-effort teardown
 
 	ctx := context.Background()
 	if err := db.EnsureSchema(ctx); err != nil {
@@ -472,6 +509,7 @@ func TestIntegration_VectorSearch(t *testing.T) {
 	// Search with a similar vector (slightly different seed).
 	queryVec := createTestVector(43)
 	q := BuildHybridContextQuery(testTenant, "main", queryVec, "", nil, 10)
+
 	var rawResp map[string]any
 	if err := db.Exec(ctx, q, &rawResp); err != nil {
 		t.Fatalf("BuildHybridContextQuery failed: %v", err)
@@ -481,25 +519,30 @@ func TestIntegration_VectorSearch(t *testing.T) {
 	if !ok {
 		t.Fatal("expected 'by_vector' in response")
 	}
+
 	vecItems := extractResultItems(vecRaw)
 	if len(vecItems) == 0 {
 		t.Fatal("expected at least 1 vector search result")
 	}
 
 	found := false
+
 	for _, item := range vecItems {
 		if m, ok := item.(map[string]any); ok {
 			if s, _ := m["sha"].(string); s == sha {
 				found = true
+
 				if dist, _ := m["distance"].(float64); dist > 0 {
 					t.Logf("vector distance for %s: %f", sha, dist)
 				}
 			}
 		}
 	}
+
 	if !found {
 		t.Errorf("expected commit %s in vector search results (%d items)", sha, len(vecItems))
 	}
+
 	t.Logf("Vector search returned %d items, found expected commit", len(vecItems))
 }
 
@@ -511,7 +554,7 @@ func TestIntegration_TopFilesStats(t *testing.T) {
 	}
 
 	mgr, db := startManagedContainer(t)
-	defer mgr.Stop(context.Background())
+	defer func() { _ = mgr.Stop(context.Background()) }() // best-effort teardown
 
 	ctx := context.Background()
 	if err := db.EnsureSchema(ctx); err != nil {
@@ -549,6 +592,7 @@ func TestIntegration_TopFilesStats(t *testing.T) {
 
 	// Top files query.
 	q := BuildTopFilesQuery(testTenant, 10)
+
 	var rawResp map[string]any
 	if err := db.Exec(ctx, q, &rawResp); err != nil {
 		t.Fatalf("BuildTopFilesQuery failed: %v", err)
@@ -563,14 +607,17 @@ func TestIntegration_TopFilesStats(t *testing.T) {
 	}
 	// lib/core.go should have 2 changes (across 2 commits).
 	found := false
+
 	for _, s := range stats {
 		if s.Path == "lib/core.go" {
 			found = true
+
 			if s.Changes < 2 {
 				t.Errorf("expected lib/core.go to have >=2 changes, got %d", s.Changes)
 			}
 		}
 	}
+
 	if !found {
 		t.Errorf("expected lib/core.go in top files, got: %+v", stats)
 	}
@@ -584,7 +631,7 @@ func TestIntegration_CategoryMemoriesQuery(t *testing.T) {
 	}
 
 	mgr, db := startManagedContainer(t)
-	defer mgr.Stop(context.Background())
+	defer func() { _ = mgr.Stop(context.Background()) }() // best-effort teardown
 
 	ctx := context.Background()
 	if err := db.EnsureSchema(ctx); err != nil {
@@ -611,6 +658,7 @@ func TestIntegration_CategoryMemoriesQuery(t *testing.T) {
 				helix.Prop("name", helix.String(cat.name)),
 				helix.Prop("description", helix.String("")),
 			}))
+
 		if err := db.Exec(ctx, createCat.Returning("cat"), nil); err != nil {
 			t.Fatalf("create category %s failed: %v", cat.name, err)
 		}
@@ -657,10 +705,12 @@ func TestIntegration_CategoryMemoriesQuery(t *testing.T) {
 
 	// Query work category — should only find work memory.
 	qWork := BuildCategoryMemoriesQuery(tenant+":work", tenant, 10)
+
 	var workResp map[string]any
 	if err := db.Exec(ctx, qWork, &workResp); err != nil {
 		t.Fatalf("BuildCategoryMemoriesQuery(work) failed: %v", err)
 	}
+
 	workItems := extractResultItems(workResp["memories"])
 
 	// Verify work memory is present and personal memory is not.
@@ -674,13 +724,16 @@ func TestIntegration_CategoryMemoriesQuery(t *testing.T) {
 
 	// Query personal category — should only find personal memory.
 	qPersonal := BuildCategoryMemoriesQuery(tenant+":personal", tenant, 10)
+
 	var personalResp map[string]any
 	if err := db.Exec(ctx, qPersonal, &personalResp); err != nil {
 		t.Fatalf("BuildCategoryMemoriesQuery(personal) failed: %v", err)
 	}
+
 	personalItems := extractResultItems(personalResp["memories"])
 
 	foundPersonal := false
+
 	for _, item := range personalItems {
 		if m, ok := item.(map[string]any); ok {
 			if mid, _ := m["memoryId"].(string); mid == memPersonal.MemoryID {
@@ -688,9 +741,11 @@ func TestIntegration_CategoryMemoriesQuery(t *testing.T) {
 			}
 		}
 	}
+
 	if !foundPersonal {
 		t.Errorf("expected personal memory %s in personal category results", memPersonal.MemoryID)
 	}
+
 	t.Logf("Category query verified: work has %d memories, personal has %d", len(workItems), len(personalItems))
 }
 
@@ -702,7 +757,7 @@ func TestIntegration_BM25ContextQueryNoResults(t *testing.T) {
 	}
 
 	mgr, db := startManagedContainer(t)
-	defer mgr.Stop(context.Background())
+	defer func() { _ = mgr.Stop(context.Background()) }() // best-effort teardown
 
 	ctx := context.Background()
 	if err := db.EnsureSchema(ctx); err != nil {
@@ -710,6 +765,7 @@ func TestIntegration_BM25ContextQueryNoResults(t *testing.T) {
 	}
 
 	now := time.Now()
+
 	c := CommitData{
 		SHA: "nores-a", Message: "some commit", Author: "dev@example.com",
 		RepoPath: testTenant, Branch: "main",
@@ -722,13 +778,16 @@ func TestIntegration_BM25ContextQueryNoResults(t *testing.T) {
 
 	// Search for something that doesn't match.
 	q := BuildContextQuery(testTenant, "main", nil, "ZZZZ_THIS_DOES_NOT_MATCH_ZZZZ")
+
 	var rawResp map[string]any
 	if err := db.Exec(ctx, q, &rawResp); err != nil {
 		t.Fatalf("BuildContextQuery failed: %v", err)
 	}
+
 	records := ParseContextResults(NewResponse(rawResp))
 	if len(records) != 0 {
 		t.Errorf("expected 0 results for non-matching query, got %d", len(records))
 	}
+
 	t.Log("Non-matching BM25 correctly returned no results")
 }

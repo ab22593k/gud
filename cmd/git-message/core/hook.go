@@ -73,6 +73,7 @@ func runHookInstall(global bool) error {
 	if err != nil {
 		return fmt.Errorf("failed to get executable path: %w", err)
 	}
+
 	binaryPath, err = filepath.Abs(binaryPath)
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
@@ -127,9 +128,11 @@ func runHookModeInternal(ctx context.Context, msgFile string, app *AppContext) e
 	if err != nil {
 		return fmt.Errorf("failed to get staged changes: %w", err)
 	}
+
 	if strings.TrimSpace(diff) == "" {
 		return nil
 	}
+
 	diff = appendDeletedContext(diff, deleted)
 
 	if err := app.InitClient(ctx); err != nil {
@@ -145,6 +148,7 @@ func runHookModeInternal(ctx context.Context, msgFile string, app *AppContext) e
 // message provided by an interactive git-message commit or git commit -m.
 func generateAndWriteMsg(ctx context.Context, app *AppContext, diff, msgFile string) error {
 	msgFile = filepath.Clean(msgFile)
+
 	existing, err := os.ReadFile(msgFile)
 	if err == nil && hasMeaningfulContent(string(existing)) {
 		return nil
@@ -152,6 +156,7 @@ func generateAndWriteMsg(ctx context.Context, app *AppContext, diff, msgFile str
 
 	cfg := app.Config()
 	profileContent := resolveProfileContent(string(cfg.Profile))
+
 	msg, err := app.Client().GenerateCommitMessageWithContent(
 		ctx, diff, "", request.DetailLevel(cfg.DetailLevel),
 		cfg.Hint, request.ProfileName(cfg.Profile), profileContent, cfg.WrapLine,

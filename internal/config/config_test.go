@@ -13,6 +13,7 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.DetailLevel != DetailStandard {
 		t.Errorf("DefaultConfig().DetailLevel = %q, want %q", cfg.DetailLevel, DetailStandard)
 	}
+
 	if cfg.WrapLine != 72 {
 		t.Errorf("DefaultConfig().WrapLine = %d, want 72", cfg.WrapLine)
 	}
@@ -34,6 +35,7 @@ func TestValidateDetailLevel(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := Config{DetailLevel: tt.input}
+
 			got := cfg.Validate()
 			if got.DetailLevel != tt.want {
 				t.Errorf("Validate().DetailLevel = %q, want %q", got.DetailLevel, tt.want)
@@ -49,6 +51,7 @@ func TestValidateHistoryUnset(t *testing.T) {
 	if got.History != nil {
 		t.Errorf("Validate() on unset History = %v, want nil", got.History)
 	}
+
 	if got.HistoryValue() != 0 {
 		t.Errorf("HistoryValue() = %d, want 0", got.HistoryValue())
 	}
@@ -70,6 +73,7 @@ func TestValidateHistory(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := Config{History: Ptr(tt.input)}
+
 			got := cfg.Validate()
 			if got.HistoryValue() != tt.want {
 				t.Errorf("Validate().History = %d, want %d", got.HistoryValue(), tt.want)
@@ -95,6 +99,7 @@ func TestValidateWrapLine(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := Config{WrapLine: tt.input}
+
 			got := cfg.Validate()
 			if got.WrapLine != tt.want {
 				t.Errorf("Validate().WrapLine = %d, want %d", got.WrapLine, tt.want)
@@ -120,12 +125,15 @@ func TestMerge(t *testing.T) {
 	if merged.DetailLevel != DetailStandard {
 		t.Errorf("Merge preserved DetailLevel = %q, want %q", merged.DetailLevel, DetailStandard)
 	}
+
 	if merged.Model != "gemini-flash-latest" {
 		t.Errorf("Merge overrode Model = %q, want %q", merged.Model, "gemini-flash-latest")
 	}
+
 	if merged.HistoryValue() != 5 {
 		t.Errorf("Merge preserved History = %d, want 5", merged.HistoryValue())
 	}
+
 	if merged.WrapLine != 72 {
 		t.Errorf("Merge preserved WrapLine = %d, want 72", merged.WrapLine)
 	}
@@ -143,6 +151,7 @@ func TestMergeHistoryZeroOverridesBase(t *testing.T) {
 	if merged.History == nil {
 		t.Fatal("Merge lost explicit History=0 (treated as not set)")
 	}
+
 	if merged.HistoryValue() != 0 {
 		t.Errorf("Merge History = %d, want 0 (explicit disable wins)", merged.HistoryValue())
 	}
@@ -171,6 +180,7 @@ func TestMergeEmptyOverride(t *testing.T) {
 	if merged.DetailLevel != DetailDetailed {
 		t.Errorf("Merge empty preserved DetailLevel = %q", merged.DetailLevel)
 	}
+
 	if merged.Model != "gemini-flash-lite-latest" {
 		t.Errorf("Merge empty preserved Model = %q", merged.Model)
 	}
@@ -187,6 +197,7 @@ func TestMergeOverrideEmptyBase(t *testing.T) {
 	if merged.Model != "gemini-flash-latest" {
 		t.Errorf("Merge from zero value: Model = %q", merged.Model)
 	}
+
 	if merged.WrapLine != 80 {
 		t.Errorf("Merge from zero value: WrapLine = %d", merged.WrapLine)
 	}

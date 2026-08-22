@@ -12,6 +12,7 @@ func TestNewContainerManager_DefaultValues(t *testing.T) {
 	if m.ContainerName() != DefaultContainerName {
 		t.Errorf("ContainerName() = %q, want %q", m.ContainerName(), DefaultContainerName)
 	}
+
 	if m.StartedByUs() {
 		t.Error("StartedByUs() = true, want false")
 	}
@@ -24,6 +25,7 @@ func TestNewContainerManager_CustomValues(t *testing.T) {
 	if m.ContainerName() != "my-helix" {
 		t.Errorf("ContainerName() = %q, want my-helix", m.ContainerName())
 	}
+
 	if m.StartedByUs() {
 		t.Error("StartedByUs() = true, want false")
 	}
@@ -36,6 +38,7 @@ func TestContainerManager_StopNotStartedByUs(t *testing.T) {
 	if err := m.Stop(context.Background()); err != nil {
 		t.Errorf("Stop() should be no-op when not started by us, got: %v", err)
 	}
+
 	if m.StartedByUs() {
 		t.Error("StartedByUs() should still be false after no-op Stop()")
 	}
@@ -67,7 +70,7 @@ func TestContainerManager_BaseURL(t *testing.T) {
 		port string
 		want string
 	}{
-		{name: "default port", port: "", want: "http://localhost:3223"},
+		{name: "default port", port: "", want: DefaultBaseURL},
 		{name: "legacy explicit port stays respected", port: "2232", want: "http://localhost:2232"},
 		{name: "custom port 8080", port: "8080", want: "http://localhost:8080"},
 	}
@@ -75,6 +78,7 @@ func TestContainerManager_BaseURL(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			m := NewContainerManager("x", tt.port)
 			if got := m.baseURL(); got != tt.want {
 				t.Errorf("baseURL() = %q, want %q", got, tt.want)

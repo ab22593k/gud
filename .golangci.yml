@@ -32,6 +32,7 @@ linters:
     - nilerr
     - forcetypeassert
     - noctx
+    - wsl_v5
     - godot
     - gosec
     - goconst
@@ -41,6 +42,18 @@ linters:
     - errorlint
     - modernize
   settings:
+    # Accepted-risk classes for this local CLI tool:
+    #   G204: subprocesses always use the fixed "git"/"docker" binary; arguments
+    #         come from internal callers (git output / local config), never
+    #         from remote or untrusted user input.
+    #   G304: reading files whose paths come from git output (repo-relative
+    #         paths) or the CLI's own resolved config locations.
+    #   G301: intentionally permissive (0755) fixture directories in tests.
+    gosec:
+      excludes:
+        - G204
+        - G304
+        - G301
     funlen:
       lines: 65
       statements: 40

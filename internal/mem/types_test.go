@@ -45,6 +45,7 @@ func TestCommitData_ToProperties(t *testing.T) {
 			expectedKeys[p.Name] = true
 		}
 	}
+
 	for key, found := range expectedKeys {
 		if !found {
 			t.Errorf("missing property %q", key)
@@ -67,11 +68,13 @@ func TestCommitData_ToProperties_NoEmbedding(t *testing.T) {
 
 	props := c.ToProps()
 	found := false
+
 	for _, p := range props {
 		if p.Name == "embedding" {
 			found = true
 		}
 	}
+
 	if found {
 		t.Error("expected no embedding property when nil")
 	}
@@ -92,11 +95,13 @@ func TestCommitData_ToProperties_WithLifecycle(t *testing.T) {
 
 	props := c.ToProps()
 	foundDeleted := false
+
 	for _, p := range props {
 		if p.Name == "deletedAt" {
 			foundDeleted = true
 		}
 	}
+
 	if !foundDeleted {
 		t.Error("expected deletedAt property")
 	}
@@ -118,6 +123,7 @@ func TestMemoryData_ToProps(t *testing.T) {
 	}
 
 	props := m.ToProps()
+
 	expectedKeys := map[string]bool{
 		"memoryId": false, "content": false, "tenantId": false, "userId": false,
 		"kind": false, "salience": false, "isLatest": false, "createdAt": false,
@@ -128,6 +134,7 @@ func TestMemoryData_ToProps(t *testing.T) {
 			expectedKeys[p.Name] = true
 		}
 	}
+
 	for key, found := range expectedKeys {
 		if !found {
 			t.Errorf("missing property %q", key)
@@ -179,6 +186,7 @@ func TestCommitRecord_FromHelixNode(t *testing.T) {
 	if record.HelixID != 42 {
 		t.Errorf("expected HelixID 42, got %d", record.HelixID)
 	}
+
 	if record.Message != "fix: handle nil pointer" {
 		t.Errorf("expected message %q, got %q", "fix: handle nil pointer", record.Message)
 	}
@@ -189,6 +197,7 @@ func TestBuildCommitNodeQuery(t *testing.T) {
 	if q == nil {
 		t.Fatal("expected non-nil query")
 	}
+
 	err := q.Validate()
 	if err != nil {
 		t.Errorf("query validation failed: %v", err)
@@ -200,6 +209,7 @@ func TestBuildCommitNodeQuery_EmptyBranch(t *testing.T) {
 	if q == nil {
 		t.Fatal("expected non-nil query")
 	}
+
 	err := q.Validate()
 	if err != nil {
 		t.Errorf("query validation failed: %v", err)

@@ -156,9 +156,11 @@ func TestJSONRoundTrip(t *testing.T) {
 	if err := json.Unmarshal(data, &raw); err != nil {
 		t.Fatalf("json.Unmarshal to map failed: %v", err)
 	}
+
 	if _, exists := raw["hint"]; exists {
 		t.Errorf("hint should be omitted when empty, got %v", raw)
 	}
+
 	if _, exists := raw["api_key"]; exists {
 		t.Errorf("api_key should be omitted when empty, got %v", raw)
 	}
@@ -180,6 +182,7 @@ func TestJSONRoundTripHistoryZero(t *testing.T) {
 	if err := json.Unmarshal(data, &raw); err != nil {
 		t.Fatalf("json.Unmarshal to map failed: %v", err)
 	}
+
 	if v, exists := raw["history"]; !exists {
 		t.Errorf("history should be serialized when explicitly 0, got %v", raw)
 	} else if v != float64(0) {
@@ -190,6 +193,7 @@ func TestJSONRoundTripHistoryZero(t *testing.T) {
 	if err := json.Unmarshal(data, &restored); err != nil {
 		t.Fatalf("json.Unmarshal failed: %v", err)
 	}
+
 	if restored.History == nil || *restored.History != 0 {
 		t.Errorf("round-tripped History = %v, want pointer to 0", restored.History)
 	}
@@ -228,9 +232,11 @@ func TestEmptyDTO(t *testing.T) {
 	if entity.DetailLevel != "" {
 		t.Errorf("empty DTO: DetailLevel = %q", entity.DetailLevel)
 	}
+
 	if entity.History != nil {
 		t.Errorf("empty DTO: History = %v, want nil", entity.History)
 	}
+
 	if entity.WrapLine != 0 {
 		t.Errorf("empty DTO: WrapLine = %d", entity.WrapLine)
 	}

@@ -33,6 +33,7 @@ func NewManager() (*Manager, error) {
 	if err != nil {
 		return nil, fmt.Errorf("home dir: %w", err)
 	}
+
 	cacheDir := filepath.Join(home, ".config", "gud", "profiles")
 	if err := os.MkdirAll(cacheDir, 0750); err != nil {
 		return nil, fmt.Errorf("create cache dir: %w", err)
@@ -59,14 +60,17 @@ func (m *Manager) List() ([]Profile, error) {
 		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
 			continue
 		}
+
 		data, err := os.ReadFile(filepath.Join(m.cacheDir, entry.Name()))
 		if err != nil {
 			continue
 		}
+
 		var p Profile
 		if err := json.Unmarshal(data, &p); err != nil {
 			continue
 		}
+
 		if p.Slug != "" {
 			profiles = append(profiles, p)
 		}
@@ -91,10 +95,12 @@ func (m *Manager) IsCached(slug string) bool {
 
 func (m *Manager) Save(slug string, p Profile) error {
 	p.Slug = slug
+
 	data, err := json.MarshalIndent(p, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)
 	}
+
 	if err := os.WriteFile(m.cachePath(slug), data, 0600); err != nil {
 		return fmt.Errorf("write: %w", err)
 	}
@@ -123,6 +129,7 @@ func (m *Manager) Get(slug string) (*Profile, error) {
 
 		return nil, fmt.Errorf("read: %w", err)
 	}
+
 	var p Profile
 	if err := json.Unmarshal(data, &p); err != nil {
 		return nil, fmt.Errorf("parse: %w", err)

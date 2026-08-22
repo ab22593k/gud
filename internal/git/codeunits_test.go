@@ -23,15 +23,19 @@ index abc123..def456 100644
 	if len(units) == 0 {
 		t.Fatal("expected at least one code unit")
 	}
+
 	if units[0].Name != "NewClient" {
 		t.Errorf("expected name 'NewClient', got %q", units[0].Name)
 	}
+
 	if units[0].Kind != "function" {
 		t.Errorf("expected kind 'function', got %q", units[0].Kind)
 	}
+
 	if units[0].FilePath != "internal/request/client.go" {
 		t.Errorf("expected file path 'internal/request/client.go', got %q", units[0].FilePath)
 	}
+
 	if units[0].ChangeType != "modified" {
 		t.Errorf("expected change type 'modified', got %q", units[0].ChangeType)
 	}
@@ -52,9 +56,11 @@ func TestExtractCodeUnits_Method(t *testing.T) {
 	if len(units) == 0 {
 		t.Fatal("expected at least one code unit")
 	}
+
 	if units[0].Name != "(*GitRepo).Commit" {
 		t.Errorf("expected name '(*GitRepo).Commit', got %q", units[0].Name)
 	}
+
 	if units[0].Kind != "method" {
 		t.Errorf("expected kind 'method', got %q", units[0].Kind)
 	}
@@ -74,9 +80,11 @@ func TestExtractCodeUnits_Struct(t *testing.T) {
 	if len(units) == 0 {
 		t.Fatal("expected at least one code unit")
 	}
+
 	if units[0].Name != "Config" {
 		t.Errorf("expected name 'Config', got %q", units[0].Name)
 	}
+
 	if units[0].Kind != "struct" {
 		t.Errorf("expected kind 'struct', got %q", units[0].Kind)
 	}
@@ -101,6 +109,7 @@ func TestExtractCodeUnits_MultipleHunks(t *testing.T) {
 	if len(units) != 2 {
 		t.Fatalf("expected 2 code units, got %d", len(units))
 	}
+
 	if units[0].Name != "init" && units[1].Name != "init" {
 		t.Errorf("expected at least one 'init' function")
 	}

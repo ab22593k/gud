@@ -26,20 +26,25 @@ func TestInstallHook(t *testing.T) {
 			binaryPath: testBinary,
 			validateHook: func(t *testing.T, hookPath string) {
 				t.Helper()
+
 				if _, err := os.Stat(hookPath); os.IsNotExist(err) {
 					t.Errorf("hook file should exist at %s", hookPath)
 				}
+
 				info, err := os.Stat(hookPath)
 				if err != nil {
 					t.Fatalf("failed to stat hook file: %v", err)
 				}
+
 				if info.Mode()&0111 == 0 {
 					t.Errorf("hook file should be executable")
 				}
+
 				content, err := os.ReadFile(hookPath)
 				if err != nil {
 					t.Fatalf("failed to read hook file: %v", err)
 				}
+
 				quotedBinary := `'` + testBinary + `'`
 				if !strings.Contains(string(content), quotedBinary+" hook run") {
 					t.Errorf("hook should call %s hook run, got:\n%s", testBinary, string(content))
@@ -52,6 +57,7 @@ func TestInstallHook(t *testing.T) {
 			binaryPath: `/usr/local/gud' -c "rm -rf /" `,
 			validateHook: func(t *testing.T, hookPath string) {
 				t.Helper()
+
 				content, err := os.ReadFile(hookPath)
 				if err != nil {
 					t.Fatalf("failed to read hook file: %v", err)
@@ -70,6 +76,7 @@ func TestInstallHook(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			tmpDir := t.TempDir()
+
 			hookDir := filepath.Join(tmpDir, ".git", "hooks")
 			if err := os.MkdirAll(hookDir, 0755); err != nil {
 				t.Fatalf("failed to create hooks dir: %v", err)
@@ -93,10 +100,12 @@ func TestInstallHook(t *testing.T) {
 func TestUninstallHook(t *testing.T) {
 	t.Parallel()
 	tmpDir := t.TempDir()
+
 	hookDir := filepath.Join(tmpDir, ".git", "hooks")
 	if err := os.MkdirAll(hookDir, 0755); err != nil {
 		t.Fatalf("failed to create hooks dir: %v", err)
 	}
+
 	hookPath := filepath.Join(hookDir, string(PrepareCommitMsg))
 
 	if err := os.WriteFile(hookPath, []byte("#!/bin/sh\necho test"), 0600); err != nil {

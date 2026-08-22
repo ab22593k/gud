@@ -90,17 +90,21 @@ func (c Config) Validate() Config {
 	if c.Issues != nil {
 		// Drop non-positive entries and duplicates, preserving order.
 		seen := make(map[int]struct{}, len(c.Issues))
+
 		deduped := make([]int, 0, len(c.Issues))
 		for _, n := range c.Issues {
 			if n <= 0 {
 				continue
 			}
+
 			if _, ok := seen[n]; ok {
 				continue
 			}
+
 			seen[n] = struct{}{}
 			deduped = append(deduped, n)
 		}
+
 		c.Issues = deduped
 	}
 
@@ -121,24 +125,31 @@ func (c Config) Merge(override Config) Config {
 	if override.DetailLevel != "" {
 		merged.DetailLevel = override.DetailLevel
 	}
+
 	if override.Profile != "" {
 		merged.Profile = override.Profile
 	}
+
 	if override.Model != "" {
 		merged.Model = override.Model
 	}
+
 	if override.Hint != "" {
 		merged.Hint = override.Hint
 	}
+
 	if override.History != nil {
 		merged.History = override.History
 	}
+
 	if override.APIKey != "" {
 		merged.APIKey = override.APIKey
 	}
+
 	if override.WrapLine != 0 {
 		merged.WrapLine = override.WrapLine
 	}
+
 	if override.Issues != nil {
 		merged.Issues = override.Issues
 	}

@@ -133,6 +133,7 @@ func (a *AppContext) InitClient(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to create request client: %w", err)
 	}
+
 	a.client = client
 
 	return nil
@@ -192,6 +193,7 @@ func (a *AppContext) Branch(ctx context.Context) string {
 		} else {
 			a.branch = git.GetBranch(ctx)
 		}
+
 		a.branchOK = true
 	}
 
@@ -209,6 +211,7 @@ func (a *AppContext) Operation(ctx context.Context) git.Operation {
 		} else {
 			a.operation = git.DetectOperation(ctx)
 		}
+
 		a.operationOK = true
 	}
 

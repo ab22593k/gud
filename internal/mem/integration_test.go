@@ -20,18 +20,21 @@ func startManagedContainer(t *testing.T) (*ContainerManager, *DB) {
 	t.Helper()
 
 	mgr := NewContainerManager("gud-helixdb-int", testPort)
+
 	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
 	defer cancel()
 
 	url, err := mgr.EnsureRunning(ctx)
 	if err != nil {
-		mgr.Stop(context.Background())
+		_ = mgr.Stop(context.Background()) // best-effort teardown
+
 		t.Fatalf("EnsureRunning: %v", err)
 	}
 
 	db := NewDB(Options{BaseURL: url, Enabled: true})
 	if !db.Enabled() {
-		mgr.Stop(context.Background())
+		_ = mgr.Stop(context.Background()) // best-effort teardown
+
 		t.Fatal("DB not enabled after EnsureRunning")
 	}
 
@@ -44,12 +47,13 @@ func TestIntegration_EnsureSchema(t *testing.T) {
 	}
 
 	mgr, db := startManagedContainer(t)
-	defer mgr.Stop(context.Background())
+	defer func() { _ = mgr.Stop(context.Background()) }() // best-effort teardown
 
 	ctx := context.Background()
 	if err := db.EnsureSchema(ctx); err != nil {
 		t.Fatalf("EnsureSchema failed: %v", err)
 	}
+
 	t.Log("schema ensured successfully")
 }
 
@@ -59,7 +63,7 @@ func TestIntegration_PersistAndQueryCommit(t *testing.T) {
 	}
 
 	mgr, db := startManagedContainer(t)
-	defer mgr.Stop(context.Background())
+	defer func() { _ = mgr.Stop(context.Background()) }() // best-effort teardown
 
 	ctx := context.Background()
 	if err := db.EnsureSchema(ctx); err != nil {
@@ -80,13 +84,16 @@ func TestIntegration_PersistAndQueryCommit(t *testing.T) {
 	}
 
 	q := BuildPersistCommitQuery(commit)
+
 	var persistResp map[string]any
 	if err := db.Exec(ctx, q, &persistResp); err != nil {
 		t.Fatalf("persist commit failed: %v", err)
 	}
+
 	t.Log("commit persisted successfully")
 
 	summaryQ := BuildRepoSummaryQuery(commit.RepoPath)
+
 	var rawSummaryResp map[string]any
 	if err := db.Exec(ctx, summaryQ, &rawSummaryResp); err != nil {
 		t.Fatalf("repo summary query failed: %v", err)
@@ -101,6 +108,7 @@ func TestIntegration_PersistAndQueryCommit(t *testing.T) {
 	if !strings.Contains(output, "dev@example.com") {
 		t.Errorf("expected author in output, got: %s", output)
 	}
+
 	t.Logf("summary:\n%s", output)
 }
 
@@ -110,7 +118,7 @@ func TestIntegration_AuthorStats(t *testing.T) {
 	}
 
 	mgr, db := startManagedContainer(t)
-	defer mgr.Stop(context.Background())
+	defer func() { _ = mgr.Stop(context.Background()) }() // best-effort teardown
 
 	ctx := context.Background()
 	if err := db.EnsureSchema(ctx); err != nil {
@@ -134,6 +142,7 @@ func TestIntegration_AuthorStats(t *testing.T) {
 	}
 
 	q := BuildAuthorStatsQuery("/test/repo")
+
 	var rawResp map[string]any
 	if err := db.Exec(ctx, q, &rawResp); err != nil {
 		t.Fatalf("author stats query failed: %v", err)
@@ -148,6 +157,7 @@ func TestIntegration_AuthorStats(t *testing.T) {
 	if !strings.Contains(output, "alice") || !strings.Contains(output, "bob") {
 		t.Errorf("expected both authors in output, got: %s", output)
 	}
+
 	t.Logf("author stats:\n%s", output)
 }
 
@@ -157,7 +167,7 @@ func TestIntegration_Trends(t *testing.T) {
 	}
 
 	mgr, db := startManagedContainer(t)
-	defer mgr.Stop(context.Background())
+	defer func() { _ = mgr.Stop(context.Background()) }() // best-effort teardown
 
 	ctx := context.Background()
 	if err := db.EnsureSchema(ctx); err != nil {
@@ -184,6 +194,7 @@ func TestIntegration_Trends(t *testing.T) {
 	}
 
 	q := BuildTrendsQuery("/test/repo")
+
 	var rawResp map[string]any
 	if err := db.Exec(ctx, q, &rawResp); err != nil {
 		t.Fatalf("trends query failed: %v", err)
@@ -195,10 +206,12 @@ func TestIntegration_Trends(t *testing.T) {
 	}
 
 	output := FormatTrends(trends)
+
 	expectedDate := now.Format("2006-01-02")
 	if !strings.Contains(output, expectedDate) {
 		t.Errorf("expected date %s in output, got: %s", expectedDate, output)
 	}
+
 	t.Logf("trends:\n%s", output)
 }
 
@@ -218,12 +231,15 @@ func TestIntegration_ContainerManager(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EnsureRunning failed: %v", err)
 	}
+
 	if url != "http://localhost:"+containerMgrTestPort {
 		t.Errorf("expected url http://localhost:%s, got %s", testPort, url)
 	}
+
 	if !mgr.StartedByUs() {
 		t.Error("expected StartedByUs to be true after EnsureRunning")
 	}
+
 	if !mgr.IsRunning(ctx) {
 		t.Error("expected IsRunning to be true after EnsureRunning")
 	}
@@ -233,6 +249,7 @@ func TestIntegration_ContainerManager(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EnsureRunning (second call) failed: %v", err)
 	}
+
 	if url2 != url {
 		t.Errorf("expected same url, got %s", url2)
 	}
@@ -241,9 +258,11 @@ func TestIntegration_ContainerManager(t *testing.T) {
 	if err := mgr.Stop(ctx); err != nil {
 		t.Fatalf("Stop failed: %v", err)
 	}
+
 	if mgr.StartedByUs() {
 		t.Error("expected StartedByUs to be false after Stop")
 	}
+
 	if mgr.IsRunning(ctx) {
 		t.Error("expected IsRunning to be false after Stop")
 	}

@@ -61,6 +61,7 @@ func TestAppendTrailers(t *testing.T) {
 			if err != nil {
 				t.Fatalf("AppendTrailers: %v", err)
 			}
+
 			if got != tt.want {
 				t.Errorf("AppendTrailers:\n  got:  %q\n  want: %q", got, tt.want)
 			}

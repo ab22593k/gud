@@ -66,12 +66,14 @@ func suggestProfileIfNeeded(ctx context.Context, cmd *cobra.Command, app *AppCon
 	if err != nil {
 		return fmt.Errorf("compute stats: %w", err)
 	}
+
 	if stats.TotalFiles == 0 {
 		return nil
 	}
 
 	// Fetch remote catalog
 	initProfileManager()
+
 	entries, err := profileManager.FetchCatalog(ctx)
 	if err != nil {
 		return fmt.Errorf("fetch catalog: %w", err)
@@ -91,11 +93,13 @@ func suggestProfileIfNeeded(ctx context.Context, cmd *cobra.Command, app *AppCon
 	if !scanner.Scan() {
 		return nil
 	}
+
 	input := strings.TrimSpace(scanner.Text())
 
 	switch {
 	case input == "" || strings.EqualFold(input, "s") || strings.EqualFold(input, "skip"):
 		writeSkipMarker(cwd)
+
 		_, _ = fmt.Fprintln(out, "Skipped. To see all profiles: git message profile list --remote")
 
 		return nil
@@ -109,6 +113,7 @@ func suggestProfileIfNeeded(ctx context.Context, cmd *cobra.Command, app *AppCon
 		idx, err := strconv.Atoi(input)
 		if err != nil || idx < 1 || idx > len(suggestions) {
 			_, _ = fmt.Fprintf(out, "Invalid selection %q. Skipping.\n", input)
+
 			writeSkipMarker(cwd)
 
 			return nil //nolint:nilerr // bad user input is handled as UX flow, not a failure
@@ -129,6 +134,7 @@ func applySelectedProfile(ctx context.Context, app *AppContext, out io.Writer, e
 		if err := downloadAndSaveProfile(ctx, entry.Slug, entry.Profession); err != nil {
 			return err
 		}
+
 		_, _ = fmt.Fprintf(out, "Profile %q saved.\n", entry.Slug)
 	}
 
@@ -138,6 +144,7 @@ func applySelectedProfile(ctx context.Context, app *AppContext, out io.Writer, e
 	if err != nil {
 		return fmt.Errorf("get cwd: %w", err)
 	}
+
 	projCfg := config.Config{
 		Profile: config.ProfileName(entry.Slug),
 	}

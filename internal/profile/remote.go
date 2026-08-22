@@ -36,10 +36,12 @@ func (m *Manager) FetchCatalog(ctx context.Context) ([]CatalogEntry, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
+
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("fetch catalog: %w", err)
 	}
+
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
@@ -57,6 +59,7 @@ func (m *Manager) FetchCatalog(ctx context.Context) ([]CatalogEntry, error) {
 	}
 
 	var entries []CatalogEntry
+
 	for _, a := range rc.Agents {
 		slug := slugify(a.Profession)
 		entries = append(entries, CatalogEntry{
@@ -75,20 +78,25 @@ func (m *Manager) FetchProfile(ctx context.Context, slug string) (string, error)
 	if !validSlug.MatchString(slug) {
 		return "", fmt.Errorf("invalid profile slug %q: must match %s", slug, validSlug.String())
 	}
+
 	urlStr := fmt.Sprintf(profileBaseURL, url.PathEscape(slug))
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, urlStr, nil)
 	if err != nil {
 		return "", fmt.Errorf("create request: %w", err)
 	}
+
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("fetch profile: %w", err)
 	}
+
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return "", fmt.Errorf("profile %q not found on remote", slug)
 	}
+
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("remote fetch returned HTTP %d", resp.StatusCode)
 	}

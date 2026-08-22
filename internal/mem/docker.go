@@ -3,6 +3,7 @@ package mem
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os/exec"
@@ -15,6 +16,8 @@ const (
 	DefaultContainerName = "gud-helixdb"
 	// DefaultImage is the HelixDB Docker image.
 	DefaultImage = "ghcr.io/helixdb/enterprise-dev"
+
+	containerStateRunning = "running"
 	// DefaultInternalPort is the port HelixDB listens on inside the container.
 	DefaultInternalPort = "8080"
 	// readinessTimeout is how long to wait for the container to become healthy.
@@ -35,6 +38,7 @@ func NewContainerManager(containerName, hostPort string) *ContainerManager {
 	if containerName == "" {
 		containerName = DefaultContainerName
 	}
+
 	if hostPort == "" {
 		hostPort = "3223"
 	}
@@ -57,7 +61,7 @@ func (m *ContainerManager) StartedByUs() bool { return m.startedByUs }
 func (m *ContainerManager) EnsureRunning(ctx context.Context) (string, error) {
 	// Check if container already exists and is running.
 	switch m.containerStatus(ctx) {
-	case "running":
+	case containerStateRunning:
 		slog.Debug("helixdb: container already running",
 			"container", m.containerName)
 
@@ -66,15 +70,18 @@ func (m *ContainerManager) EnsureRunning(ctx context.Context) (string, error) {
 	case "exited", "paused":
 		slog.Debug("helixdb: restarting existing container",
 			"container", m.containerName)
+
 		if err := m.runDocker(ctx, "start", m.containerName); err != nil {
 			return "", fmt.Errorf("start container: %w", err)
 		}
+
 		m.startedByUs = true
 
 	default:
 		// Container doesn't exist — create and start it.
 		slog.Debug("helixdb: starting new container",
 			"container", m.containerName, "image", DefaultImage)
+
 		if err := m.runDocker(ctx, "run", "-d",
 			"--name", m.containerName,
 			"-p", m.hostPort+":"+DefaultInternalPort,
@@ -82,6 +89,7 @@ func (m *ContainerManager) EnsureRunning(ctx context.Context) (string, error) {
 		); err != nil {
 			return "", fmt.Errorf("start container: %w", err)
 		}
+
 		m.startedByUs = true
 	}
 
@@ -101,6 +109,7 @@ func (m *ContainerManager) Stop(ctx context.Context) error {
 	if !m.startedByUs {
 		return nil
 	}
+
 	slog.Debug("helixdb: stopping container", "container", m.containerName)
 	_ = m.runDocker(ctx, "rm", "-f", m.containerName)
 	m.startedByUs = false
@@ -114,16 +123,18 @@ func (m *ContainerManager) containerStatus(ctx context.Context) string {
 	cmd := exec.CommandContext(ctx, "docker", "ps", "-a",
 		"--filter", "name=^/"+m.containerName+"$",
 		"--format", "{{.Status}}")
+
 	out, err := cmd.Output()
 	if err != nil {
 		return ""
 	}
+
 	status := strings.TrimSpace(string(out))
 	switch {
 	case status == "":
 		return ""
 	case strings.HasPrefix(status, "Up "):
-		return "running"
+		return containerStateRunning
 	case strings.HasPrefix(status, "Exited "):
 		return "exited"
 	case strings.HasPrefix(status, "Paused "):
@@ -144,9 +155,12 @@ func (m *ContainerManager) waitForReadiness(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+
 		resp, err := http.DefaultClient.Do(req)
 		if err == nil {
-			resp.Body.Close()
+			_, _ = io.Copy(io.Discard, resp.Body)
+
+			_ = resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
 				return nil
 			}
@@ -162,7 +176,7 @@ func (m *ContainerManager) waitForReadiness(ctx context.Context) error {
 
 // IsRunning returns true if the container is currently running.
 func (m *ContainerManager) IsRunning(ctx context.Context) bool {
-	return m.containerStatus(ctx) == "running"
+	return m.containerStatus(ctx) == containerStateRunning
 }
 
 // baseURL returns the HTTP URL for the managed container.
@@ -173,6 +187,7 @@ func (m *ContainerManager) baseURL() string {
 // runDocker executes a docker command with the given context.
 func (m *ContainerManager) runDocker(ctx context.Context, args ...string) error {
 	cmd := exec.CommandContext(ctx, "docker", args...)
+
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("docker %s: %w\n%s", strings.Join(args, " "), err, string(out))

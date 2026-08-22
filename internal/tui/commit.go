@@ -233,6 +233,7 @@ func (m CommitReviewModel) handleReviewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 	}
 
 	var cmd tea.Cmd
+
 	m.list, cmd = m.list.Update(msg)
 
 	return m, cmd
@@ -250,6 +251,7 @@ func (m CommitReviewModel) handleEditKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.wrapLine > 0 {
 			edited = wrapText(edited, m.wrapLine)
 		}
+
 		m.msg = edited
 		m.viewport.SetContent(m.msg)
 		m.editing = false
@@ -267,6 +269,7 @@ func (m CommitReviewModel) handleEditKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	var cmd tea.Cmd
+
 	m.textarea, cmd = m.textarea.Update(msg)
 
 	return m, cmd
@@ -313,6 +316,7 @@ func wrapText(text string, limit int) string {
 	}
 
 	lines := strings.Split(text, "\n")
+
 	var result []string
 
 	for _, line := range lines {
@@ -347,6 +351,7 @@ func wrapText(text string, limit int) string {
 				currentLine.WriteString(word)
 			}
 		}
+
 		if currentLine.Len() > 0 {
 			result = append(result, currentLine.String())
 		}
@@ -375,6 +380,7 @@ func RunCommitReview(msg string, wrapLine ...int) (string, string, error) {
 	if !ok {
 		return ActionAbort, msg, fmt.Errorf("tui: unexpected model type %T", result)
 	}
+
 	if model.action == "" {
 		return ActionAbort, msg, nil
 	}

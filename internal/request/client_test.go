@@ -18,7 +18,9 @@ type mockLLM struct {
 
 func (m *mockLLM) Name() string { return "mock" }
 
-func (m *mockLLM) GenerateContent(ctx context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {
+func (m *mockLLM) GenerateContent(
+	ctx context.Context, req *model.LLMRequest, stream bool,
+) iter.Seq2[*model.LLMResponse, error] {
 	if m.generateContentFunc != nil {
 		return m.generateContentFunc(ctx, req, stream)
 	}
@@ -30,6 +32,7 @@ func (m *mockLLM) GenerateContent(ctx context.Context, req *model.LLMRequest, st
 
 func TestWithDefaultTimeout_PreservesCallerDeadline(t *testing.T) {
 	t.Parallel()
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Hour)
 	defer cancel()
 
@@ -48,6 +51,7 @@ func TestWithDefaultTimeout_PreservesCallerDeadline(t *testing.T) {
 
 func TestWithDefaultTimeout_AppliesDefaultWhenNoDeadline(t *testing.T) {
 	t.Parallel()
+
 	ctx, cancel := withDefaultTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 
@@ -55,6 +59,7 @@ func TestWithDefaultTimeout_AppliesDefaultWhenNoDeadline(t *testing.T) {
 	if !ok {
 		t.Fatal("withDefaultTimeout did not apply a deadline")
 	}
+
 	if time.Until(deadline) > time.Second {
 		t.Errorf("deadline = %v, want ~50ms default applied", deadline)
 	}
@@ -62,6 +67,7 @@ func TestWithDefaultTimeout_AppliesDefaultWhenNoDeadline(t *testing.T) {
 
 func TestGenerateCommitMessageWithContent_RespectsCallerDeadline(t *testing.T) {
 	t.Parallel()
+
 	blocking := make(chan struct{})
 	defer close(blocking)
 
@@ -85,6 +91,7 @@ func TestGenerateCommitMessageWithContent_RespectsCallerDeadline(t *testing.T) {
 
 func TestNewClient(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name    string
 		cfg     ClientConfig
@@ -110,6 +117,7 @@ func TestNewClient(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			client, err := NewClient(context.Background(), tt.cfg)
 
 			if (err != nil) != tt.wantErr {
@@ -117,9 +125,11 @@ func TestNewClient(t *testing.T) {
 
 				return
 			}
+
 			if !tt.wantErr && client == nil {
 				t.Errorf("NewClient() should return non-nil client")
 			}
+
 			if !tt.wantErr && tt.cfg.Model != "" && client.model != tt.cfg.Model {
 				t.Errorf("client.model = %q, want %q", client.model, tt.cfg.Model)
 			}
@@ -129,15 +139,18 @@ func TestNewClient(t *testing.T) {
 
 func TestNewClientWithGenerator(t *testing.T) {
 	t.Parallel()
+
 	mock := &mockLLM{}
 	client := NewClientWithGenerator(mock, "test-model")
 
 	if client == nil {
 		t.Fatal("NewClientWithGenerator() returned nil")
 	}
+
 	if client.model != "test-model" {
 		t.Errorf("model = %q, want %q", client.model, "test-model")
 	}
+
 	if client.modelImpl != mock {
 		t.Errorf("modelImpl should be the mock")
 	}
@@ -145,6 +158,7 @@ func TestNewClientWithGenerator(t *testing.T) {
 
 func TestSanitizeOutput(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name string
 		in   string
@@ -290,6 +304,7 @@ func TestSanitizeOutput(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got := sanitizeOutput(tt.in)
 			if got != tt.want {
 				t.Errorf("sanitizeOutput() = %q, want %q", got, tt.want)
@@ -310,7 +325,9 @@ type captureRequestLLM struct {
 
 func (m *captureRequestLLM) Name() string { return m.name }
 
-func (m *captureRequestLLM) GenerateContent(_ context.Context, req *model.LLMRequest, _ bool) iter.Seq2[*model.LLMResponse, error] {
+func (m *captureRequestLLM) GenerateContent(
+	_ context.Context, req *model.LLMRequest, _ bool,
+) iter.Seq2[*model.LLMResponse, error] {
 	m.captured = req
 
 	return func(yield func(*model.LLMResponse, error) bool) {
@@ -338,8 +355,10 @@ func TestOracle_Comparable_ModelInRequestMatchesClientModel(t *testing.T) {
 	if capture.captured == nil {
 		t.Fatal("LLM was never called")
 	}
+
 	if capture.captured.Model != "gemini-flash-latest" {
-		t.Errorf("req.Model = %q, want %q (must match Client.model for Consistent trailer)", capture.captured.Model, "gemini-flash-latest")
+		t.Errorf("req.Model = %q, want %q (must match Client.model for Consistent trailer)",
+			capture.captured.Model, "gemini-flash-latest")
 	}
 }
 
@@ -361,7 +380,8 @@ func TestOracle_Comparable_ModelNameMatchesConfigured(t *testing.T) {
 
 	// The model name used in the API call must equal what ModelName() returns.
 	if client.ModelName() != capture.captured.Model {
-		t.Errorf("ModelName() = %q, req.Model = %q — they MUST agree (Assisted-by trailer would be wrong)", client.ModelName(), capture.captured.Model)
+		t.Errorf("ModelName() = %q, req.Model = %q — they MUST agree (Assisted-by trailer would be wrong)",
+			client.ModelName(), capture.captured.Model)
 	}
 }
 
@@ -384,6 +404,7 @@ func TestOracle_Claims_DefaultModelIsUsedWhenEmpty(t *testing.T) {
 	if client.ModelName() != defaultModel {
 		t.Errorf("ModelName() = %q, want %q (default)", client.ModelName(), defaultModel)
 	}
+
 	if capture.captured.Model != defaultModel {
 		t.Errorf("req.Model = %q, want %q (default)", capture.captured.Model, defaultModel)
 	}
@@ -424,6 +445,7 @@ func TestClient_GenerateCommitMessage(t *testing.T) {
 			wantErr:     false,
 			validateMsg: func(t *testing.T, msg string) {
 				t.Helper()
+
 				if msg != "feat: add hello world output" {
 					t.Errorf("got %q, want %q", msg, "feat: add hello world output")
 				}
@@ -483,14 +505,16 @@ func TestClient_GenerateCommitMessage(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			mock := &mockLLM{
-				generateContentFunc: func(ctx context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {
+				generateContentFunc: func(_ context.Context, _ *model.LLMRequest, _ bool) iter.Seq2[*model.LLMResponse, error] {
 					return func(yield func(*model.LLMResponse, error) bool) {
 						if tt.mockError != "" {
 							yield(nil, errors.New(tt.mockError))
 
 							return
 						}
+
 						if tt.mockRespError != "" {
 							yield(&model.LLMResponse{
 								ErrorMessage: tt.mockRespError,
@@ -498,6 +522,7 @@ func TestClient_GenerateCommitMessage(t *testing.T) {
 
 							return
 						}
+
 						yield(&model.LLMResponse{
 							Content: genai.NewContentFromText(tt.mockContent, "model"),
 						}, nil)
@@ -507,7 +532,8 @@ func TestClient_GenerateCommitMessage(t *testing.T) {
 
 			client := NewClientWithGenerator(mock, "gemini-flash-lite-latest")
 
-			msg, err := client.GenerateCommitMessage(context.Background(), tt.diff, tt.context, tt.detailLevel, tt.hint, tt.profile)
+			msg, err := client.GenerateCommitMessage(context.Background(),
+				tt.diff, tt.context, tt.detailLevel, tt.hint, tt.profile)
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GenerateCommitMessage() error = %v, wantErr %v", err, tt.wantErr)

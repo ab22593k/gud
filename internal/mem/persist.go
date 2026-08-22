@@ -79,6 +79,7 @@ func FormatDiffStat(files []FileChange) string {
 
 	var b strings.Builder
 	b.WriteString("Files changed:\n")
+
 	for _, f := range files {
 		_, _ = fmt.Fprintf(&b, "  %s (%s: +%d/-%d)\n",
 			f.Path, f.ChangeType, f.LinesAdded, f.LinesDeleted)

@@ -83,12 +83,14 @@ func TestCategorizeByWorkMode(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got := categorizeByWorkMode(tt.input)
 
 			if len(got) != len(tt.want) {
 				t.Fatalf("categorizeByWorkMode() returned %d categories, want %d\ngot:  %+v\nwant: %+v",
 					len(got), len(tt.want), got, tt.want)
 			}
+
 			for i := range got {
 				if got[i].name != tt.want[i].name || got[i].count != tt.want[i].count {
 					t.Errorf("categorizeByWorkMode()[%d] = {name:%q, count:%d}, want {name:%q, count:%d}",
@@ -124,6 +126,7 @@ func TestTruncate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got := truncate(tt.s, tt.maxLen)
 			if got != tt.want {
 				t.Errorf("truncate(%q, %d) = %q, want %q", tt.s, tt.maxLen, got, tt.want)

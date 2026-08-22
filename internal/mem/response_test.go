@@ -9,10 +9,12 @@ func TestNewResponse(t *testing.T) {
 
 	t.Run("nil input creates empty response", func(t *testing.T) {
 		t.Parallel()
+
 		r := NewResponse(nil)
 		if r == nil {
 			t.Fatal("NewResponse(nil) returned nil")
 		}
+
 		if len(r.Raw()) != 0 {
 			t.Errorf("NewResponse(nil) raw map should be empty, got %v", r.Raw())
 		}
@@ -20,7 +22,9 @@ func TestNewResponse(t *testing.T) {
 
 	t.Run("non-nil input preserved", func(t *testing.T) {
 		t.Parallel()
+
 		raw := map[string]any{"key": "value"}
+
 		r := NewResponse(raw)
 		if r.Raw()["key"] != "value" {
 			t.Errorf("NewResponse() raw = %v, want key=value", r.Raw())
@@ -46,6 +50,7 @@ func TestResponseHas(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			r := NewResponse(tt.raw)
 			if got := r.Has(tt.key); got != tt.want {
 				t.Errorf("Has(%q) = %v, want %v", tt.key, got, tt.want)
@@ -73,6 +78,7 @@ func TestResponseCount(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			r := NewResponse(tt.raw)
 			if got := r.Count(tt.key); got != tt.want {
 				t.Errorf("Count(%q) = %d, want %d", tt.key, got, tt.want)
@@ -86,16 +92,19 @@ func TestResponseNodes(t *testing.T) {
 
 	t.Run("flat array of maps", func(t *testing.T) {
 		t.Parallel()
+
 		r := NewResponse(map[string]any{
 			"results": []any{
 				map[string]any{"name": "alice"},
 				map[string]any{"name": "bob"},
 			},
 		})
+
 		nodes := r.Nodes("results")
 		if len(nodes) != 2 {
 			t.Fatalf("Nodes() returned %d nodes, want 2", len(nodes))
 		}
+
 		if nodes[0].String("name") != "alice" {
 			t.Errorf("Nodes[0].String(name) = %q, want alice", nodes[0].String("name"))
 		}
@@ -103,6 +112,7 @@ func TestResponseNodes(t *testing.T) {
 
 	t.Run("wrapped properties format", func(t *testing.T) {
 		t.Parallel()
+
 		r := NewResponse(map[string]any{
 			"results": map[string]any{
 				"properties": []any{
@@ -111,6 +121,7 @@ func TestResponseNodes(t *testing.T) {
 				},
 			},
 		})
+
 		nodes := r.Nodes("results")
 		if len(nodes) != 2 {
 			t.Fatalf("Nodes() returned %d nodes, want 2", len(nodes))
@@ -119,7 +130,9 @@ func TestResponseNodes(t *testing.T) {
 
 	t.Run("key missing returns empty", func(t *testing.T) {
 		t.Parallel()
+
 		r := NewResponse(map[string]any{})
+
 		nodes := r.Nodes("nonexistent")
 		if len(nodes) != 0 {
 			t.Errorf("Nodes() for missing key = %d, want 0", len(nodes))
@@ -128,6 +141,7 @@ func TestResponseNodes(t *testing.T) {
 
 	t.Run("non-map items are skipped", func(t *testing.T) {
 		t.Parallel()
+
 		r := NewResponse(map[string]any{
 			"results": []any{
 				map[string]any{"x": 1},
@@ -135,6 +149,7 @@ func TestResponseNodes(t *testing.T) {
 				42,
 			},
 		})
+
 		nodes := r.Nodes("results")
 		if len(nodes) != 1 {
 			t.Errorf("Nodes() = %d, want 1 (only map items)", len(nodes))
@@ -160,6 +175,7 @@ func TestNodeString(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			n := Node{data: tt.data}
 			if got := n.String(tt.key); got != tt.want {
 				t.Errorf("String(%q) = %q, want %q", tt.key, got, tt.want)
@@ -186,6 +202,7 @@ func TestNodeFloat64(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			n := Node{data: tt.data}
 			if got := n.Float64(tt.key); got != tt.want {
 				t.Errorf("Float64(%q) = %v, want %v", tt.key, got, tt.want)
@@ -212,6 +229,7 @@ func TestNodeUint64(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			n := Node{data: tt.data}
 			if got := n.Uint64(tt.key); got != tt.want {
 				t.Errorf("Uint64(%q) = %d, want %d", tt.key, got, tt.want)
@@ -238,6 +256,7 @@ func TestNodeBool(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			n := Node{data: tt.data}
 			if got := n.Bool(tt.key); got != tt.want {
 				t.Errorf("Bool(%q) = %v, want %v", tt.key, got, tt.want)
@@ -250,6 +269,7 @@ func TestNodeRaw(t *testing.T) {
 	t.Parallel()
 
 	data := map[string]any{"key": "val"}
+
 	n := Node{data: data}
 	if got := n.Raw(); got["key"] != "val" {
 		t.Errorf("Raw() = %v, want key=val", got)

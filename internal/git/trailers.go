@@ -34,7 +34,9 @@ func AppendTrailers(ctx context.Context, message string, trailers []Trailer) (st
 
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Stdin = bytes.NewBufferString(message)
+
 	var out bytes.Buffer
+
 	cmd.Stdout = &out
 
 	if err := cmd.Run(); err != nil {

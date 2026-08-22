@@ -13,6 +13,12 @@ import (
 // and wasting tokens.
 const MaxRecentCommits = 50
 
+// flagOneline is git's one-line-per-commit log format flag.
+const flagOneline = "--oneline"
+
+// cmdLog is the git log subcommand name.
+const cmdLog = "log"
+
 // GetStagedDiff returns the git diff of staged changes, excluding deleted and renamed file content.
 func GetStagedDiff(ctx context.Context) (string, error) {
 	return runGitDiff(ctx, "diff", "--cached", "--diff-filter=dr")
@@ -33,7 +39,9 @@ func GetStagedDeletedFiles(ctx context.Context) (string, error) {
 func Commit(ctx context.Context, message string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", "commit", "-F", "-")
 	cmd.Stdin = bytes.NewBufferString(message)
+
 	var out bytes.Buffer
+
 	cmd.Stdout = &out
 	cmd.Stderr = &out
 
@@ -51,6 +59,7 @@ func GetAuthor(ctx context.Context) string {
 	if err != nil {
 		return ""
 	}
+
 	email, err := runGitConfig(ctx, "user.email")
 	if err != nil {
 		return strings.TrimSpace(name)
@@ -62,6 +71,7 @@ func GetAuthor(ctx context.Context) string {
 // runGitConfig runs git config --get <key> and returns the value.
 func runGitConfig(ctx context.Context, key string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", "config", "--get", key)
+
 	out, err := cmd.Output()
 	if err != nil {
 		return "", err
@@ -73,6 +83,7 @@ func runGitConfig(ctx context.Context, key string) (string, error) {
 // GetRepoRoot returns the absolute path to the git repository root.
 func GetRepoRoot(ctx context.Context) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", "rev-parse", "--show-toplevel")
+
 	out, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("get repo root: %w", err)
@@ -88,6 +99,7 @@ func GetBranch(ctx context.Context) string {
 	if err != nil {
 		return ""
 	}
+
 	branch := strings.TrimSpace(string(out))
 	if branch == "HEAD" {
 		return "" // detached HEAD — no named branch
@@ -99,6 +111,7 @@ func GetBranch(ctx context.Context) string {
 // getHEADHash returns the abbreviated hash of HEAD.
 func getHEADHash(ctx context.Context) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", "rev-parse", "--short", "HEAD")
+
 	out, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("get head hash: %w", err)
@@ -115,11 +128,15 @@ func GetRecentCommits(ctx context.Context, n int) (string, error) {
 	if n <= 0 {
 		return "", nil
 	}
+
 	if n > MaxRecentCommits {
 		n = MaxRecentCommits
 	}
-	cmd := exec.CommandContext(ctx, "git", "log", fmt.Sprintf("-%d", n), "--oneline", "--no-decorate")
+
+	cmd := exec.CommandContext(ctx, "git", cmdLog, fmt.Sprintf("-%d", n), flagOneline, "--no-decorate")
+
 	var out bytes.Buffer
+
 	cmd.Stdout = &out
 
 	if err := cmd.Run(); err != nil {
@@ -142,7 +159,9 @@ type StagedChanges struct {
 // (GetStagedDiff + GetStagedDeletedFiles) reduces subprocess overhead.
 func GetStagedChanges(ctx context.Context) (*StagedChanges, error) {
 	cmd := exec.CommandContext(ctx, "git", "diff", "--cached")
+
 	var out bytes.Buffer
+
 	cmd.Stdout = &out
 
 	if err := cmd.Run(); err != nil {
@@ -161,6 +180,7 @@ func GetStagedChanges(ctx context.Context) (*StagedChanges, error) {
 // names of files that were deleted (indicated by "+++ /dev/null").
 func extractDeletedFiles(diff string) []string {
 	var deleted []string
+
 	lines := strings.Split(diff, "\n")
 	for i, line := range lines {
 		// A deleted file has the form:
@@ -181,7 +201,9 @@ func extractDeletedFiles(diff string) []string {
 // It is the single point of implementation for git diff operations in this package.
 func runGitDiff(ctx context.Context, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", args...)
+
 	var out bytes.Buffer
+
 	cmd.Stdout = &out
 
 	if err := cmd.Run(); err != nil {

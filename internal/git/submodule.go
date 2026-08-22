@@ -31,6 +31,7 @@ const maxSubmoduleLogEntries = MaxRecentCommits
 // filesystem, the submodule worktrees, or the network.
 func ExtractSubmoduleChanges(diff string) []SubmoduleChange {
 	var changes []SubmoduleChange
+
 	for _, entry := range splitDiffEntries(diff) {
 		if change, ok := parseGitlinkEntry(entry); ok {
 			changes = append(changes, change)
@@ -51,13 +52,16 @@ func parseGitlinkEntry(entry string) (SubmoduleChange, bool) {
 	}
 
 	var oldHash, newHash string
+
 	gitlink := false
+
 	for line := range strings.SplitSeq(entry, "\n") {
 		trimmed := strings.TrimSpace(line)
 		switch {
 		case strings.HasPrefix(trimmed, "index "):
 			if oldIdx, newIdx, mode, ok := parseIndexLine(trimmed); ok {
 				oldHash, newHash = oldIdx, newIdx
+
 				if mode == gitlinkMode {
 					gitlink = true
 				}
@@ -93,14 +97,17 @@ func parseIndexLine(line string) (oldHash, newHash, mode string, ok bool) {
 	if !found {
 		return "", "", "", false
 	}
+
 	fields := strings.Fields(rest)
 	if len(fields) < 1 || len(fields) > 2 {
 		return "", "", "", false
 	}
+
 	oldHash, newHash, ok = strings.Cut(fields[0], "..")
 	if !ok {
 		return "", "", "", false
 	}
+
 	if len(fields) == 2 {
 		mode = fields[1]
 	}
@@ -115,10 +122,12 @@ func parseSubprojectLine(line string) (sha string, marker byte, ok bool) {
 	if line == "" {
 		return "", 0, false
 	}
+
 	marker = line[0]
 	if marker != '-' && marker != '+' && marker != ' ' {
 		return "", 0, false
 	}
+
 	rest := strings.TrimSpace(line[1:])
 	if !strings.HasPrefix(rest, "Subproject commit ") {
 		return "", 0, false
@@ -142,24 +151,30 @@ func SubmoduleContext(ctx context.Context, root string, changes []SubmoduleChang
 
 	var b strings.Builder
 	b.WriteString("Submodule (gitlink) changes:\n")
+
 	for _, ch := range changes {
 		name := names[ch.Path]
 		if name == "" {
 			name = ch.Path
 		}
+
 		b.WriteString("- ")
 		b.WriteString(name)
+
 		if url := urls[ch.Path]; url != "" {
 			b.WriteString(" (")
 			b.WriteString(url)
 			b.WriteString(")")
 		}
+
 		b.WriteString(": ")
 		b.WriteString(shortRange(ch))
+
 		for _, subject := range submoduleSubjects(ctx, root, ch) {
 			b.WriteString("\n  > ")
 			b.WriteString(subject)
 		}
+
 		b.WriteString("\n")
 	}
 
@@ -204,13 +219,14 @@ func submoduleSubjects(ctx context.Context, root string, ch SubmoduleChange) []s
 	}
 
 	dir := filepath.Join(root, ch.Path)
+
 	var args []string
 	if isZeroSHA(ch.OldCommit) {
 		// Added gitlink: log the new commit's own history.
-		args = []string{"-C", dir, "log", "--oneline", "-n", strconv.Itoa(maxSubmoduleLogEntries), ch.NewCommit}
+		args = []string{"-C", dir, cmdLog, flagOneline, "-n", strconv.Itoa(maxSubmoduleLogEntries), ch.NewCommit}
 	} else {
 		args = []string{
-			"-C", dir, "log", "--oneline", "-n", strconv.Itoa(maxSubmoduleLogEntries),
+			"-C", dir, cmdLog, flagOneline, "-n", strconv.Itoa(maxSubmoduleLogEntries),
 			ch.OldCommit + ".." + ch.NewCommit,
 		}
 	}
@@ -237,14 +253,17 @@ func readGitmodules(ctx context.Context, root string) (names, urls map[string]st
 		if !ok {
 			continue
 		}
+
 		rest, found := strings.CutPrefix(key, "submodule.")
 		if !found {
 			continue
 		}
+
 		name, prop, found := strings.Cut(rest, ".")
 		if !found {
 			continue
 		}
+
 		switch prop {
 		case "path":
 			namePaths[name] = value
@@ -255,6 +274,7 @@ func readGitmodules(ctx context.Context, root string) (names, urls map[string]st
 
 	names = make(map[string]string)
 	urls = make(map[string]string)
+
 	for name, path := range namePaths {
 		names[path] = name
 		urls[path] = nameURLs[name]

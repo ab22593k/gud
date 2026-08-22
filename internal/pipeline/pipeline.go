@@ -26,6 +26,7 @@ func Run(ctx context.Context, jobs []Job) error {
 	for _, j := range jobs {
 		jobCh <- j
 	}
+
 	close(jobCh)
 
 	go worker(ctx, jobCh, errCh)
@@ -46,6 +47,7 @@ func Run(ctx context.Context, jobs []Job) error {
 // or an error occurs. The first error is sent to errCh.
 func worker(ctx context.Context, jobs <-chan Job, errCh chan<- error) {
 	defer close(errCh)
+
 	for {
 		select {
 		case <-ctx.Done():

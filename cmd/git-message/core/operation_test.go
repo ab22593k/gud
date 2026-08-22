@@ -28,9 +28,11 @@ func TestAppContextOperationMemoises(t *testing.T) {
 	if got := app.Operation(context.Background()); got != git.OperationMerge {
 		t.Fatalf("Operation() = %q, want merge", got)
 	}
+
 	if got := app.Operation(context.Background()); got != git.OperationMerge {
 		t.Fatalf("second Operation() = %q, want merge", got)
 	}
+
 	if calls != 1 {
 		t.Errorf("operation probe ran %d times, want 1 (memoised)", calls)
 	}
@@ -55,6 +57,7 @@ func TestBuildOperationContext(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(string(tt.op), func(t *testing.T) {
 			t.Parallel()
+
 			got := buildOperationContext(tt.op)
 			if tt.op == git.OperationNone {
 				if got != "" {
@@ -79,6 +82,7 @@ func newOperationTestRepo(t *testing.T) {
 		t.Helper()
 		//nolint:gosec // test-only git invocation with fixed repo-local args
 		cmd := exec.CommandContext(context.Background(), "git", args...)
+
 		cmd.Dir = dir
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("git %v failed: %v\n%s", args, err, out)
@@ -88,24 +92,30 @@ func newOperationTestRepo(t *testing.T) {
 	run("init", "-q", "-b", "main")
 	run("config", "user.name", "Test")
 	run("config", "user.email", "test@example.com")
+
 	if err := os.WriteFile(dir+"/file.txt", []byte("line1\n"), 0600); err != nil {
 		t.Fatalf("write file: %v", err)
 	}
+
 	run("add", ".")
 	run("commit", "-q", "-m", "feat: base")
 
 	run("checkout", "-q", "-b", "side")
+
 	if err := os.WriteFile(dir+"/side.txt", []byte("side\n"), 0600); err != nil {
 		t.Fatalf("write side file: %v", err)
 	}
+
 	run("add", ".")
 	run("commit", "-q", "-m", "feat: side work")
 
 	// Diverge main so the merge is not a fast-forward.
 	run("checkout", "-q", "main")
+
 	if err := os.WriteFile(dir+"/main.txt", []byte("main\n"), 0600); err != nil {
 		t.Fatalf("write main file: %v", err)
 	}
+
 	run("add", ".")
 	run("commit", "-q", "-m", "feat: main work")
 
@@ -120,6 +130,7 @@ func mustOutput(t *testing.T, dir string, args ...string) string {
 	//nolint:gosec // test-only git invocation with fixed repo-local args
 	cmd := exec.CommandContext(context.Background(), "git", args...)
 	cmd.Dir = dir
+
 	out, err := cmd.Output()
 	if err != nil {
 		t.Fatalf("git %v failed: %v", args, err)
@@ -141,7 +152,9 @@ func TestInteractiveCommit_UsesPreparedMessage(t *testing.T) {
 
 	app := &AppContext{cfg: config.Config{WrapLine: 72}}
 	cmd := &cobra.Command{}
+
 	var outBuf bytes.Buffer
+
 	cmd.SetIn(strings.NewReader("y\n"))
 	cmd.SetOut(&outBuf)
 
@@ -180,7 +193,9 @@ func TestInteractiveCommit_PreparedMessageWithIssues(t *testing.T) {
 
 	app := &AppContext{cfg: config.Config{WrapLine: 72, Issues: []int{42}}}
 	cmd := &cobra.Command{}
+
 	var outBuf bytes.Buffer
+
 	cmd.SetIn(strings.NewReader("y\n"))
 	cmd.SetOut(&outBuf)
 

@@ -38,9 +38,11 @@ func (i catalogItem) Description() string {
 	if i.cached {
 		b.WriteString("✓ Cached  •  ")
 	}
+
 	b.WriteString(i.entry.Profession)
 	b.WriteString("  •  ")
 	b.WriteString(i.entry.WorkMode)
+
 	if i.entry.Summary != "" {
 		b.WriteString("  —  ")
 		b.WriteString(truncate(i.entry.Summary, 50))
@@ -155,6 +157,7 @@ func (m PickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			var cmd tea.Cmd
+
 			m.list, cmd = m.list.Update(msg)
 
 			return m, cmd
@@ -170,6 +173,7 @@ func (m PickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case spinner.TickMsg:
 		if m.state == StateDownloading {
 			var cmd tea.Cmd
+
 			m.spinner, cmd = m.spinner.Update(msg)
 
 			return m, cmd
@@ -305,6 +309,7 @@ func RunPicker(
 	if !ok {
 		return nil, fmt.Errorf("tui: unexpected model type %T", result)
 	}
+
 	switch model.state {
 	case StateDone:
 		return model.selected, nil

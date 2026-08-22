@@ -15,9 +15,11 @@ func TestComputeStats_EmptyDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ComputeStats(empty) = _, %v; want nil error", err)
 	}
+
 	if stats.TotalFiles != 0 {
 		t.Errorf("TotalFiles = %d, want 0", stats.TotalFiles)
 	}
+
 	if len(stats.FilesByExtension) != 0 {
 		t.Errorf("FilesByExtension = %v, want empty", stats.FilesByExtension)
 	}
@@ -38,9 +40,11 @@ func TestComputeStats_SingleExtension(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ComputeStats = _, %v; want nil error", err)
 	}
+
 	if stats.TotalFiles != 3 {
 		t.Errorf("TotalFiles = %d, want 3", stats.TotalFiles)
 	}
+
 	if stats.FilesByExtension[".go"] != 3 {
 		t.Errorf("FilesByExtension['.go'] = %d, want 3", stats.FilesByExtension[".go"])
 	}
@@ -59,9 +63,11 @@ func TestComputeStats_MultipleExtensions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ComputeStats = _, %v; want nil error", err)
 	}
+
 	if stats.TotalFiles != 4 {
 		t.Errorf("TotalFiles = %d, want 4", stats.TotalFiles)
 	}
+
 	for _, ext := range []string{".go", ".ts", ".css", ".md"} {
 		if stats.FilesByExtension[ext] != 1 {
 			t.Errorf("FilesByExtension[%q] = %d, want 1", ext, stats.FilesByExtension[ext])
@@ -82,9 +88,11 @@ func TestComputeStats_SkipsGitDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ComputeStats = _, %v; want nil error", err)
 	}
+
 	if stats.TotalFiles != 1 {
 		t.Errorf("TotalFiles = %d, want 1 (should skip .git)", stats.TotalFiles)
 	}
+
 	if stats.FilesByExtension[".go"] != 1 {
 		t.Errorf("FilesByExtension['.go'] = %d, want 1", stats.FilesByExtension[".go"])
 	}
@@ -117,9 +125,11 @@ func TestComputeStats_SkipsGitignoredDirs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ComputeStats = _, %v; want nil error", err)
 	}
+
 	if stats.TotalFiles != 2 {
 		t.Errorf("TotalFiles = %d, want 2 (main.go + .gitignore; vendored dirs skipped)", stats.TotalFiles)
 	}
+
 	if stats.FilesByExtension[".go"] != 1 {
 		t.Errorf("FilesByExtension['.go'] = %d, want 1", stats.FilesByExtension[".go"])
 	}
@@ -212,11 +222,13 @@ func TestComputeStats_GitignorePatternSemantics(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte(tt.gitignore), 0600); err != nil {
 				t.Fatal(err)
 			}
+
 			for rel, content := range tt.files {
 				p := filepath.Join(dir, filepath.FromSlash(rel))
 				if err := os.MkdirAll(filepath.Dir(p), 0750); err != nil {
 					t.Fatal(err)
 				}
+
 				if err := os.WriteFile(p, []byte(content), 0600); err != nil {
 					t.Fatal(err)
 				}
@@ -226,6 +238,7 @@ func TestComputeStats_GitignorePatternSemantics(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ComputeStats = _, %v; want nil error", err)
 			}
+
 			if stats.TotalFiles != tt.wantFiles {
 				t.Errorf("TotalFiles = %d, want %d", stats.TotalFiles, tt.wantFiles)
 			}
@@ -244,9 +257,11 @@ func TestComputeStats_NoExtensionFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ComputeStats = _, %v; want nil error", err)
 	}
+
 	if stats.TotalFiles != 2 {
 		t.Errorf("TotalFiles = %d, want 2", stats.TotalFiles)
 	}
+
 	if stats.FilesByExtension["(no extension)"] != 2 {
 		t.Errorf("FilesByExtension['(no extension)'] = %d, want 2", stats.FilesByExtension["(no extension)"])
 	}
@@ -278,6 +293,7 @@ func TestFormatRepoContext_SingleExt(t *testing.T) {
 	if !strings.Contains(got, "Repository: 5 files across 1 extensions") {
 		t.Errorf("FormatRepoContext missing summary, got:\n%s", got)
 	}
+
 	if !strings.Contains(got, ".go") || !strings.Contains(got, "5") || !strings.Contains(got, "100%") {
 		t.Errorf("FormatRepoContext missing .go/5/100%%, got:\n%s", got)
 	}
@@ -297,15 +313,19 @@ func TestFormatRepoContext_MultipleExts(t *testing.T) {
 	if !strings.Contains(got, "Repository: 24 files across 4 extensions") {
 		t.Errorf("FormatRepoContext missing summary, got:\n%s", got)
 	}
+
 	if !strings.Contains(got, ".go") || !strings.Contains(got, "50%") {
 		t.Errorf("FormatRepoContext missing .go/50%%, got:\n%s", got)
 	}
+
 	if !strings.Contains(got, ".ts") || !strings.Contains(got, "29%") {
 		t.Errorf("FormatRepoContext missing .ts/29%%, got:\n%s", got)
 	}
+
 	if !strings.Contains(got, ".css") || !strings.Contains(got, "12%") {
 		t.Errorf("FormatRepoContext missing .css/12%%, got:\n%s", got)
 	}
+
 	if !strings.Contains(got, ".md") || !strings.Contains(got, "8%") {
 		t.Errorf("FormatRepoContext missing .md/8%%, got:\n%s", got)
 	}

@@ -79,9 +79,11 @@ func parseGitignore(data string) []gitignorePattern {
 			rootOnly = true
 			line = line[1:]
 		}
+
 		if strings.Contains(line, "/") {
 			rootOnly = true
 		}
+
 		if line == "" {
 			continue
 		}
@@ -107,12 +109,14 @@ func (m *gitignoreMatcher) ignored(rel string) bool {
 		if p.re == nil {
 			continue
 		}
+
 		var matched bool
 		if p.rootOnly {
 			matched = p.re.MatchString(rel)
 		} else {
 			matched = p.re.MatchString(base)
 		}
+
 		if matched {
 			ignored = !p.negate
 		}
@@ -133,6 +137,7 @@ func globToRegexp(pattern string) string {
 	// the pattern match from any ancestor depth.
 	if strings.HasPrefix(pattern, "**/") {
 		sb.WriteString("(?:.*/)?")
+
 		pattern = pattern[3:]
 	}
 
@@ -141,6 +146,7 @@ func globToRegexp(pattern string) string {
 		case '*':
 			if i+1 < len(pattern) && pattern[i+1] == '*' {
 				sb.WriteString(".*")
+
 				i++
 			} else {
 				sb.WriteString("[^/]*")
@@ -154,12 +160,15 @@ func globToRegexp(pattern string) string {
 			if j < len(pattern) && pattern[j] == '!' {
 				j++
 			}
+
 			if j < len(pattern) && pattern[j] == ']' {
 				j++
 			}
+
 			for j < len(pattern) && pattern[j] != ']' {
 				j++
 			}
+
 			if j >= len(pattern) {
 				sb.WriteString(`\[`)
 			} else {
@@ -167,13 +176,16 @@ func globToRegexp(pattern string) string {
 				if strings.HasPrefix(class, "[!") {
 					class = "^" + class[2:]
 				}
+
 				sb.WriteString(class)
+
 				i = j
 			}
 		default:
 			if strings.ContainsRune(`.+()|{}^$\\`, rune(c)) {
 				sb.WriteByte('\\')
 			}
+
 			sb.WriteByte(c)
 		}
 	}
@@ -197,6 +209,7 @@ func ComputeStats(repoRoot string) (*RepoStats, error) {
 		if err != nil {
 			return nil //nolint:nilerr // documented: unreadable paths are skipped silently
 		}
+
 		if d.IsDir() {
 			if d.Name() == ".git" {
 				return filepath.SkipDir
@@ -214,6 +227,7 @@ func ComputeStats(repoRoot string) (*RepoStats, error) {
 		if ext == "" {
 			ext = "(no extension)"
 		}
+
 		stats.FilesByExtension[ext]++
 		stats.TotalFiles++
 
@@ -253,10 +267,12 @@ func FormatRepoContext(stats *RepoStats) string {
 		ext   string
 		count int
 	}
+
 	sorted := make([]extCount, 0, len(stats.FilesByExtension))
 	for ext, count := range stats.FilesByExtension {
 		sorted = append(sorted, extCount{ext, count})
 	}
+
 	sort.Slice(sorted, func(i, j int) bool {
 		if sorted[i].count != sorted[j].count {
 			return sorted[i].count > sorted[j].count

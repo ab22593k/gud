@@ -15,6 +15,7 @@ import (
 // normal mode still rejects the missing profile.
 func TestHookModeToleratesUncachedProfile(t *testing.T) {
 	orig := profileManager
+
 	t.Cleanup(func() { profileManager = orig })
 	profileManager = profile.NewManagerWithDir(t.TempDir())
 
@@ -33,9 +34,11 @@ func TestHookModeToleratesUncachedProfile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewAppContextTolerant with uncached profile: %v", err)
 	}
+
 	if app == nil {
 		t.Fatal("NewAppContextTolerant returned nil app")
 	}
+
 	if got := app.Config().Profile; got != "nonexistent-slug-12345" {
 		t.Errorf("Profile = %q, want %q", got, "nonexistent-slug-12345")
 	}
@@ -70,6 +73,7 @@ func TestHasMeaningfulContent(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got := hasMeaningfulContent(tt.text)
 			if got != tt.want {
 				t.Errorf("hasMeaningfulContent(%q) = %v, want %v", tt.text, got, tt.want)

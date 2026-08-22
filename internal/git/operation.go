@@ -37,15 +37,19 @@ func DetectOperation(ctx context.Context) Operation {
 	if fileExists(filepath.Join(dir, "MERGE_HEAD")) {
 		return OperationMerge
 	}
+
 	if fileExists(filepath.Join(dir, "CHERRY_PICK_HEAD")) {
 		return OperationCherryPick
 	}
+
 	if fileExists(filepath.Join(dir, "REVERT_HEAD")) {
 		return OperationRevert
 	}
+
 	if dirExists(filepath.Join(dir, "rebase-merge")) {
 		return rebaseOperation(filepath.Join(dir, "rebase-merge"), filepath.Join(dir, "SQUASH_MSG"))
 	}
+
 	if dirExists(filepath.Join(dir, "rebase-apply")) {
 		return OperationRebase
 	}
@@ -66,6 +70,7 @@ func rebaseOperation(rebaseDir, squashMsgPath string) Operation {
 			return OperationFixup
 		}
 	}
+
 	if fileExists(squashMsgPath) {
 		return OperationSquash
 	}
@@ -87,11 +92,13 @@ func currentRebaseCommand(rebaseDir string) string {
 	if err != nil {
 		return ""
 	}
+
 	for line := range strings.SplitSeq(string(data), "\n") {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
 			continue
 		}
+
 		if fields := strings.Fields(trimmed); len(fields) > 0 {
 			return fields[0]
 		}
@@ -109,16 +116,20 @@ func lastDoneCommand(rebaseDir string) string {
 	}
 
 	last := ""
+
 	for line := range strings.SplitSeq(string(data), "\n") {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
 			continue
 		}
+
 		last = trimmed
 	}
+
 	if last == "" {
 		return ""
 	}
+
 	if fields := strings.Fields(last); len(fields) > 0 {
 		return fields[0]
 	}
@@ -173,6 +184,7 @@ func commitMessage(ctx context.Context, rev string) string {
 //	This reverts commit <full sha>.
 func revertMessage(ctx context.Context) string {
 	sha := runGitOutput(ctx, "rev-parse", "REVERT_HEAD")
+
 	subject := runGitOutput(ctx, "log", "-1", "--format=%s", "REVERT_HEAD")
 	if sha == "" || subject == "" {
 		return ""
@@ -190,6 +202,7 @@ func rebaseMessage(ctx context.Context, dir string) string {
 			return msg
 		}
 	}
+
 	if ref := readTrimmed(filepath.Join(dir, "rebase-apply", "original-commit")); ref != "" {
 		return commitMessage(ctx, ref)
 	}
@@ -214,7 +227,9 @@ func gitDir(ctx context.Context) (string, error) {
 // gracefully.
 func runGitOutput(ctx context.Context, args ...string) string {
 	cmd := exec.CommandContext(ctx, "git", args...)
+
 	var out bytes.Buffer
+
 	cmd.Stdout = &out
 
 	if err := cmd.Run(); err != nil {
@@ -230,10 +245,12 @@ func runGitOutput(ctx context.Context, args ...string) string {
 // interleave the actual message with #-prefixed explanatory comments.
 func stripCommentLines(s string) string {
 	var b strings.Builder
+
 	for line := range strings.SplitSeq(s, "\n") {
 		if strings.HasPrefix(strings.TrimSpace(line), "#") {
 			continue
 		}
+
 		b.WriteString(line)
 		b.WriteString("\n")
 	}

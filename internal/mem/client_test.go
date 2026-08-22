@@ -14,7 +14,8 @@ func TestNewDB_DefaultURL(t *testing.T) {
 	if db == nil {
 		t.Fatal("expected non-nil DB")
 	}
-	if db.BaseURL() != "http://localhost:3223" {
+
+	if db.BaseURL() != DefaultBaseURL {
 		t.Errorf("expected default URL, got %q", db.BaseURL())
 	}
 }
@@ -27,14 +28,14 @@ func TestNewDB_CustomURL(t *testing.T) {
 }
 
 func TestNewDB_WithAPIKey(t *testing.T) {
-	db := NewDB(Options{BaseURL: "http://localhost:3223", APIKey: "hx_test_key"})
+	db := NewDB(Options{BaseURL: DefaultBaseURL, APIKey: "hx_test_key"})
 	if db.APIKey() != "hx_test_key" {
 		t.Errorf("expected API key to be set, got %q", db.APIKey())
 	}
 }
 
 func TestDB_IsAvailable_NoConnection(t *testing.T) {
-	db := NewDB(Options{BaseURL: "http://localhost:3223"})
+	db := NewDB(Options{BaseURL: DefaultBaseURL})
 	// Should not panic; returns false gracefully
 	available := db.IsAvailable(context.Background())
 	if available {
@@ -48,6 +49,7 @@ func countHealthRequests(t *testing.T, status int) (*DB, *atomic.Int64) {
 	t.Helper()
 
 	var hits atomic.Int64
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		hits.Add(1)
 		w.WriteHeader(status)
@@ -72,6 +74,7 @@ func TestDB_IsAvailable_CachesUp(t *testing.T) {
 			t.Fatal("expected IsAvailable to be true")
 		}
 	}
+
 	if got := hits.Load(); got != 1 {
 		t.Errorf("expected 1 health request, got %d", got)
 	}
@@ -87,6 +90,7 @@ func TestDB_IsAvailable_CachesDown(t *testing.T) {
 			t.Fatal("expected IsAvailable to be false")
 		}
 	}
+
 	if got := hits.Load(); got != 1 {
 		t.Errorf("expected 1 health request, got %d", got)
 	}
@@ -97,6 +101,7 @@ func TestErrHelixUnavailable(t *testing.T) {
 	if !errors.Is(err, ErrHelixUnavailable) {
 		t.Errorf("expected ErrHelixUnavailable in error chain")
 	}
+
 	if err.Error() == "" {
 		t.Errorf("expected non-empty error message")
 	}
@@ -107,6 +112,7 @@ func TestHelixDBSentinelError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected non-nil error")
 	}
+
 	if !errors.Is(err, ErrHelixUnavailable) {
 		t.Errorf("expected ErrHelixUnavailable in error chain")
 	}

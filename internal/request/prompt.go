@@ -81,6 +81,7 @@ func writeLabeled(sb *strings.Builder, label, content string) {
 	if content == "" {
 		return
 	}
+
 	sb.WriteString(label)
 	sb.WriteString(content)
 	sb.WriteString("\n")
@@ -88,7 +89,7 @@ func writeLabeled(sb *strings.Builder, label, content string) {
 
 // BuildCommitMessagePrompt creates a prompt for generating a git commit message.
 func BuildCommitMessagePrompt(
-	diff, commitContext string, detailLevel DetailLevel, hint string, profile ProfileName,
+	diff, commitContext string, detailLevel DetailLevel, hint string, _ ProfileName,
 ) string {
 	p := defaultProfile
 

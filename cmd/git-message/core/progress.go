@@ -18,6 +18,7 @@ func showProgress[T any](ctx context.Context, msg string, fn func() (T, error)) 
 		err      error
 		panicVal any
 	}
+
 	resCh := make(chan result, 1)
 
 	go func() {
@@ -30,6 +31,7 @@ func showProgress[T any](ctx context.Context, msg string, fn func() (T, error)) 
 				}
 			}
 		}()
+
 		val, err := fn()
 		select {
 		case resCh <- result{val: val, err: err}:
@@ -39,17 +41,20 @@ func showProgress[T any](ctx context.Context, msg string, fn func() (T, error)) 
 	}()
 
 	spinner := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+
 	ticker := time.NewTicker(80 * time.Millisecond)
 	defer ticker.Stop()
 
 	// Write initial spinner immediately so the user sees feedback.
 	fmt.Fprintf(os.Stderr, "\r%s %s", spinner[0], msg)
+
 	i := 1
 
 	for {
 		select {
 		case <-ctx.Done():
 			fmt.Fprintf(os.Stderr, "\r%s ✗ (cancelled)\n", msg)
+
 			var zero T
 
 			return zero, ctx.Err()

@@ -115,23 +115,29 @@ func configFromCmd(cmd *cobra.Command) config.Config {
 	if flags.Changed("detail-level") {
 		cfg.DetailLevel = config.DetailLevel(mustGet(cmd, "detail-level", flags.GetString))
 	}
+
 	if flags.Changed("profile") {
 		cfg.Profile = config.ProfileName(mustGet(cmd, "profile", flags.GetString))
 	}
+
 	if flags.Changed("hint") {
 		cfg.Hint = mustGet(cmd, "hint", flags.GetString)
 	}
+
 	if flags.Changed("history") {
 		// Pointer (not plain int) so --history 0 reliably disables history
 		// instead of being treated as "not set" by config.Config.Merge.
 		cfg.History = config.Ptr(mustGet(cmd, "history", flags.GetInt))
 	}
+
 	if flags.Changed("model") {
 		cfg.Model = mustGet(cmd, "model", flags.GetString)
 	}
+
 	if flags.Changed("wrapline") {
 		cfg.WrapLine = mustGet(cmd, "wrapline", flags.GetInt)
 	}
+
 	if flags.Changed("issue") {
 		cfg.Issues = parseIssueList(mustGet(cmd, "issue", flags.GetStringSlice))
 	}
@@ -144,15 +150,18 @@ func configFromCmd(cmd *cobra.Command) config.Config {
 // and non-numeric entries are ignored; the caller's Validate deduplicates.
 func parseIssueList(values []string) []int {
 	var issues []int
+
 	for _, v := range values {
 		trimmed := strings.TrimSpace(v)
 		if trimmed == "" {
 			continue
 		}
+
 		n, err := strconv.Atoi(trimmed)
 		if err != nil || n <= 0 {
 			continue
 		}
+
 		issues = append(issues, n)
 	}
 

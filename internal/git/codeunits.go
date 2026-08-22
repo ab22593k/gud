@@ -49,6 +49,7 @@ func ExtractCodeUnits(diff string) []CodeUnit {
 			if decl == "" {
 				continue
 			}
+
 			unit := parseDeclaration(decl, filePath)
 			if unit != nil {
 				units = append(units, *unit)
@@ -62,8 +63,12 @@ func ExtractCodeUnits(diff string) []CodeUnit {
 // splitHunks splits a single-file diff entry into its constituent hunks.
 func splitHunks(entry string) []string {
 	lines := strings.Split(entry, "\n")
-	var hunks []string
-	var current []string
+
+	var (
+		hunks   []string
+		current []string
+	)
+
 	inHunk := false
 
 	for _, line := range lines {
@@ -71,12 +76,14 @@ func splitHunks(entry string) []string {
 			if inHunk && len(current) > 0 {
 				hunks = append(hunks, strings.Join(current, "\n"))
 			}
+
 			current = []string{line}
 			inHunk = true
 		} else if inHunk {
 			current = append(current, line)
 		}
 	}
+
 	if inHunk && len(current) > 0 {
 		hunks = append(hunks, strings.Join(current, "\n"))
 	}
@@ -104,6 +111,7 @@ func extractDeclaration(hunk string) string {
 		if line == "" {
 			continue
 		}
+
 		trimmed := strings.TrimSpace(line)
 		// The hunk body starts with the hunk content. We need to look at
 		// context lines (starting with space), added lines (+), or removed lines (-).
@@ -133,6 +141,7 @@ func parseDeclaration(decl, filePath string) *CodeUnit {
 	case strings.HasPrefix(trimmed, "type "):
 		name := strings.TrimPrefix(trimmed, "type ")
 		name = strings.Fields(name)[0]
+
 		kind := "type"
 		if len(name) > 0 && name[0] >= 'A' && name[0] <= 'Z' {
 			kind = "struct"
@@ -153,7 +162,9 @@ func parseFuncOrMethod(sig, filePath string) *CodeUnit {
 		if closeParen == -1 || closeParen+1 >= len(sig) {
 			return nil
 		}
+
 		afterParen := strings.TrimSpace(sig[closeParen+1:])
+
 		funcName := extractIdentifier(afterParen)
 		if funcName == "" {
 			return nil
@@ -176,6 +187,7 @@ func parseFuncOrMethod(sig, filePath string) *CodeUnit {
 // extractIdentifier returns the first word/identifier in s.
 func extractIdentifier(s string) string {
 	s = strings.TrimSpace(s)
+
 	idx := strings.IndexAny(s, " (")
 	if idx == -1 {
 		return s
@@ -197,7 +209,9 @@ func extractReceiverType(recv string) string {
 // splitDiffEntries splits a multi-file diff into per-file entries.
 func splitDiffEntries(diff string) []string {
 	entries := strings.Split(diff, "\ndiff --git ")
+
 	var result []string
+
 	for i, e := range entries {
 		if i == 0 {
 			if strings.TrimSpace(e) != "" {
@@ -218,6 +232,7 @@ func extractFilePath(entry string) string {
 			return after
 		}
 	}
+
 	for line := range strings.SplitSeq(entry, "\n") {
 		if after, ok := strings.CutPrefix(line, "--- a/"); ok {
 			return after

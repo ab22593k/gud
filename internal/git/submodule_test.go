@@ -81,10 +81,12 @@ func TestExtractSubmoduleChanges(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got := ExtractSubmoduleChanges(tt.diff)
 			if len(got) != len(tt.want) {
 				t.Fatalf("ExtractSubmoduleChanges() = %v, want %v", got, tt.want)
 			}
+
 			for i := range got {
 				if got[i] != tt.want[i] {
 					t.Errorf("ExtractSubmoduleChanges()[%d] = %+v, want %+v", i, got[i], tt.want[i])
@@ -106,8 +108,10 @@ func TestSubmoduleContext(t *testing.T) {
 
 	runIn := func(workDir string, args ...string) string {
 		t.Helper()
+
 		cmd := exec.CommandContext(context.Background(), "git", args...)
 		cmd.Dir = workDir
+
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("git %v failed: %v\n%s", args, err, out)
@@ -121,18 +125,23 @@ func TestSubmoduleContext(t *testing.T) {
 	if err := os.MkdirAll(inner, 0755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
+
 	runIn(inner, "init", "-q", "-b", "main")
 	runIn(inner, "config", "user.name", "Test")
 	runIn(inner, "config", "user.email", "test@example.com")
+
 	if err := os.WriteFile(filepath.Join(inner, "f.txt"), []byte("v1\n"), 0600); err != nil {
 		t.Fatalf("write: %v", err)
 	}
+
 	runIn(inner, "add", ".")
 	runIn(inner, "commit", "-q", "-m", "feat: v1")
+
 	sha1 := runIn(inner, "rev-parse", "HEAD")
 	if err := os.WriteFile(filepath.Join(inner, "f.txt"), []byte("v2\n"), 0600); err != nil {
 		t.Fatalf("write: %v", err)
 	}
+
 	runIn(inner, "commit", "-q", "-am", "fix: v2")
 	sha2 := runIn(inner, "rev-parse", "HEAD")
 
@@ -141,10 +150,12 @@ func TestSubmoduleContext(t *testing.T) {
 	runIn(dir, "init", "-q", "-b", "main")
 	runIn(dir, "config", "user.name", "Test")
 	runIn(dir, "config", "user.email", "test@example.com")
+
 	gitmodules := "[submodule \"sub\"]\n\tpath = sub\n\turl = https://example.com/org/sub.git\n"
 	if err := os.WriteFile(filepath.Join(dir, ".gitmodules"), []byte(gitmodules), 0600); err != nil {
 		t.Fatalf("write .gitmodules: %v", err)
 	}
+
 	runIn(dir, "update-index", "--add", "--cacheinfo", "160000,"+sha1+",sub")
 	runIn(dir, "commit", "-q", "-m", "chore: add submodule sub")
 
@@ -170,10 +181,12 @@ func TestSubmoduleContext(t *testing.T) {
 	if err := os.RemoveAll(inner); err != nil {
 		t.Fatalf("remove checkout: %v", err)
 	}
+
 	got = SubmoduleContext(context.Background(), dir, changes)
 	if !strings.Contains(got, sha1[:7]) {
 		t.Errorf("SubmoduleContext() should keep the range summary, got:\n%s", got)
 	}
+
 	if strings.Contains(got, "fix: v2") {
 		t.Errorf("SubmoduleContext() should drop subjects without local history, got:\n%s", got)
 	}

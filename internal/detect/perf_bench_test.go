@@ -18,6 +18,7 @@ func benchWalk(b *testing.B, files, dirs int) string {
 		if err := os.MkdirAll(dir, 0750); err != nil {
 			b.Fatal(err)
 		}
+
 		for j := range files / dirs {
 			if err := os.WriteFile(
 				filepath.Join(dir, "f"+string(rune('a'+j%26))+".go"),
@@ -31,6 +32,7 @@ func benchWalk(b *testing.B, files, dirs int) string {
 	// repo's own .gitignore exactly as a real project would declare it.
 	_ = os.WriteFile(filepath.Join(root, ".gitignore"), []byte("node_modules/\n"), 0600)
 	bloat := filepath.Join(root, "node_modules", "pkg")
+
 	_ = os.MkdirAll(bloat, 0750)
 	for j := range files {
 		_ = os.WriteFile(
@@ -44,6 +46,7 @@ func benchWalk(b *testing.B, files, dirs int) string {
 func BenchmarkComputeStats_500Files(b *testing.B) {
 	root := benchWalk(b, 250, 10)
 	b.ResetTimer()
+
 	for b.Loop() {
 		if _, err := ComputeStats(root); err != nil {
 			b.Fatal(err)
@@ -54,6 +57,7 @@ func BenchmarkComputeStats_500Files(b *testing.B) {
 func BenchmarkComputeStats_10kFiles(b *testing.B) {
 	root := benchWalk(b, 5000, 25)
 	b.ResetTimer()
+
 	for b.Loop() {
 		if _, err := ComputeStats(root); err != nil {
 			b.Fatal(err)

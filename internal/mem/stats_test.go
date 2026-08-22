@@ -11,6 +11,7 @@ func TestBuildRepoSummaryQuery(t *testing.T) {
 	if q == nil {
 		t.Fatal("expected non-nil query")
 	}
+
 	err := q.Validate()
 	if err != nil {
 		t.Errorf("query validation failed: %v", err)
@@ -22,6 +23,7 @@ func TestBuildAuthorStatsQuery(t *testing.T) {
 	if q == nil {
 		t.Fatal("expected non-nil query")
 	}
+
 	err := q.Validate()
 	if err != nil {
 		t.Errorf("query validation failed: %v", err)
@@ -33,6 +35,7 @@ func TestBuildTopFilesQuery(t *testing.T) {
 	if q == nil {
 		t.Fatal("expected non-nil query")
 	}
+
 	err := q.Validate()
 	if err != nil {
 		t.Errorf("query validation failed: %v", err)
@@ -58,13 +61,16 @@ func TestFormatRepoSummary_NotEmpty(t *testing.T) {
 			{Path: "auth.go", Changes: 8},
 		},
 	}
+
 	result := FormatRepoSummary(stats)
 	if !contains(result, "42") {
 		t.Errorf("expected '42' in output")
 	}
+
 	if !contains(result, "alice") {
 		t.Errorf("expected 'alice' in output")
 	}
+
 	if !contains(result, "main.go") {
 		t.Errorf("expected 'main.go' in output")
 	}
@@ -75,6 +81,7 @@ func TestBuildTrendsQuery(t *testing.T) {
 	if q == nil {
 		t.Fatal("expected non-nil query")
 	}
+
 	if err := q.Validate(); err != nil {
 		t.Errorf("query validation failed: %v", err)
 	}
@@ -129,6 +136,7 @@ func TestParseAuthorStats(t *testing.T) {
 			if len(got) != len(tt.want) {
 				t.Fatalf("ParseAuthorStats() = %v, want %v", got, tt.want)
 			}
+
 			for _, g := range got {
 				if !slices.Contains(tt.want, g) {
 					t.Errorf("unexpected AuthorStat %v", g)
@@ -148,10 +156,12 @@ func TestParseTopFiles(t *testing.T) {
 		},
 	})
 	got := ParseTopFiles(resp)
+
 	want := map[string]int{"main.go": 2, "util.go": 1}
 	if len(got) != len(want) {
 		t.Fatalf("ParseTopFiles() = %v, want counts %v", got, want)
 	}
+
 	for _, f := range got {
 		if want[f.Path] != f.Changes {
 			t.Errorf("%s: changes = %d, want %d", f.Path, f.Changes, want[f.Path])
@@ -181,11 +191,14 @@ func TestParseTrends(t *testing.T) {
 			for _, s := range tt.stamps {
 				nodes = append(nodes, map[string]any{"timestamp": s})
 			}
+
 			got := ParseTrends(NewResponse(map[string]any{tt.key: nodes}))
+
 			total := 0
 			for _, p := range got {
 				total += p.Count
 			}
+
 			if total != len(tt.stamps) {
 				t.Errorf("total trend count = %d, want %d (%v)", total, len(tt.stamps), got)
 			}
@@ -212,10 +225,12 @@ func TestParseTimestamp(t *testing.T) {
 	if _, ok := parseTimestamp(0); ok {
 		t.Error("parseTimestamp(0) ok = true, want false")
 	}
+
 	ts, ok := parseTimestamp(1782734400000)
 	if !ok {
 		t.Fatal("parseTimestamp(valid) ok = false, want true")
 	}
+
 	if got := ts.UTC().Format("2006-01-02"); got != "2026-06-29" {
 		t.Errorf("parsed date = %s, want 2026-06-29", got)
 	}
@@ -265,10 +280,12 @@ func TestParseRepoSummary(t *testing.T) {
 			map[string]any{"author": "b@x.com"},
 		},
 	})
+
 	stats := ParseRepoSummary(resp)
 	if stats.TotalCommits != 3 {
 		t.Errorf("TotalCommits = %d, want 3", stats.TotalCommits)
 	}
+
 	if len(stats.AuthorStats) != 2 {
 		t.Errorf("AuthorStats = %v, want 2 entries", stats.AuthorStats)
 	}

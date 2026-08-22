@@ -105,16 +105,19 @@ func ParseAuthorStats(resp *Response) []AuthorStat {
 	if len(nodes) == 0 {
 		nodes = resp.Nodes("authors_by_array")
 	}
+
 	if len(nodes) == 0 {
 		return nil
 	}
 
 	emailCount := make(map[string]int)
+
 	for _, n := range nodes {
 		author := n.String("author")
 		if author == "" {
 			continue
 		}
+
 		emailCount[author]++
 	}
 
@@ -134,11 +137,13 @@ func ParseTopFiles(resp *Response) []FileStat {
 	}
 
 	pathCount := make(map[string]int)
+
 	for _, n := range nodes {
 		path := n.String("path")
 		if path == "" {
 			continue
 		}
+
 		pathCount[path]++
 	}
 
@@ -156,16 +161,19 @@ func ParseTrends(resp *Response) []TrendPoint {
 	if len(nodes) == 0 {
 		nodes = resp.Nodes("commits")
 	}
+
 	if len(nodes) == 0 {
 		return nil
 	}
 
 	dayCount := make(map[string]int)
+
 	for _, n := range nodes {
 		t, ok := parseTimestamp(n.Float64("timestamp"))
 		if !ok {
 			continue
 		}
+
 		date := t.Format("2006-01-02")
 		dayCount[date]++
 	}
@@ -196,15 +204,18 @@ func FormatAuthorStats(stats []AuthorStat) string {
 
 	var b strings.Builder
 	b.WriteString("Commits by author:\n")
+
 	total := 0
 	for _, s := range stats {
 		total += s.Count
 	}
+
 	for _, s := range stats {
 		pct := 0
 		if total > 0 {
 			pct = s.Count * 100 / total
 		}
+
 		_, _ = fmt.Fprintf(&b, "  %s  %d commits  (%d%%)\n", s.Email, s.Count, pct)
 	}
 
@@ -219,6 +230,7 @@ func FormatTopFiles(stats []FileStat) string {
 
 	var b strings.Builder
 	b.WriteString("Most changed files:\n")
+
 	for _, s := range stats {
 		_, _ = fmt.Fprintf(&b, "  %s  %d changes\n", s.Path, s.Changes)
 	}
@@ -234,6 +246,7 @@ func FormatTrends(trends []TrendPoint) string {
 
 	var b strings.Builder
 	b.WriteString("Commit activity by day:\n")
+
 	for _, t := range trends {
 		_, _ = fmt.Fprintf(&b, "  %s  %d commits\n", t.Date, t.Count)
 	}
@@ -254,6 +267,7 @@ func ParseRepoSummary(resp *Response) RepoStats {
 	if stats.TotalCommits == 0 {
 		stats.TotalCommits = len(resp.Nodes("by_author"))
 	}
+
 	if stats.TotalCommits == 0 {
 		stats.TotalCommits = len(resp.Nodes("authors_by_array"))
 	}
@@ -268,18 +282,22 @@ func FormatRepoSummary(stats RepoStats) string {
 
 	if len(stats.AuthorStats) > 0 {
 		b.WriteString("By author:\n")
+
 		for _, a := range stats.AuthorStats {
 			pct := 0
 			if stats.TotalCommits > 0 {
 				pct = a.Count * 100 / stats.TotalCommits
 			}
+
 			_, _ = fmt.Fprintf(&b, "  %s  %d commits  (%d%%)\n", a.Email, a.Count, pct)
 		}
+
 		b.WriteString("\n")
 	}
 
 	if len(stats.FileStats) > 0 {
 		b.WriteString("Top files:\n")
+
 		for _, f := range stats.FileStats {
 			_, _ = fmt.Fprintf(&b, "  %s  %d changes\n", f.Path, f.Changes)
 		}

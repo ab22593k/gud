@@ -18,9 +18,17 @@ const maxContextRecords = 5
 //
 // When branch is non-empty, results are scoped to that branch, including
 // legacy records persisted without a branch (branch = "").
+// Return-key names shared by the retrieval query builders and result parsers.
+const (
+	returnKeyByDiff    = "by_diff"
+	returnKeyByMessage = "by_message"
+	returnKeyByVector  = "by_vector"
+	returnKeyCommits   = "commits"
+)
+
 func BuildContextQuery(tenantID, branch string, files []string, diffText string) helix.Request {
 	b := helix.ReadQuery("commit_context")
-	returns := []string{"by_diff"}
+	returns := []string{returnKeyByDiff}
 
 	// 1. BM25 search over stored diff_text for the same tenant.
 	diffSearch := helix.G()
@@ -38,7 +46,7 @@ func BuildContextQuery(tenantID, branch string, files []string, diffText string)
 		byDiff = byDiff.Where(branchFilter(branch))
 	}
 
-	b.VarAs("by_diff", byDiff.Project(
+	b.VarAs(returnKeyByDiff, byDiff.Project(
 		helix.ProjectPropAs("$id", "$id"),
 		helix.ProjectPropAs("id", "sha"),
 		helix.ProjectPropAs("message", "message"),
@@ -53,6 +61,7 @@ func BuildContextQuery(tenantID, branch string, files []string, diffText string)
 	// 2. BM25 search over commit messages using file names as signals.
 	if len(files) > 0 {
 		msgQuery := strings.Join(files, " ")
+
 		byMessage := helix.G().
 			TextSearchNodes("Commit", "message", msgQuery, maxContextRecords, tenantID).
 			Has("repo_path", tenantID).
@@ -61,7 +70,7 @@ func BuildContextQuery(tenantID, branch string, files []string, diffText string)
 			byMessage = byMessage.Where(branchFilter(branch))
 		}
 
-		b.VarAs("by_message", byMessage.Project(
+		b.VarAs(returnKeyByMessage, byMessage.Project(
 			helix.ProjectPropAs("$id", "$id"),
 			helix.ProjectPropAs("id", "sha"),
 			helix.ProjectPropAs("message", "message"),
@@ -72,7 +81,7 @@ func BuildContextQuery(tenantID, branch string, files []string, diffText string)
 			helix.ProjectPropAs("diff_stat", "diff_stat"),
 		).
 			Limit(maxContextRecords))
-		returns = append(returns, "by_message")
+		returns = append(returns, returnKeyByMessage)
 	}
 
 	return b.Returning(returns...)
@@ -131,26 +140,26 @@ func BuildHybridContextQuery(
 
 	// 1. Vector search when an embedding query vector is provided.
 	if len(queryVector) > 0 {
-		b.VarAs("by_vector",
+		b.VarAs(returnKeyByVector,
 			projectSearch(scope(helix.G().
 				VectorSearchNodes("Commit", "embedding", queryVector, int(limit), tenantID))))
-		returns = append(returns, "by_vector")
+		returns = append(returns, returnKeyByVector)
 	}
 
 	// 2. BM25 search over diff text.
 	if diffText != "" {
-		b.VarAs("by_diff",
+		b.VarAs(returnKeyByDiff,
 			projectSearch(scope(helix.G().
 				TextSearchNodes("Commit", "diff_text", shortenDiff(diffText), int(limit), tenantID))))
-		returns = append(returns, "by_diff")
+		returns = append(returns, returnKeyByDiff)
 	}
 
 	// 3. BM25 search over commit messages using file names as signals.
 	if len(files) > 0 {
-		b.VarAs("by_message",
+		b.VarAs(returnKeyByMessage,
 			projectSearch(scope(helix.G().
 				TextSearchNodes("Commit", "message", strings.Join(files, " "), int(limit), tenantID))))
-		returns = append(returns, "by_message")
+		returns = append(returns, returnKeyByMessage)
 	}
 
 	return b.Returning(returns...)
@@ -176,7 +185,7 @@ func BuildEntityContextQuery(tenantID, branch string, codeElementKeys []string, 
 		traversal = traversal.Where(branchFilter(branch))
 	}
 
-	b.VarAs("commits",
+	b.VarAs(returnKeyCommits,
 		traversal.
 			Project(
 				helix.ProjectPropAs("$id", "$id"),
@@ -190,7 +199,7 @@ func BuildEntityContextQuery(tenantID, branch string, codeElementKeys []string, 
 			).
 			Limit(limit))
 
-	return b.Returning("commits")
+	return b.Returning(returnKeyCommits)
 }
 
 // ScoredCommit pairs a retrieved commit with its relevance distance from the
@@ -215,19 +224,23 @@ const rrfK = 60
 // omitted and records without a SHA are dropped.
 func CollectContextGroups(resp *Response) []RankedGroup {
 	var groups []RankedGroup
-	for _, key := range []string{"by_vector", "by_diff", "by_message", "commits"} {
+
+	for _, key := range []string{returnKeyByVector, returnKeyByDiff, returnKeyByMessage, returnKeyCommits} {
 		nodes := resp.Nodes(key)
 		if len(nodes) == 0 {
 			continue
 		}
+
 		items := make([]ScoredCommit, 0, len(nodes))
 		for _, n := range nodes {
 			rec := CommitRecordFromHelixData(n)
 			if rec.SHA == "" {
 				continue
 			}
+
 			items = append(items, ScoredCommit{Record: rec, Distance: n.Float64("distance")})
 		}
+
 		if len(items) > 0 {
 			groups = append(groups, RankedGroup{Key: key, Items: items})
 		}
@@ -239,7 +252,7 @@ func CollectContextGroups(resp *Response) []RankedGroup {
 // FuseContextRecords fuses ranked retrieval groups with reciprocal-rank fusion
 // and re-ranks by recency. A commit present in multiple sources accumulates a
 // vote per source (1/(K+rank)), so agreement across sources ranks above any
-// single strong hit. Entity matches (Key == "commits") are exact graph hits
+// single strong hit. Entity matches (Key == returnKeyCommits) are exact graph hits
 // and vote as if top-ranked. When limit > 0 the result is capped.
 func FuseContextRecords(groups []RankedGroup, limit int) []CommitRecord {
 	type acc struct {
@@ -247,6 +260,7 @@ func FuseContextRecords(groups []RankedGroup, limit int) []CommitRecord {
 		score     float64
 		timestamp time.Time
 	}
+
 	scores := make(map[string]*acc)
 	order := make([]string, 0, 8)
 
@@ -255,19 +269,22 @@ func FuseContextRecords(groups []RankedGroup, limit int) []CommitRecord {
 			continue
 		}
 		// Entity matches are precise: every hit votes as if it were top-ranked.
-		entityGroup := g.Key == "commits"
+		entityGroup := g.Key == returnKeyCommits
 		for i, item := range g.Items {
 			sha := item.Record.SHA
+
 			a := scores[sha]
 			if a == nil {
 				a = &acc{rec: item.Record, timestamp: item.Record.Timestamp}
 				scores[sha] = a
 				order = append(order, sha)
 			}
+
 			rank := float64(i + 1)
 			if entityGroup {
 				rank = 1
 			}
+
 			a.score += 1.0 / (rrfK + rank)
 		}
 	}
@@ -299,9 +316,10 @@ func FuseContextRecords(groups []RankedGroup, limit int) []CommitRecord {
 // CollectContextGroups + FuseContextRecords for ranked hybrid retrieval.
 func ParseContextResults(resp *Response) []CommitRecord {
 	seen := make(map[string]bool)
+
 	var records []CommitRecord
 
-	for _, key := range []string{"by_diff", "by_message", "by_vector", "commits"} {
+	for _, key := range []string{returnKeyByDiff, returnKeyByMessage, returnKeyByVector, returnKeyCommits} {
 		for _, node := range resp.Nodes(key) {
 			record := CommitRecordFromHelixData(node)
 			if record.SHA != "" && !seen[record.SHA] {
@@ -320,6 +338,7 @@ func extractResultItems(raw any) []any {
 	if items, ok := raw.([]any); ok {
 		return items
 	}
+
 	if obj, ok := raw.(map[string]any); ok {
 		if props, ok := obj["properties"].([]any); ok {
 			return props
@@ -338,6 +357,7 @@ func FormatContextRecords(records []CommitRecord) string {
 
 	var b strings.Builder
 	b.WriteString("Related commit history (from HelixDB memory):\n")
+
 	for _, r := range records {
 		_, _ = fmt.Fprintf(&b, "  %s %s by %s [%s@%s]\n",
 			truncateSHA(r.SHA), r.Message, truncateAuthor(r.Author), r.Branch, r.RepoPath)
@@ -363,6 +383,7 @@ func BuildMemoryContextQuery(tenantID, userID, query string, limit int) helix.Re
 	if userID != "" {
 		traversal = traversal.Where(helix.PredEq("userId", user))
 	}
+
 	if query != "" {
 		traversal = traversal.Where(helix.PredContains("content", query))
 	}
@@ -417,6 +438,7 @@ func truncateAuthor(author string) string {
 	if idx := strings.Index(author, "@"); idx > 0 {
 		return author[:idx] + "@..."
 	}
+
 	if len(author) > 20 {
 		return author[:20] + "..."
 	}

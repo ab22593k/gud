@@ -38,7 +38,9 @@ func TestPromptAction(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			scanner := bufio.NewScanner(strings.NewReader(tt.input))
+
 			got := promptAction(scanner, discardWriter{})
 			if got != tt.want {
 				t.Errorf("promptAction(%q) = %q, want %q", tt.input, got, tt.want)
@@ -64,7 +66,9 @@ func TestBuildHistoryContext_Disabled(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			ctx := context.Background()
+
 			got := buildHistoryContext(ctx, tt.app, "")
 			if got != "" {
 				t.Errorf("buildHistoryContext(%+v) = %q, want empty string", tt.app.Config(), got)
@@ -94,6 +98,7 @@ func TestParseLogLevel(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			if got := parseLogLevel(tt.input); got != tt.want {
 				t.Errorf("parseLogLevel(%q) = %v, want %v", tt.input, got, tt.want)
 			}

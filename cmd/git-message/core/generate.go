@@ -50,6 +50,7 @@ func runGenerate(cmd *cobra.Command, _ []string) error {
 		// reword stop): the commit message is git's prepared one, not
 		// derived from a diff.
 		slog.Debug("no staged changes while a git operation is in progress; using prepared message", "operation", op)
+
 		diff = ""
 	}
 
@@ -160,7 +161,9 @@ func resolveProfileContent(profileName string) string {
 	if profileName == "" {
 		return ""
 	}
+
 	initProfileManager()
+
 	p, err := profileManager.Get(profileName)
 	if err != nil {
 		slog.Warn("configured profile not cached; proceeding without profile content",
@@ -179,7 +182,9 @@ func requireProfile(profileName string) error {
 	if profileName == "" {
 		return nil
 	}
+
 	initProfileManager()
+
 	_, err := profileManager.Get(profileName)
 	if err != nil {
 		return fmt.Errorf("profile %q not found.\n\n"+
@@ -196,6 +201,7 @@ func getStagedDiffOrError(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
 	if strings.TrimSpace(diff) == "" {
 		return "", errors.New("no staged changes found. Use 'git add' to stage changes")
 	}
@@ -229,7 +235,9 @@ func appendDeletedContext(diff, deleted string) string {
 	// This prevents injection of fake diff context via malicious filenames
 	// containing embedded newlines, while preserving the one-per-line format.
 	lines := strings.Split(deleted, "\n")
+
 	var clean []string
+
 	for _, line := range lines {
 		if line = strings.TrimSpace(line); line != "" {
 			clean = append(clean, line)
@@ -239,12 +247,15 @@ func appendDeletedContext(diff, deleted string) string {
 	var b strings.Builder
 	b.WriteString(diff)
 	b.WriteString("\n\nDeleted files:\n")
+
 	for i, line := range clean {
 		if i > 0 {
 			b.WriteString("\n")
 		}
+
 		b.WriteString(line)
 	}
+
 	b.WriteString("\n")
 
 	return b.String()
@@ -302,6 +313,7 @@ func buildHistoryContext(ctx context.Context, app *AppContext, diff string) stri
 
 	if upstream := git.GetUpstreamBranch(ctx); upstream != "" {
 		paths := git.ExtractChangedPaths(diff)
+
 		history, err := git.GetTopicHistory(ctx, upstream, n, paths)
 		if err == nil && strings.TrimSpace(history) != "" {
 			label := fmt.Sprintf("Commits on %s since diverging from %s:", app.Branch(ctx), upstream)
@@ -321,6 +333,7 @@ func buildHistoryContext(ctx context.Context, app *AppContext, diff string) stri
 
 		return ""
 	}
+
 	if strings.TrimSpace(history) == "" {
 		return ""
 	}
