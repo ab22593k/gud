@@ -59,6 +59,8 @@ func GetTopicHistory(ctx context.Context, upstream string, n int, paths []string
 // relative arguments (such as log pathspecs) resolve against dir rather than
 // the caller's cwd.
 func runGitDir(ctx context.Context, dir string, args ...string) (string, error) {
+	//nolint:gosec // G204: binary is the fixed "git" command; arguments come from
+	// internal callers, not user input.
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
 	var out bytes.Buffer

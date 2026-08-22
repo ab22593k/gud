@@ -14,7 +14,6 @@ import (
 // and testPort = "2232".
 
 const testTenant = "/test/repo"
-const testTenantB = "/other/repo"
 
 // createTestVector generates a 1536-dim F32 vector for integration testing.
 // Uses text-embedding-3-small dimensions (1536). Contents are deterministic.
