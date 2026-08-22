@@ -24,6 +24,7 @@ func TestBuildCommitMessagePrompt(t *testing.T) {
 			hint:        "",
 			profile:     "",
 			validate: func(t *testing.T, prompt string) {
+				t.Helper()
 				if !strings.Contains(prompt, "fmt.Println") {
 					t.Errorf("prompt should contain diff content")
 				}
@@ -40,6 +41,7 @@ func TestBuildCommitMessagePrompt(t *testing.T) {
 			hint:        "",
 			profile:     "",
 			validate: func(t *testing.T, prompt string) {
+				t.Helper()
 				if !strings.Contains(prompt, "Adding hello world feature") {
 					t.Errorf("prompt should contain context")
 				}
@@ -53,6 +55,7 @@ func TestBuildCommitMessagePrompt(t *testing.T) {
 			hint:        "",
 			profile:     "",
 			validate: func(t *testing.T, prompt string) {
+				t.Helper()
 				if !strings.Contains(prompt, "72") && !strings.Contains(prompt, "Concise") {
 					t.Errorf("minimal prompt should mention concise")
 				}
@@ -66,6 +69,7 @@ func TestBuildCommitMessagePrompt(t *testing.T) {
 			hint:        "",
 			profile:     "",
 			validate: func(t *testing.T, prompt string) {
+				t.Helper()
 				if !strings.Contains(prompt, "72") && !strings.Contains(prompt, "82") {
 					t.Errorf("detailed prompt should mention character limits")
 				}
@@ -79,6 +83,7 @@ func TestBuildCommitMessagePrompt(t *testing.T) {
 			hint:        "focus on security changes",
 			profile:     "",
 			validate: func(t *testing.T, prompt string) {
+				t.Helper()
 				if !strings.Contains(prompt, "focus on security changes") {
 					t.Errorf("prompt should contain hint")
 				}
@@ -92,6 +97,7 @@ func TestBuildCommitMessagePrompt(t *testing.T) {
 			hint:        "",
 			profile:     "",
 			validate: func(t *testing.T, prompt string) {
+				t.Helper()
 				if prompt == "" {
 					t.Errorf("prompt should not be empty")
 				}
@@ -125,6 +131,7 @@ func TestBuildCommitMessagePromptWithEmptyProfile(t *testing.T) {
 			detailLevel: DetailStandard,
 			hint:        "",
 			validate: func(t *testing.T, prompt string) {
+				t.Helper()
 				if !strings.Contains(prompt, "func add") {
 					t.Errorf("prompt should contain diff content")
 				}
@@ -137,6 +144,7 @@ func TestBuildCommitMessagePromptWithEmptyProfile(t *testing.T) {
 			detailLevel: DetailDetailed,
 			hint:        "",
 			validate: func(t *testing.T, prompt string) {
+				t.Helper()
 				if !strings.Contains(prompt, "72") && !strings.Contains(prompt, "82") {
 					t.Errorf("detailed prompt should mention character limits")
 				}

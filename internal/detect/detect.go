@@ -195,7 +195,7 @@ func ComputeStats(repoRoot string) (*RepoStats, error) {
 
 	err := filepath.WalkDir(repoRoot, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return nil // skip unreadable paths
+			return nil //nolint:nilerr // documented: unreadable paths are skipped silently
 		}
 		if d.IsDir() {
 			if d.Name() == ".git" {

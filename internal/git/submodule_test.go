@@ -106,7 +106,7 @@ func TestSubmoduleContext(t *testing.T) {
 
 	runIn := func(workDir string, args ...string) string {
 		t.Helper()
-		cmd := exec.Command("git", args...)
+		cmd := exec.CommandContext(context.Background(), "git", args...)
 		cmd.Dir = workDir
 		out, err := cmd.CombinedOutput()
 		if err != nil {

@@ -9,6 +9,29 @@ linters:
     - whitespace
     - copyloopvar
     - usetesting
+    - unconvert
+    - bodyclose
+    - wastedassign
+    - nakedret
+    - dogsled
+    - nestif
+    - mirror
+    - reassign
+    - fatcontext
+    - durationcheck
+    - makezero
+    - usestdlibvars
+    - testableexamples
+    - intrange
+    - thelper
+    - unparam
+    - predeclared
+    - errname
+    - prealloc
+    - contextcheck
+    - nilerr
+    - forcetypeassert
+    - noctx
     - godot
     - gosec
     - goconst

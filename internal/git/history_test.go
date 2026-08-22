@@ -81,13 +81,13 @@ func TestExtractChangedPaths(t *testing.T) {
 //	main:      "feat: base" → "feat: main work"
 //	origin/main → "feat: base" (topic upstream)
 //	topic:     "feat: base" → "feat: change file1" → "feat: change file2"
-func newHistoryTestRepo(t *testing.T) string {
+func newHistoryTestRepo(t *testing.T) {
 	t.Helper()
 	dir := t.TempDir()
 
 	run := func(args ...string) {
 		t.Helper()
-		cmd := exec.Command("git", args...)
+		cmd := exec.CommandContext(context.Background(), "git", args...)
 		cmd.Dir = dir
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("git %v failed: %v\n%s", args, err, out)
@@ -131,8 +131,6 @@ func newHistoryTestRepo(t *testing.T) string {
 	run("checkout", "-q", "topic")
 
 	t.Chdir(dir)
-
-	return dir
 }
 
 func TestGetUpstreamBranch(t *testing.T) {
@@ -156,7 +154,7 @@ func TestGetUpstreamBranch_None(t *testing.T) {
 	dir := t.TempDir()
 	run := func(args ...string) {
 		t.Helper()
-		cmd := exec.Command("git", args...)
+		cmd := exec.CommandContext(context.Background(), "git", args...)
 		cmd.Dir = dir
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("git %v failed: %v\n%s", args, err, out)

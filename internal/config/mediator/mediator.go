@@ -19,14 +19,14 @@ import (
 	"gud/internal/config/provider"
 )
 
-// ErrUnresolvedPlaceholder is returned when a config value contains
+// UnresolvedPlaceholderError is returned when a config value contains
 // an unresolved template variable that should have been replaced.
-type ErrUnresolvedPlaceholder struct {
+type UnresolvedPlaceholderError struct {
 	Field string
 	Value string
 }
 
-func (e *ErrUnresolvedPlaceholder) Error() string {
+func (e *UnresolvedPlaceholderError) Error() string {
 	return fmt.Sprintf("config: %s contains unresolved placeholder %q", e.Field, e.Value)
 }
 
@@ -131,7 +131,7 @@ func validateStrict(cfg config.Config) error {
 
 	for name, value := range stringFields {
 		if hasPlaceholder(value) {
-			return &ErrUnresolvedPlaceholder{Field: name, Value: value}
+			return &UnresolvedPlaceholderError{Field: name, Value: value}
 		}
 	}
 

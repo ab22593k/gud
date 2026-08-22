@@ -16,14 +16,14 @@ import (
 //	main:      "feat: base" → "feat: main work"
 //	origin/main → "feat: base" (topic upstream)
 //	topic:     "feat: base" → "feat: change file1" → "feat: change file2"
-func newCoreHistoryTestRepo(t *testing.T) string {
+func newCoreHistoryTestRepo(t *testing.T) {
 	t.Helper()
 	dir := t.TempDir()
 
 	run := func(args ...string) {
 		t.Helper()
 		//nolint:gosec // test-only git invocation with fixed repo-local args
-		cmd := exec.Command("git", args...)
+		cmd := exec.CommandContext(context.Background(), "git", args...)
 		cmd.Dir = dir
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("git %v failed: %v\n%s", args, err, out)
@@ -65,8 +65,6 @@ func newCoreHistoryTestRepo(t *testing.T) string {
 	run("checkout", "-q", "topic")
 
 	t.Chdir(dir)
-
-	return dir
 }
 
 func TestBuildHistoryContext_GraphRelative(t *testing.T) {
@@ -123,7 +121,7 @@ func TestBuildHistoryContext_FallsBackToRecent(t *testing.T) {
 	run := func(args ...string) {
 		t.Helper()
 		//nolint:gosec // test-only git invocation with fixed repo-local args
-		cmd := exec.Command("git", args...)
+		cmd := exec.CommandContext(context.Background(), "git", args...)
 		cmd.Dir = dir
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("git %v failed: %v\n%s", args, err, out)

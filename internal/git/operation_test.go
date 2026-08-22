@@ -134,19 +134,17 @@ func TestStripCommentLines(t *testing.T) {
 
 // newTestRepo initialises a bare git repository in a temp dir, chdirs into it,
 // and returns a cleanup that restores the original working directory.
-func newTestRepo(t *testing.T) string {
+func newTestRepo(t *testing.T) {
 	t.Helper()
 	dir := t.TempDir()
 
-	cmd := exec.Command("git", "init", "-q")
+	cmd := exec.CommandContext(context.Background(), "git", "init", "-q")
 	cmd.Dir = dir
 	if err := cmd.Run(); err != nil {
 		t.Skipf("git init unavailable: %v", err)
 	}
 
 	t.Chdir(dir)
-
-	return dir
 }
 
 // writeRepoFile writes a file inside the repository (used for state files).
@@ -278,7 +276,7 @@ func TestPreparedMessage(t *testing.T) {
 			t.Fatalf("write file: %v", err)
 		}
 		run := func(args ...string) {
-			cmd := exec.Command("git", args...)
+			cmd := exec.CommandContext(ctx, "git", args...)
 			if out, err := cmd.CombinedOutput(); err != nil {
 				t.Fatalf("git %v failed: %v\n%s", args, err, out)
 			}

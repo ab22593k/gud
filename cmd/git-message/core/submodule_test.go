@@ -22,7 +22,7 @@ func TestBuildSubmoduleContext(t *testing.T) {
 	runIn := func(workDir string, args ...string) string {
 		t.Helper()
 		//nolint:gosec // test-only git invocation with fixed repo-local args
-		cmd := exec.Command("git", args...)
+		cmd := exec.CommandContext(context.Background(), "git", args...)
 		cmd.Dir = workDir
 		out, err := cmd.CombinedOutput()
 		if err != nil {

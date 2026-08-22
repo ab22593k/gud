@@ -71,14 +71,14 @@ func TestBuildOperationContext(t *testing.T) {
 // branches and chdirs into it, leaving the repo with a non-fast-forward merge
 // in progress (git merge --no-commit) so a completing commit is a real merge
 // commit with two parents.
-func newOperationTestRepo(t *testing.T) string {
+func newOperationTestRepo(t *testing.T) {
 	t.Helper()
 	dir := t.TempDir()
 
 	run := func(args ...string) {
 		t.Helper()
 		//nolint:gosec // test-only git invocation with fixed repo-local args
-		cmd := exec.Command("git", args...)
+		cmd := exec.CommandContext(context.Background(), "git", args...)
 		cmd.Dir = dir
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("git %v failed: %v\n%s", args, err, out)
@@ -113,14 +113,12 @@ func newOperationTestRepo(t *testing.T) string {
 	run("merge", "--no-commit", "side")
 
 	t.Chdir(dir)
-
-	return dir
 }
 
 func mustOutput(t *testing.T, dir string, args ...string) string {
 	t.Helper()
 	//nolint:gosec // test-only git invocation with fixed repo-local args
-	cmd := exec.Command("git", args...)
+	cmd := exec.CommandContext(context.Background(), "git", args...)
 	cmd.Dir = dir
 	out, err := cmd.Output()
 	if err != nil {

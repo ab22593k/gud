@@ -113,7 +113,7 @@ func TestCommit(t *testing.T) {
 		"git config user.email test@example.com",
 		"git config user.name Test",
 	} {
-		c := exec.Command("sh", "-c", cmd)
+		c := exec.CommandContext(context.Background(), "sh", "-c", cmd)
 		c.Dir = dir
 		if err := c.Run(); err != nil {
 			t.Fatalf("%s failed: %v", cmd, err)
@@ -122,7 +122,7 @@ func TestCommit(t *testing.T) {
 	if err := os.WriteFile(dir+"/file.go", []byte("package main\n"), 0600); err != nil {
 		t.Fatalf("write file failed: %v", err)
 	}
-	addCmd := exec.Command("git", "add", ".")
+	addCmd := exec.CommandContext(context.Background(), "git", "add", ".")
 	addCmd.Dir = dir
 	if err := addCmd.Run(); err != nil {
 		t.Fatalf("git add failed: %v", err)
@@ -156,7 +156,7 @@ func TestCommit_EmptyMessage(t *testing.T) {
 		"git config user.email test@example.com",
 		"git config user.name Test",
 	} {
-		c := exec.Command("sh", "-c", cmd)
+		c := exec.CommandContext(context.Background(), "sh", "-c", cmd)
 		c.Dir = dir
 		if err := c.Run(); err != nil {
 			t.Fatalf("%s failed: %v", cmd, err)
@@ -165,7 +165,7 @@ func TestCommit_EmptyMessage(t *testing.T) {
 	if err := os.WriteFile(dir+"/file.go", []byte("package main\n"), 0600); err != nil {
 		t.Fatalf("write file failed: %v", err)
 	}
-	addCmd := exec.Command("git", "add", ".")
+	addCmd := exec.CommandContext(context.Background(), "git", "add", ".")
 	addCmd.Dir = dir
 	if err := addCmd.Run(); err != nil {
 		t.Fatalf("git add failed: %v", err)
@@ -203,7 +203,7 @@ func TestGetStagedDeletedFiles_WithDeletion(t *testing.T) {
 		"git config user.email test@example.com",
 		"git config user.name Test",
 	} { //nolint:goconst
-		c := exec.Command("sh", "-c", cmd)
+		c := exec.CommandContext(context.Background(), "sh", "-c", cmd)
 		c.Dir = dir
 		if err := c.Run(); err != nil {
 			t.Fatalf("%s failed: %v", cmd, err)
@@ -216,7 +216,7 @@ func TestGetStagedDeletedFiles_WithDeletion(t *testing.T) {
 		t.Fatalf("write keep.go failed: %v", err)
 	}
 
-	addCmd := exec.Command("git", "add", ".")
+	addCmd := exec.CommandContext(context.Background(), "git", "add", ".")
 	addCmd.Dir = dir
 	if err := addCmd.Run(); err != nil {
 		t.Fatalf("git add failed: %v", err)
@@ -235,7 +235,7 @@ func TestGetStagedDeletedFiles_WithDeletion(t *testing.T) {
 	if err := os.Remove("file.go"); err != nil {
 		t.Fatalf("remove file.go failed: %v", err)
 	}
-	rmCmd := exec.Command("git", "rm", "file.go")
+	rmCmd := exec.CommandContext(context.Background(), "git", "rm", "file.go")
 	rmCmd.Dir = dir
 	if err := rmCmd.Run(); err != nil {
 		t.Fatalf("git rm file.go failed: %v", err)
@@ -245,7 +245,7 @@ func TestGetStagedDeletedFiles_WithDeletion(t *testing.T) {
 	if err := os.WriteFile("keep.go", []byte("package main\n\nfunc main() {}\n"), 0600); err != nil {
 		t.Fatalf("write keep.go failed: %v", err)
 	}
-	addAgain := exec.Command("git", "add", "keep.go")
+	addAgain := exec.CommandContext(context.Background(), "git", "add", "keep.go")
 	addAgain.Dir = dir
 	if err := addAgain.Run(); err != nil {
 		t.Fatalf("git add keep.go failed: %v", err)
@@ -287,7 +287,7 @@ func TestGetStagedDiff_ExcludesRenames(t *testing.T) {
 		"git config user.email test@example.com",
 		"git config user.name Test",
 	} { //nolint:goconst
-		c := exec.Command("sh", "-c", cmd)
+		c := exec.CommandContext(context.Background(), "sh", "-c", cmd)
 		c.Dir = dir
 		if err := c.Run(); err != nil {
 			t.Fatalf("%s failed: %v", cmd, err)
@@ -297,7 +297,7 @@ func TestGetStagedDiff_ExcludesRenames(t *testing.T) {
 		t.Fatalf("write old.go failed: %v", err)
 	}
 
-	addCmd := exec.Command("git", "add", ".")
+	addCmd := exec.CommandContext(context.Background(), "git", "add", ".")
 	addCmd.Dir = dir
 	if err := addCmd.Run(); err != nil {
 		t.Fatalf("git add failed: %v", err)
@@ -312,7 +312,7 @@ func TestGetStagedDiff_ExcludesRenames(t *testing.T) {
 	}
 
 	// Rename the file
-	mvCmd := exec.Command("git", "mv", "old.go", "new.go")
+	mvCmd := exec.CommandContext(context.Background(), "git", "mv", "old.go", "new.go")
 	mvCmd.Dir = dir
 	if err := mvCmd.Run(); err != nil {
 		t.Fatalf("git mv old.go new.go failed: %v", err)
@@ -349,7 +349,7 @@ func TestGetRecentCommits_EmptyRepo(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	cmd := exec.Command("git", "init")
+	cmd := exec.CommandContext(context.Background(), "git", "init")
 	cmd.Dir = dir
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("git init failed: %v", err)
@@ -387,7 +387,7 @@ func TestGetBranchIntegration(t *testing.T) {
 
 	// Initialize a temp repo, commit, and verify the branch is detected.
 	dir := t.TempDir()
-	cmd := exec.Command("git", "init", "-b", "main")
+	cmd := exec.CommandContext(context.Background(), "git", "init", "-b", "main")
 	cmd.Dir = dir
 	if err := cmd.Run(); err != nil {
 		t.Skipf("git init unavailable: %v", err)
@@ -401,7 +401,7 @@ func TestGetBranchIntegration(t *testing.T) {
 	write("f.txt", "hello\n")
 	msg := "init"
 	for _, a := range [][]string{{"add", "f.txt"}, {"-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", msg}} {
-		c := exec.Command("git", a...)
+		c := exec.CommandContext(context.Background(), "git", a...)
 		c.Dir = dir
 		if err := c.Run(); err != nil {
 			t.Skipf("git %v failed: %v", a, err)

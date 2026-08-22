@@ -371,7 +371,10 @@ func RunCommitReview(msg string, wrapLine ...int) (string, string, error) {
 		return ActionAbort, msg, err
 	}
 
-	model := result.(CommitReviewModel)
+	model, ok := result.(CommitReviewModel)
+	if !ok {
+		return ActionAbort, msg, fmt.Errorf("tui: unexpected model type %T", result)
+	}
 	if model.action == "" {
 		return ActionAbort, msg, nil
 	}

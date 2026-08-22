@@ -93,7 +93,10 @@ func TestPickerUpdate_WindowSize(t *testing.T) {
 	if sizeCmd != nil {
 		t.Errorf("WindowSizeMsg cmd = %v, want nil", sizeCmd)
 	}
-	pm := updated.(PickerModel)
+	pm, ok := updated.(PickerModel)
+	if !ok {
+		t.Fatalf("updated model type = %T, want PickerModel", updated)
+	}
 	if w := pm.list.Width(); w != 80 {
 		t.Errorf("list width = %d, want 80", w)
 	}
@@ -124,7 +127,10 @@ func TestPickerUpdate_DownloadLifecycle(t *testing.T) {
 
 	// downloadStartedMsg moves to downloading and kicks off the download cmd.
 	updated, _ := m.Update(downloadStartedMsg{slug: "plumber"})
-	pm := updated.(PickerModel)
+	pm, ok := updated.(PickerModel)
+	if !ok {
+		t.Fatalf("updated model type = %T, want PickerModel", updated)
+	}
 	if pm.state != StateDownloading {
 		t.Errorf("state after started = %v, want StateDownloading", pm.state)
 	}
@@ -140,13 +146,20 @@ func TestPickerUpdate_DownloadLifecycle(t *testing.T) {
 
 	// Success transitions to done.
 	done, _ := pm.Update(downloadDoneMsg{slug: "plumber"})
-	if done.(PickerModel).state != StateDone {
-		t.Errorf("state after done = %v, want StateDone", done.(PickerModel).state)
+	dm, ok := done.(PickerModel)
+	if !ok {
+		t.Fatalf("done model type = %T, want PickerModel", done)
+	}
+	if dm.state != StateDone {
+		t.Errorf("state after done = %v, want StateDone", dm.state)
 	}
 
 	// Failure records the error.
 	failed, _ := pm.Update(downloadFailedMsg{slug: "plumber", err: errors.New("boom")})
-	fm := failed.(PickerModel)
+	fm, fok := failed.(PickerModel)
+	if !fok {
+		t.Fatalf("failed model type = %T, want PickerModel", failed)
+	}
 	if fm.state != StateFailed || fm.err == nil {
 		t.Errorf("state = %v, err = %v; want StateFailed with error", fm.state, fm.err)
 	}
@@ -177,7 +190,10 @@ func TestPickerStateTransition_DoneQuitsOnAnyKey(t *testing.T) {
 
 	m := newTestPicker(t)
 	done, _ := m.Update(downloadDoneMsg{slug: "plumber"})
-	dm := done.(PickerModel)
+	dm, dok := done.(PickerModel)
+	if !dok {
+		t.Fatalf("done model type = %T, want PickerModel", done)
+	}
 	_, cmd := dm.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	if cmd == nil {
 		t.Error("key in StateDone cmd = nil, want quit command")

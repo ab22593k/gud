@@ -10,6 +10,8 @@ import (
 // and returns the root, mirroring a real project (node_modules-style bloat
 // included) to expose the cost of ComputeStats' full-tree walk.
 func benchWalk(b *testing.B, files, dirs int) string {
+	b.Helper()
+
 	root := b.TempDir()
 	for i := range dirs {
 		dir := filepath.Join(root, "pkg", "d"+string(rune('a'+i%26))+string(rune('0'+i/26)))

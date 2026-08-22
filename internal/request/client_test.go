@@ -423,6 +423,7 @@ func TestClient_GenerateCommitMessage(t *testing.T) {
 			mockContent: "feat: add hello world output",
 			wantErr:     false,
 			validateMsg: func(t *testing.T, msg string) {
+				t.Helper()
 				if msg != "feat: add hello world output" {
 					t.Errorf("got %q, want %q", msg, "feat: add hello world output")
 				}

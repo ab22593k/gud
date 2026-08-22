@@ -96,6 +96,8 @@ func (db *DB) IsAvailable(_ context.Context) bool {
 	if !db.enabled || db.client == nil {
 		return false
 	}
+	//nolint:contextcheck // intentional Background use: the cached probe must
+	// survive a cancelled caller context (bounded by its own 2s timeout).
 	db.availOnce.Do(func() {
 		db.availResult = db.checkHealth(context.Background())
 	})

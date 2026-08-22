@@ -25,6 +25,7 @@ func TestInstallHook(t *testing.T) {
 			hookType:   PrepareCommitMsg,
 			binaryPath: testBinary,
 			validateHook: func(t *testing.T, hookPath string) {
+				t.Helper()
 				if _, err := os.Stat(hookPath); os.IsNotExist(err) {
 					t.Errorf("hook file should exist at %s", hookPath)
 				}
@@ -50,6 +51,7 @@ func TestInstallHook(t *testing.T) {
 			hookType:   PrepareCommitMsg,
 			binaryPath: `/usr/local/gud' -c "rm -rf /" `,
 			validateHook: func(t *testing.T, hookPath string) {
+				t.Helper()
 				content, err := os.ReadFile(hookPath)
 				if err != nil {
 					t.Fatalf("failed to read hook file: %v", err)

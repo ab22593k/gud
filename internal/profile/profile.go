@@ -52,7 +52,7 @@ func (m *Manager) List() ([]Profile, error) {
 
 	entries, err := os.ReadDir(m.cacheDir)
 	if err != nil {
-		return profiles, nil
+		return profiles, nil //nolint:nilerr // missing cache dir (first run) means an empty list
 	}
 
 	for _, entry := range entries {

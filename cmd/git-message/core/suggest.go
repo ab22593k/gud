@@ -111,7 +111,7 @@ func suggestProfileIfNeeded(ctx context.Context, cmd *cobra.Command, app *AppCon
 			_, _ = fmt.Fprintf(out, "Invalid selection %q. Skipping.\n", input)
 			writeSkipMarker(cwd)
 
-			return nil
+			return nil //nolint:nilerr // bad user input is handled as UX flow, not a failure
 		}
 
 		selected := suggestions[idx-1]

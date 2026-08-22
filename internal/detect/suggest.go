@@ -65,7 +65,7 @@ func topExtensionKeywords(stats *RepoStats) []string {
 		ext   string
 		count int
 	}
-	var exts []extItem
+	exts := make([]extItem, 0, len(stats.FilesByExtension))
 	for ext, count := range stats.FilesByExtension {
 		exts = append(exts, extItem{ext, count})
 	}

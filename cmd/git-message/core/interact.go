@@ -222,8 +222,8 @@ func editMessage(msg string) (string, error) {
 		return "", fmt.Errorf("failed to write temp file: %w", err)
 	}
 
-	//nolint:gosec
-	editCmd := exec.Command(editor /* user's $EDITOR */, path)
+	//nolint:noctx // interactive editor session must not be killed by cancellation
+	editCmd := exec.Command(editor /* user's $EDITOR */, path) //nolint:gosec
 	editCmd.Stdin = os.Stdin
 	editCmd.Stdout = os.Stdout
 	editCmd.Stderr = os.Stderr

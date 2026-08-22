@@ -99,58 +99,69 @@ func BuildPersistMemoryQuery(data MemoryData) helix.Request {
 	return b.Returning("memory")
 }
 
-// BuildCategorizeMemoryQuery links a Memory node to a Category node.
-func BuildCategorizeMemoryQuery(memoryID, tenantID, categoryKey string) helix.Request {
-	b := helix.WriteQuery("categorize_memory")
+// memoryLinkSpec describes how to link a Memory node to a tenant-scoped
+// target node of a given label via a typed edge (see buildMemoryLink).
+type memoryLinkSpec struct {
+	query     string // HelixDB stored-query name
+	label     string // label of the target node
+	keyProp   string // property on the target node holding its key
+	keyParam  string // query parameter name carrying the key value
+	edge      string // edge label from Memory to the target node
+	returnVar string // name of the returned traversal variable
+}
+
+// buildMemoryLink constructs the shared WriteQuery shape used to link a
+// Memory node to a tenant-scoped labeled node: both nodes are looked up by
+// id/key within the caller's tenant partition, then connected by an edge
+// carrying the tenant property.
+func buildMemoryLink(spec memoryLinkSpec, memoryID, keyVal, tenantID string) helix.Request {
+	b := helix.WriteQuery(spec.query)
 
 	memory := b.ParamString("memory_id", memoryID)
 	tenant := b.ParamString("tenant_id", tenantID)
-	catKey := b.ParamString("category_key", categoryKey)
+	nodeKey := b.ParamString(spec.keyParam, keyVal)
 
 	b.VarAs("memory",
 		helix.G().NWithLabel("Memory").
 			Where(helix.PredEq("memoryId", memory)).
 			Where(helix.PredEq(DefaultTenantProperty, tenant)),
 	)
-	b.VarAs("category",
-		helix.G().NWithLabel("Category").
-			Where(helix.PredEq("categoryKey", catKey)).
+	b.VarAs("node",
+		helix.G().NWithLabel(spec.label).
+			Where(helix.PredEq(spec.keyProp, nodeKey)).
 			Where(helix.PredEq(DefaultTenantProperty, tenant)),
 	)
-	b.VarAs("in_category",
-		helix.G().N(helix.NodeVar("memory")).AddE("IN_CATEGORY", helix.NodeVar("category"), helix.Props{
+	b.VarAs(spec.returnVar,
+		helix.G().N(helix.NodeVar("memory")).AddE(spec.edge, helix.NodeVar("node"), helix.Props{
 			helix.Prop(DefaultTenantProperty, helix.String(tenantID)),
 		}),
 	)
 
-	return b.Returning("in_category")
+	return b.Returning(spec.returnVar)
+}
+
+// BuildCategorizeMemoryQuery links a Memory node to a Category node.
+func BuildCategorizeMemoryQuery(memoryID, tenantID, categoryKey string) helix.Request {
+	return buildMemoryLink(memoryLinkSpec{
+		query:     "categorize_memory",
+		label:     "Category",
+		keyProp:   "categoryKey",
+		keyParam:  "category_key",
+		edge:      "IN_CATEGORY",
+		returnVar: "in_category",
+	}, memoryID, categoryKey, tenantID)
 }
 
 // BuildMentionEntityQuery links a Memory node to an Entity node.
 func BuildMentionEntityQuery(memoryID, tenantID, entityKey string) helix.Request {
-	b := helix.WriteQuery("mention_entity")
-
-	memory := b.ParamString("memory_id", memoryID)
-	tenant := b.ParamString("tenant_id", tenantID)
-	entKey := b.ParamString("entity_key", entityKey)
-
-	b.VarAs("memory",
-		helix.G().NWithLabel("Memory").
-			Where(helix.PredEq("memoryId", memory)).
-			Where(helix.PredEq(DefaultTenantProperty, tenant)),
-	)
-	b.VarAs("entity",
-		helix.G().NWithLabel("Entity").
-			Where(helix.PredEq("entityKey", entKey)).
-			Where(helix.PredEq(DefaultTenantProperty, tenant)),
-	)
-	b.VarAs("mentions",
-		helix.G().N(helix.NodeVar("memory")).AddE("MENTIONS", helix.NodeVar("entity"), helix.Props{
-			helix.Prop(DefaultTenantProperty, helix.String(tenantID)),
-		}),
-	)
-
-	return b.Returning("mentions")
+	return buildMemoryLink(memoryLinkSpec{
+		query:     "mention_entity",
+		label:     "Entity",
+		keyProp:   "entityKey",
+		keyParam:  "entity_key",
+		edge:      "MENTIONS",
+		returnVar: "mentions",
+	}, memoryID, entityKey, tenantID)
 }
 
 // BuildUpdateMemoryQuery creates a new version of a Memory and links it with

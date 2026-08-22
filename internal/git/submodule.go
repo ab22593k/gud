@@ -50,14 +50,14 @@ func parseGitlinkEntry(entry string) (SubmoduleChange, bool) {
 		return SubmoduleChange{}, false
 	}
 
-	var old, new string
+	var oldHash, newHash string
 	gitlink := false
 	for line := range strings.SplitSeq(entry, "\n") {
 		trimmed := strings.TrimSpace(line)
 		switch {
 		case strings.HasPrefix(trimmed, "index "):
 			if oldIdx, newIdx, mode, ok := parseIndexLine(trimmed); ok {
-				old, new = oldIdx, newIdx
+				oldHash, newHash = oldIdx, newIdx
 				if mode == gitlinkMode {
 					gitlink = true
 				}
@@ -69,9 +69,9 @@ func parseGitlinkEntry(entry string) (SubmoduleChange, bool) {
 		default:
 			if sha, marker, ok := parseSubprojectLine(trimmed); ok {
 				if marker == '-' {
-					old = sha
+					oldHash = sha
 				} else {
-					new = sha
+					newHash = sha
 				}
 			}
 		}
@@ -81,14 +81,14 @@ func parseGitlinkEntry(entry string) (SubmoduleChange, bool) {
 		return SubmoduleChange{}, false
 	}
 
-	return SubmoduleChange{Path: path, OldCommit: old, NewCommit: new}, true
+	return SubmoduleChange{Path: path, OldCommit: oldHash, NewCommit: newHash}, true
 }
 
 // parseIndexLine extracts the old and new hashes from an "index <old>..<new>"
 // diff line, optionally suffixed with a mode. Add/remove index lines carry no
 // mode (it lives on the "new/deleted file mode" line), so mode is "" there;
 // a present non-gitlink mode marks the entry as a regular file.
-func parseIndexLine(line string) (old, new, mode string, ok bool) {
+func parseIndexLine(line string) (oldHash, newHash, mode string, ok bool) {
 	rest, found := strings.CutPrefix(line, "index ")
 	if !found {
 		return "", "", "", false
@@ -97,7 +97,7 @@ func parseIndexLine(line string) (old, new, mode string, ok bool) {
 	if len(fields) < 1 || len(fields) > 2 {
 		return "", "", "", false
 	}
-	old, new, ok = strings.Cut(fields[0], "..")
+	oldHash, newHash, ok = strings.Cut(fields[0], "..")
 	if !ok {
 		return "", "", "", false
 	}
@@ -105,7 +105,7 @@ func parseIndexLine(line string) (old, new, mode string, ok bool) {
 		mode = fields[1]
 	}
 
-	return old, new, mode, true
+	return oldHash, newHash, mode, true
 }
 
 // parseSubprojectLine extracts the commit hash from a diff content line of the

@@ -301,7 +301,10 @@ func RunPicker(
 		return nil, fmt.Errorf("tui: %w", err)
 	}
 
-	model := result.(PickerModel)
+	model, ok := result.(PickerModel)
+	if !ok {
+		return nil, fmt.Errorf("tui: unexpected model type %T", result)
+	}
 	switch model.state {
 	case StateDone:
 		return model.selected, nil

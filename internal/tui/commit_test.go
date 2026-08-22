@@ -26,7 +26,10 @@ func TestCommitReviewUpdateWindowSize(t *testing.T) {
 	model := NewCommitReview("feat: add feature")
 	updated, _ := model.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 
-	m := updated.(CommitReviewModel)
+	m, ok := updated.(CommitReviewModel)
+	if !ok {
+		t.Fatalf("updated model type = %T, want CommitReviewModel", updated)
+	}
 	if !m.ready {
 		t.Errorf("expected model to be ready after WindowSizeMsg")
 	}
@@ -75,7 +78,10 @@ func TestCommitReviewKeyActions(t *testing.T) {
 			model := NewCommitReview("test message")
 			model.ready = true
 			updated, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(tt.key)})
-			m := updated.(CommitReviewModel)
+			m, ok := updated.(CommitReviewModel)
+			if !ok {
+				t.Fatalf("updated model type = %T, want CommitReviewModel", updated)
+			}
 
 			if m.action != tt.expectedAction {
 				t.Errorf("expected action %q, got %q", tt.expectedAction, m.action)
@@ -92,7 +98,10 @@ func TestCommitReviewEnterSelection(t *testing.T) {
 	model.ready = true
 	// By default item 0 is Commit ("✓ Commit")
 	updated, cmd := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	m := updated.(CommitReviewModel)
+	m, ok := updated.(CommitReviewModel)
+	if !ok {
+		t.Fatalf("updated model type = %T, want CommitReviewModel", updated)
+	}
 
 	if m.action != ActionCommit {
 		t.Errorf("expected action %q, got %q", ActionCommit, m.action)
@@ -148,7 +157,10 @@ func TestCommitReviewRespectsWrapLine(t *testing.T) {
 
 	// Test WindowSizeMsg bounds viewport to wrapLine
 	updated, _ := model.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
-	m := updated.(CommitReviewModel)
+	m, ok := updated.(CommitReviewModel)
+	if !ok {
+		t.Fatalf("updated model type = %T, want CommitReviewModel", updated)
+	}
 
 	if m.viewport.Width > 50 {
 		t.Errorf("expected viewport width <= 50, got %d", m.viewport.Width)
@@ -179,7 +191,10 @@ func TestCommitReviewEditConfirmPreservesEdits(t *testing.T) {
 
 			for _, k := range keys {
 				updated, _ := m.Update(k)
-				m = updated.(CommitReviewModel)
+				var cok bool
+				if m, cok = updated.(CommitReviewModel); !cok {
+					t.Fatalf("updated model type = %T, want CommitReviewModel", updated)
+				}
 			}
 
 			if m.action != ActionCommit {
@@ -215,7 +230,10 @@ func TestCommitReviewProgramEditPreservesEdits(t *testing.T) {
 		t.Fatalf("program error: %v", err)
 	}
 
-	m := result.(CommitReviewModel)
+	m, rok := result.(CommitReviewModel)
+	if !rok {
+		t.Fatalf("result model type = %T, want CommitReviewModel", result)
+	}
 	if !strings.Contains(m.msg, "touched") {
 		t.Errorf("edited message not preserved through program loop: msg = %q", m.msg)
 	}
