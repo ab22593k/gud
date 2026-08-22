@@ -98,12 +98,17 @@ func withDefaultTimeout(ctx context.Context, d time.Duration) (context.Context, 
 }
 
 // GenerateCommitMessage generates a commit message based on the provided diff.
-func (c *Client) GenerateCommitMessage(ctx context.Context, diff, commitContext string, detailLevel DetailLevel, hint string, profile ProfileName) (string, error) {
+func (c *Client) GenerateCommitMessage(
+	ctx context.Context, diff, commitContext string, detailLevel DetailLevel, hint string, profile ProfileName,
+) (string, error) {
 	return c.GenerateCommitMessageWithContent(ctx, diff, commitContext, detailLevel, hint, profile, "", defaultWrapLine)
 }
 
 // GenerateCommitMessageWithContent generates a commit message with an optional custom system prompt content.
-func (c *Client) GenerateCommitMessageWithContent(ctx context.Context, diff, commitContext string, detailLevel DetailLevel, hint string, profile ProfileName, systemContent string, wrapLine int) (string, error) {
+func (c *Client) GenerateCommitMessageWithContent(
+	ctx context.Context, diff, commitContext string, detailLevel DetailLevel, hint string, profile ProfileName,
+	systemContent string, wrapLine int,
+) (string, error) {
 	if diff == "" {
 		return "", fmt.Errorf("diff is required")
 	}

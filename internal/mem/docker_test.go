@@ -67,7 +67,8 @@ func TestContainerManager_BaseURL(t *testing.T) {
 		port string
 		want string
 	}{
-		{name: "default port 2232", port: "2232", want: "http://localhost:3223"},
+		{name: "default port", port: "", want: "http://localhost:3223"},
+		{name: "legacy explicit port stays respected", port: "2232", want: "http://localhost:2232"},
 		{name: "custom port 8080", port: "8080", want: "http://localhost:8080"},
 	}
 

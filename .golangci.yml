@@ -8,6 +8,7 @@ linters:
     - misspell
     - whitespace
     - copyloopvar
+    - usetesting
     - godot
     - gosec
     - goconst
@@ -33,9 +34,9 @@ linters:
     varnamelen:
       min-name-length: 2
       ignore-decls:
-        - tt
-        - fn
-        - i
+        - "t: testing.T"
+        - "tt: *testing.T"
+        - "i: int"
   exclusions:
     generate:
       rules:

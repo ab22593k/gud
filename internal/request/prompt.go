@@ -27,7 +27,8 @@ var defaultProfile = ProfileConfig{
 	Name: "__default__",
 	System: `A commit message is permanent technical documentation. Explain *why* a change is necessary with precision.
 
-	Respond in plain text only. Do NOT use markdown, code fences, backticks, or any formatting. Output ONLY the commit message itself — no preamble, no explanation, no commentary before or after.`,
+	Respond in plain text only. Do NOT use markdown, code fences, backticks, or any formatting. ` +
+		`Output ONLY the commit message itself — no preamble, no explanation, no commentary before or after.`,
 	Rules: map[DetailLevel]string{
 		DetailMinimal:  "Subject line + single paragraph of technical reasoning",
 		DetailDetailed: "Exhaustive docs: before/after state, logic flow, architectural implications",
@@ -43,7 +44,9 @@ func (p ProfileConfig) BuildPrompt(detailLevel DetailLevel, hint, context, diff 
 }
 
 // BuildPromptWithContent creates a full prompt with a custom system prompt.
-func (p ProfileConfig) BuildPromptWithContent(detailLevel DetailLevel, hint, context, diff, systemContent string, wrapLine int) string {
+func (p ProfileConfig) BuildPromptWithContent(
+	detailLevel DetailLevel, hint, context, diff, systemContent string, wrapLine int,
+) string {
 	var sb strings.Builder
 
 	sb.WriteString(systemContent)
@@ -83,14 +86,18 @@ func writeLabeled(sb *strings.Builder, label, content string) {
 }
 
 // BuildCommitMessagePrompt creates a prompt for generating a git commit message.
-func BuildCommitMessagePrompt(diff, commitContext string, detailLevel DetailLevel, hint string, profile ProfileName) string {
+func BuildCommitMessagePrompt(
+	diff, commitContext string, detailLevel DetailLevel, hint string, profile ProfileName,
+) string {
 	p := defaultProfile
 	return p.BuildPrompt(detailLevel, hint, commitContext, diff)
 }
 
 // BuildCommitMessagePromptWithContent creates a prompt using the provided system
 // content. If content is empty, falls back to the default profile.
-func BuildCommitMessagePromptWithContent(diff, commitContext string, detailLevel DetailLevel, hint string, _ ProfileName, systemContent string, wrapLine int) string {
+func BuildCommitMessagePromptWithContent(
+	diff, commitContext string, detailLevel DetailLevel, hint string, _ ProfileName, systemContent string, wrapLine int,
+) string {
 	p := defaultProfile
 	return p.BuildPromptWithContent(detailLevel, hint, commitContext, diff, systemContent, wrapLine)
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -204,7 +205,10 @@ func submoduleSubjects(ctx context.Context, root string, ch SubmoduleChange) []s
 		// Added gitlink: log the new commit's own history.
 		args = []string{"-C", dir, "log", "--oneline", "-n", fmt.Sprint(maxSubmoduleLogEntries), ch.NewCommit}
 	} else {
-		args = []string{"-C", dir, "log", "--oneline", "-n", fmt.Sprint(maxSubmoduleLogEntries), ch.OldCommit + ".." + ch.NewCommit}
+		args = []string{
+			"-C", dir, "log", "--oneline", "-n", strconv.Itoa(maxSubmoduleLogEntries),
+			ch.OldCommit + ".." + ch.NewCommit,
+		}
 	}
 
 	out := runGitOutput(ctx, args...)

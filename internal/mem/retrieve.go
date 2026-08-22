@@ -99,7 +99,9 @@ func branchFilter(branch string) helix.Predicate {
 // All sources are scoped to the tenant, filtered for soft-deleted records, and
 // when branch is non-empty scoped to that branch (including legacy records
 // persisted without a branch). Sources with no usable input are omitted.
-func BuildHybridContextQuery(tenantID, branch string, queryVector []float32, diffText string, files []string, limit int64) helix.Request {
+func BuildHybridContextQuery(
+	tenantID, branch string, queryVector []float32, diffText string, files []string, limit int64,
+) helix.Request {
 	b := helix.ReadQuery("hybrid_commit_context")
 	returns := []string{}
 

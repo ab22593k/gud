@@ -66,14 +66,7 @@ func TestBuildSubmoduleContext(t *testing.T) {
 	runIn(dir, "update-index", "--cacheinfo", "160000,"+sha2+",sub")
 	gitlinkDiff := runIn(dir, "diff", "--cached")
 
-	orig, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
-	}
-	if err := os.Chdir(dir); err != nil {
-		t.Fatalf("chdir: %v", err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(orig) })
+	t.Chdir(dir)
 
 	app := &AppContext{}
 	got := buildSubmoduleContext(context.Background(), app, gitlinkDiff)

@@ -105,9 +105,7 @@ func TestOracle_Familiarity_StdoutVsStderr(t *testing.T) {
 // F: running the default command without a git repo gives an actionable error.
 func TestOracle_Familiarity_NoGitRepo(t *testing.T) {
 	tmpDir := t.TempDir()
-	origWd, _ := os.Getwd()
-	t.Cleanup(func() { _ = os.Chdir(origWd) })
-	_ = os.Chdir(tmpDir)
+	t.Chdir(tmpDir)
 
 	var buf bytes.Buffer
 	rootCmd.SetOut(&buf)

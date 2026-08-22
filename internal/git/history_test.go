@@ -130,14 +130,7 @@ func newHistoryTestRepo(t *testing.T) string {
 	run("commit", "-q", "-m", "feat: main work")
 	run("checkout", "-q", "topic")
 
-	orig, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
-	}
-	if err := os.Chdir(dir); err != nil {
-		t.Fatalf("chdir: %v", err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(orig) })
+	t.Chdir(dir)
 
 	return dir
 }
@@ -178,11 +171,7 @@ func TestGetUpstreamBranch_None(t *testing.T) {
 	run("add", ".")
 	run("commit", "-q", "-m", "init")
 
-	orig, _ := os.Getwd()
-	if err := os.Chdir(dir); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(orig) })
+	t.Chdir(dir)
 
 	if got := GetUpstreamBranch(context.Background()); got != "" {
 		t.Errorf("GetUpstreamBranch() without upstream = %q, want empty", got)

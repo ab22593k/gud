@@ -128,11 +128,7 @@ func TestCommit(t *testing.T) {
 		t.Fatalf("git add failed: %v", err)
 	}
 
-	origDir, _ := os.Getwd()
-	if err := os.Chdir(dir); err != nil {
-		t.Fatalf("Chdir failed: %v", err)
-	}
-	defer func() { _ = os.Chdir(origDir) }()
+	t.Chdir(dir)
 
 	ctx := context.Background()
 	if _, err := Commit(ctx, "feat: initial commit\n\nAdd main package."); err != nil {
@@ -175,11 +171,7 @@ func TestCommit_EmptyMessage(t *testing.T) {
 		t.Fatalf("git add failed: %v", err)
 	}
 
-	origDir, _ := os.Getwd()
-	if err := os.Chdir(dir); err != nil {
-		t.Fatalf("Chdir failed: %v", err)
-	}
-	defer func() { _ = os.Chdir(origDir) }()
+	t.Chdir(dir)
 
 	ctx := context.Background()
 	_, err := Commit(ctx, "")
@@ -230,11 +222,7 @@ func TestGetStagedDeletedFiles_WithDeletion(t *testing.T) {
 		t.Fatalf("git add failed: %v", err)
 	}
 
-	origDir, _ := os.Getwd()
-	if err := os.Chdir(dir); err != nil {
-		t.Fatalf("Chdir failed: %v", err)
-	}
-	defer func() { _ = os.Chdir(origDir) }()
+	t.Chdir(dir)
 
 	ctx := context.Background()
 
@@ -315,11 +303,7 @@ func TestGetStagedDiff_ExcludesRenames(t *testing.T) {
 		t.Fatalf("git add failed: %v", err)
 	}
 
-	origDir, _ := os.Getwd()
-	if err := os.Chdir(dir); err != nil {
-		t.Fatalf("Chdir failed: %v", err)
-	}
-	defer func() { _ = os.Chdir(origDir) }()
+	t.Chdir(dir)
 
 	ctx := context.Background()
 
@@ -371,11 +355,7 @@ func TestGetRecentCommits_EmptyRepo(t *testing.T) {
 		t.Fatalf("git init failed: %v", err)
 	}
 
-	origDir, _ := os.Getwd()
-	if err := os.Chdir(dir); err != nil {
-		t.Fatalf("Chdir to temp repo failed: %v", err)
-	}
-	defer func() { _ = os.Chdir(origDir) }()
+	t.Chdir(dir)
 
 	ctx := context.Background()
 	got, err := GetRecentCommits(ctx, 5)
@@ -428,11 +408,7 @@ func TestGetBranchIntegration(t *testing.T) {
 		}
 	}
 
-	cwd, _ := os.Getwd()
-	if err := os.Chdir(dir); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(cwd) })
+	t.Chdir(dir)
 
 	if got := GetBranch(context.Background()); got != "main" {
 		t.Errorf("GetBranch() = %q, want %q", got, "main")

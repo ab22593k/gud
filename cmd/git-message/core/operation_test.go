@@ -112,14 +112,7 @@ func newOperationTestRepo(t *testing.T) string {
 	// Leave a real (clean) merge stop: merged tree staged, MERGE_HEAD set.
 	run("merge", "--no-commit", "side")
 
-	orig, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
-	}
-	if err := os.Chdir(dir); err != nil {
-		t.Fatalf("chdir: %v", err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(orig) })
+	t.Chdir(dir)
 
 	return dir
 }

@@ -144,14 +144,7 @@ func newTestRepo(t *testing.T) string {
 		t.Skipf("git init unavailable: %v", err)
 	}
 
-	orig, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
-	}
-	if err := os.Chdir(dir); err != nil {
-		t.Fatalf("chdir: %v", err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(orig) })
+	t.Chdir(dir)
 
 	return dir
 }
@@ -363,14 +356,7 @@ func TestPreparedMessage(t *testing.T) {
 // sequential like the other integration tests.
 func TestDetectOperation_OutsideRepo(t *testing.T) {
 	dir := t.TempDir()
-	orig, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
-	}
-	if err := os.Chdir(dir); err != nil {
-		t.Fatalf("chdir: %v", err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(orig) })
+	t.Chdir(dir)
 
 	if got := DetectOperation(context.Background()); got != OperationNone {
 		t.Errorf("DetectOperation() outside a repo = %q, want %q", got, OperationNone)
