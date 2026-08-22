@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/helixdb/helix-db/sdks/go"
+	helix "github.com/helixdb/helix-db/sdks/go"
 )
 
 const maxContextRecords = 5
@@ -112,6 +112,7 @@ func BuildHybridContextQuery(
 		if branch != "" {
 			t = t.Where(branchFilter(branch))
 		}
+
 		return t
 	}
 
@@ -231,6 +232,7 @@ func CollectContextGroups(resp *Response) []RankedGroup {
 			groups = append(groups, RankedGroup{Key: key, Items: items})
 		}
 	}
+
 	return groups
 }
 
@@ -280,12 +282,14 @@ func FuseContextRecords(groups []RankedGroup, limit int) []CommitRecord {
 		if si != sj {
 			return si > sj
 		}
+
 		return recs[i].Timestamp.After(recs[j].Timestamp)
 	})
 
 	if limit > 0 && len(recs) > limit {
 		recs = recs[:limit]
 	}
+
 	return recs
 }
 
@@ -321,6 +325,7 @@ func extractResultItems(raw any) []any {
 			return props
 		}
 	}
+
 	return nil
 }
 
@@ -337,6 +342,7 @@ func FormatContextRecords(records []CommitRecord) string {
 		_, _ = fmt.Fprintf(&b, "  %s %s by %s [%s@%s]\n",
 			truncateSHA(r.SHA), r.Message, truncateAuthor(r.Author), r.Branch, r.RepoPath)
 	}
+
 	return b.String()
 }
 
@@ -395,6 +401,7 @@ func truncateSHA(sha string) string {
 	if len(sha) > 7 {
 		return sha[:7]
 	}
+
 	return sha
 }
 
@@ -402,6 +409,7 @@ func shortenDiff(diff string) string {
 	if len(diff) <= 500 {
 		return diff
 	}
+
 	return diff[:500]
 }
 
@@ -412,6 +420,7 @@ func truncateAuthor(author string) string {
 	if len(author) > 20 {
 		return author[:20] + "..."
 	}
+
 	return author
 }
 
@@ -420,5 +429,6 @@ func toInterfaceSlice(ss []string) []any {
 	for i, s := range ss {
 		result[i] = s
 	}
+
 	return result
 }

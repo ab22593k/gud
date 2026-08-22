@@ -114,6 +114,7 @@ func TestNewClient(t *testing.T) {
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("NewClient() error = %v, wantErr %v", err, tt.wantErr)
+
 				return
 			}
 			if !tt.wantErr && client == nil {
@@ -311,6 +312,7 @@ func (m *captureRequestLLM) Name() string { return m.name }
 
 func (m *captureRequestLLM) GenerateContent(_ context.Context, req *model.LLMRequest, _ bool) iter.Seq2[*model.LLMResponse, error] {
 	m.captured = req
+
 	return func(yield func(*model.LLMResponse, error) bool) {
 		yield(&model.LLMResponse{Content: genai.NewContentFromText("fix: address issue", "model")}, nil)
 	}
@@ -485,12 +487,14 @@ func TestClient_GenerateCommitMessage(t *testing.T) {
 					return func(yield func(*model.LLMResponse, error) bool) {
 						if tt.mockError != "" {
 							yield(nil, errors.New(tt.mockError))
+
 							return
 						}
 						if tt.mockRespError != "" {
 							yield(&model.LLMResponse{
 								ErrorMessage: tt.mockRespError,
 							}, nil)
+
 							return
 						}
 						yield(&model.LLMResponse{
@@ -506,6 +510,7 @@ func TestClient_GenerateCommitMessage(t *testing.T) {
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GenerateCommitMessage() error = %v, wantErr %v", err, tt.wantErr)
+
 				return
 			}
 

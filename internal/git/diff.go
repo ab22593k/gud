@@ -150,6 +150,7 @@ func GetStagedChanges(ctx context.Context) (*StagedChanges, error) {
 	}
 
 	diff := out.String()
+
 	return &StagedChanges{
 		Diff:    diff,
 		Deleted: extractDeletedFiles(diff),
@@ -167,11 +168,12 @@ func extractDeletedFiles(diff string) []string {
 		//   +++ /dev/null
 		if strings.HasPrefix(line, "+++ /dev/null") && i > 0 {
 			prev := lines[i-1]
-			if strings.HasPrefix(prev, "--- a/") {
-				deleted = append(deleted, strings.TrimPrefix(prev, "--- a/"))
+			if after, ok := strings.CutPrefix(prev, "--- a/"); ok {
+				deleted = append(deleted, after)
 			}
 		}
 	}
+
 	return deleted
 }
 

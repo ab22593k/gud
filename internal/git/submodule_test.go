@@ -112,6 +112,7 @@ func TestSubmoduleContext(t *testing.T) {
 		if err != nil {
 			t.Fatalf("git %v failed: %v\n%s", args, err, out)
 		}
+
 		return strings.TrimSpace(string(out))
 	}
 

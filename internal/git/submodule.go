@@ -2,7 +2,6 @@ package git
 
 import (
 	"context"
-	"fmt"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -37,6 +36,7 @@ func ExtractSubmoduleChanges(diff string) []SubmoduleChange {
 			changes = append(changes, change)
 		}
 	}
+
 	return changes
 }
 
@@ -80,6 +80,7 @@ func parseGitlinkEntry(entry string) (SubmoduleChange, bool) {
 	if !gitlink {
 		return SubmoduleChange{}, false
 	}
+
 	return SubmoduleChange{Path: path, OldCommit: old, NewCommit: new}, true
 }
 
@@ -103,6 +104,7 @@ func parseIndexLine(line string) (old, new, mode string, ok bool) {
 	if len(fields) == 2 {
 		mode = fields[1]
 	}
+
 	return old, new, mode, true
 }
 
@@ -121,6 +123,7 @@ func parseSubprojectLine(line string) (sha string, marker byte, ok bool) {
 	if !strings.HasPrefix(rest, "Subproject commit ") {
 		return "", 0, false
 	}
+
 	return strings.TrimSpace(strings.TrimPrefix(rest, "Subproject commit ")), marker, true
 }
 
@@ -182,6 +185,7 @@ func shortSHA(sha string) string {
 	if len(sha) > 7 {
 		return sha[:7]
 	}
+
 	return sha
 }
 
@@ -203,7 +207,7 @@ func submoduleSubjects(ctx context.Context, root string, ch SubmoduleChange) []s
 	var args []string
 	if isZeroSHA(ch.OldCommit) {
 		// Added gitlink: log the new commit's own history.
-		args = []string{"-C", dir, "log", "--oneline", "-n", fmt.Sprint(maxSubmoduleLogEntries), ch.NewCommit}
+		args = []string{"-C", dir, "log", "--oneline", "-n", strconv.Itoa(maxSubmoduleLogEntries), ch.NewCommit}
 	} else {
 		args = []string{
 			"-C", dir, "log", "--oneline", "-n", strconv.Itoa(maxSubmoduleLogEntries),
@@ -215,6 +219,7 @@ func submoduleSubjects(ctx context.Context, root string, ch SubmoduleChange) []s
 	if out == "" {
 		return nil
 	}
+
 	return strings.Split(out, "\n")
 }
 
@@ -254,5 +259,6 @@ func readGitmodules(ctx context.Context, root string) (names, urls map[string]st
 		names[path] = name
 		urls[path] = nameURLs[name]
 	}
+
 	return names, urls
 }

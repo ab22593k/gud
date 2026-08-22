@@ -7,15 +7,15 @@ import (
 
 func TestBuildPersistQuery_Valid(t *testing.T) {
 	data := CommitData{
-		SHA:       "abc123def456",
-		Message:   "feat: add login",
-		Author:    "Alice <alice@example.com>",
-		Timestamp: time.Date(2026, 6, 29, 10, 0, 0, 0, time.UTC),
-		RepoPath:  "/home/user/project",
-		Branch:    "main",
-		DiffHash:  "sha256:xyz",
-		DiffStat:  "1 file changed",
-		DiffText:  "diff --git a/main.go b/main.go",
+		SHA:            "abc123def456",
+		Message:        "feat: add login",
+		Author:         "Alice <alice@example.com>",
+		Timestamp:      time.Date(2026, 6, 29, 10, 0, 0, 0, time.UTC),
+		RepoPath:       "/home/user/project",
+		Branch:         "main",
+		DiffHash:       "sha256:xyz",
+		DiffStat:       "1 file changed",
+		DiffText:       "diff --git a/main.go b/main.go",
 		IsGudGenerated: true,
 	}
 
@@ -31,15 +31,15 @@ func TestBuildPersistQuery_Valid(t *testing.T) {
 
 func TestBuildPersistQuery_WithFiles(t *testing.T) {
 	data := CommitData{
-		SHA:       "def789",
-		Message:   "refactor: extract auth",
-		Author:    "Bob <bob@example.com>",
-		Timestamp: time.Date(2026, 6, 28, 15, 0, 0, 0, time.UTC),
-		RepoPath:  "/home/user/project",
-		Branch:    "feat/auth",
-		DiffHash:  "sha256:abc",
-		DiffStat:  "3 files changed",
-		DiffText:  "diff --git a/auth.go b/auth.go",
+		SHA:            "def789",
+		Message:        "refactor: extract auth",
+		Author:         "Bob <bob@example.com>",
+		Timestamp:      time.Date(2026, 6, 28, 15, 0, 0, 0, time.UTC),
+		RepoPath:       "/home/user/project",
+		Branch:         "feat/auth",
+		DiffHash:       "sha256:abc",
+		DiffStat:       "3 files changed",
+		DiffText:       "diff --git a/auth.go b/auth.go",
 		IsGudGenerated: false,
 		Files: []FileChange{
 			{Path: "auth.go", ChangeType: "modified", LinesAdded: 10, LinesDeleted: 2},

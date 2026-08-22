@@ -76,6 +76,7 @@ func TestInstallHook(t *testing.T) {
 			err := InstallHook(hookDir, tt.hookType, tt.binaryPath)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("InstallHook() error = %v, wantErr %v", err, tt.wantErr)
+
 				return
 			}
 

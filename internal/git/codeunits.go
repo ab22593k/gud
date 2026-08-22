@@ -137,6 +137,7 @@ func parseDeclaration(decl, filePath string) *CodeUnit {
 		if len(name) > 0 && name[0] >= 'A' && name[0] <= 'Z' {
 			kind = "struct"
 		}
+
 		return &CodeUnit{Name: name, Kind: kind, ChangeType: changeTypeModified, FilePath: filePath}
 	}
 
@@ -168,6 +169,7 @@ func parseFuncOrMethod(sig, filePath string) *CodeUnit {
 	if funcName == "" {
 		return nil
 	}
+
 	return &CodeUnit{Name: funcName, Kind: "function", ChangeType: "modified", FilePath: filePath}
 }
 
@@ -178,6 +180,7 @@ func extractIdentifier(s string) string {
 	if idx == -1 {
 		return s
 	}
+
 	return s[:idx]
 }
 
@@ -187,6 +190,7 @@ func extractReceiverType(recv string) string {
 	if len(parts) == 0 {
 		return ""
 	}
+
 	return strings.TrimPrefix(parts[len(parts)-1], "*")
 }
 
@@ -203,20 +207,22 @@ func splitDiffEntries(diff string) []string {
 			result = append(result, "diff --git "+e)
 		}
 	}
+
 	return result
 }
 
 // extractFilePath extracts the "+++ b/..." path from a diff entry.
 func extractFilePath(entry string) string {
-	for _, line := range strings.Split(entry, "\n") {
-		if strings.HasPrefix(line, "+++ b/") {
-			return strings.TrimPrefix(line, "+++ b/")
+	for line := range strings.SplitSeq(entry, "\n") {
+		if after, ok := strings.CutPrefix(line, "+++ b/"); ok {
+			return after
 		}
 	}
-	for _, line := range strings.Split(entry, "\n") {
-		if strings.HasPrefix(line, "--- a/") {
-			return strings.TrimPrefix(line, "--- a/")
+	for line := range strings.SplitSeq(entry, "\n") {
+		if after, ok := strings.CutPrefix(line, "--- a/"); ok {
+			return after
 		}
 	}
+
 	return ""
 }

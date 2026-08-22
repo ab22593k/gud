@@ -71,6 +71,7 @@ func ruleForLevel(level DetailLevel, rules map[DetailLevel]string) string {
 	if !ok {
 		rule = rules[DetailStandard]
 	}
+
 	return rule
 }
 
@@ -90,6 +91,7 @@ func BuildCommitMessagePrompt(
 	diff, commitContext string, detailLevel DetailLevel, hint string, profile ProfileName,
 ) string {
 	p := defaultProfile
+
 	return p.BuildPrompt(detailLevel, hint, commitContext, diff)
 }
 
@@ -99,5 +101,6 @@ func BuildCommitMessagePromptWithContent(
 	diff, commitContext string, detailLevel DetailLevel, hint string, _ ProfileName, systemContent string, wrapLine int,
 ) string {
 	p := defaultProfile
+
 	return p.BuildPromptWithContent(detailLevel, hint, commitContext, diff, systemContent, wrapLine)
 }

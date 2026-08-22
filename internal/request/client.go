@@ -2,6 +2,7 @@ package request
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"slices"
@@ -45,7 +46,7 @@ const (
 // and cancellation.
 func NewClient(ctx context.Context, cfg ClientConfig) (*Client, error) {
 	if cfg.APIKey == "" {
-		return nil, fmt.Errorf("API key is required")
+		return nil, errors.New("API key is required")
 	}
 	if cfg.Model == "" {
 		cfg.Model = defaultModel
@@ -81,6 +82,7 @@ func NewClientWithGenerator(llm model.LLM, modelName string) *Client {
 	if modelName == "" {
 		modelName = defaultModel
 	}
+
 	return &Client{
 		modelImpl: llm,
 		model:     modelName,
@@ -94,6 +96,7 @@ func withDefaultTimeout(ctx context.Context, d time.Duration) (context.Context, 
 	if _, hasDeadline := ctx.Deadline(); hasDeadline {
 		return ctx, func() {}
 	}
+
 	return context.WithTimeout(ctx, d)
 }
 
@@ -110,7 +113,7 @@ func (c *Client) GenerateCommitMessageWithContent(
 	systemContent string, wrapLine int,
 ) (string, error) {
 	if diff == "" {
-		return "", fmt.Errorf("diff is required")
+		return "", errors.New("diff is required")
 	}
 
 	slog.Debug("generating commit message", "model", c.model, "detailLevel", detailLevel)
@@ -132,7 +135,7 @@ func (c *Client) GenerateCommitMessageWithContent(
 	}
 
 	if result == "" {
-		return "", fmt.Errorf("generated message is empty")
+		return "", errors.New("generated message is empty")
 	}
 
 	return result, nil
@@ -145,7 +148,7 @@ func generateContent(c *Client, ctx context.Context, req *model.LLMRequest) (str
 			return "", fmt.Errorf("model error: %w", err)
 		}
 		if resp == nil {
-			return "", fmt.Errorf("model returned nil response")
+			return "", errors.New("model returned nil response")
 		}
 		if resp.ErrorMessage != "" {
 			return "", fmt.Errorf("model error: %s", resp.ErrorMessage)
@@ -157,7 +160,7 @@ func generateContent(c *Client, ctx context.Context, req *model.LLMRequest) (str
 	}
 
 	if response == nil {
-		return "", fmt.Errorf("no response from model")
+		return "", errors.New("no response from model")
 	}
 
 	return extractText(response.Content)
@@ -166,7 +169,7 @@ func generateContent(c *Client, ctx context.Context, req *model.LLMRequest) (str
 // extractText pulls text from genai.Content parts and then sanitizes it.
 func extractText(content *genai.Content) (string, error) {
 	if content == nil {
-		return "", fmt.Errorf("content is nil")
+		return "", errors.New("content is nil")
 	}
 	var sb strings.Builder
 	for _, part := range content.Parts {
@@ -175,6 +178,7 @@ func extractText(content *genai.Content) (string, error) {
 		}
 		sb.WriteString(part.Text)
 	}
+
 	return sanitizeOutput(sb.String()), nil
 }
 
@@ -201,6 +205,7 @@ func extractFromCodeFences(text string) string {
 				return strings.Join(lines[1:i], "\n")
 			}
 		}
+
 		return strings.Join(lines[1:], "\n")
 	}
 
@@ -243,6 +248,7 @@ func stripPreamble(text string) string {
 			if strings.HasPrefix(firstLower, prefix) {
 				text = strings.TrimSpace(lines[1])
 				matched = true
+
 				break
 			}
 		}

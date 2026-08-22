@@ -13,6 +13,7 @@ func NewResponse(raw map[string]any) *Response {
 	if raw == nil {
 		return &Response{raw: make(map[string]any)}
 	}
+
 	return &Response{raw: raw}
 }
 
@@ -32,6 +33,7 @@ func (r *Response) Nodes(key string) []Node {
 			nodes = append(nodes, Node{data: m})
 		}
 	}
+
 	return nodes
 }
 
@@ -43,12 +45,14 @@ func (r *Response) Count(key string) int {
 		return 0
 	}
 	count, _ := obj["count"].(float64)
+
 	return int(count)
 }
 
 // Has reports whether the given key is present in the response.
 func (r *Response) Has(key string) bool {
 	_, ok := r.raw[key]
+
 	return ok
 }
 
@@ -61,12 +65,14 @@ type Node struct {
 // String returns the string value for the given property.
 func (n Node) String(key string) string {
 	s, _ := n.data[key].(string)
+
 	return s
 }
 
 // Float64 returns the float64 value for the given property.
 func (n Node) Float64(key string) float64 {
 	f, _ := n.data[key].(float64)
+
 	return f
 }
 
@@ -76,12 +82,14 @@ func (n Node) Uint64(key string) uint64 {
 	if f, ok := n.data[key].(float64); ok {
 		return uint64(f)
 	}
+
 	return 0
 }
 
 // Bool returns the bool value for the given property.
 func (n Node) Bool(key string) bool {
 	b, _ := n.data[key].(bool)
+
 	return b
 }
 

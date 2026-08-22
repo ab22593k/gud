@@ -3,7 +3,7 @@ package mem
 import (
 	"time"
 
-	"github.com/helixdb/helix-db/sdks/go"
+	helix "github.com/helixdb/helix-db/sdks/go"
 )
 
 const (
@@ -78,6 +78,7 @@ func (c *CommitData) ToProps() helix.Props {
 	if c.ExpiresAt != nil {
 		props = append(props, helix.Prop("expiresAt", helix.DateTimeMillis(c.ExpiresAt.UnixMilli())))
 	}
+
 	return props
 }
 
@@ -118,6 +119,7 @@ func firstNonEmpty(vals ...string) string {
 			return v
 		}
 	}
+
 	return ""
 }
 
@@ -130,6 +132,7 @@ func BuildCommitNodeQuery(repoPath, branch string) *helix.Traversal {
 	if branch != "" {
 		q = q.Has("branch", branch)
 	}
+
 	return q.ValueMap("$id", "id", "message", "author", "timestamp", "repo_path", "branch", "diff_stat")
 }
 
@@ -208,6 +211,7 @@ func (m *MemoryData) ToProps() helix.Props {
 	if m.Timezone != "" {
 		props = append(props, helix.Prop("timezone", helix.String(m.Timezone)))
 	}
+
 	return props
 }
 
@@ -231,6 +235,7 @@ func (c *CategoryData) ToProps() helix.Props {
 	if c.ParentKey != "" {
 		props = append(props, helix.Prop("parentKey", helix.String(c.ParentKey)))
 	}
+
 	return props
 }
 
@@ -252,5 +257,6 @@ func (e *EntityData) ToProps() helix.Props {
 		helix.Prop("kind", helix.String(e.Kind)),
 		helix.Prop("metadata", helix.String("")),
 	}
+
 	return props
 }

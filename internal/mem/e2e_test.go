@@ -23,6 +23,7 @@ func createTestVector(seed byte) []float32 {
 	for i := range v {
 		v[i] = float32(int(seed)+i) / 1536.0
 	}
+
 	return v
 }
 
@@ -33,6 +34,7 @@ func findSHAInResults(records []CommitRecord, sha string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 

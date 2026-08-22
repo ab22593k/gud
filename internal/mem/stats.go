@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/helixdb/helix-db/sdks/go"
+	helix "github.com/helixdb/helix-db/sdks/go"
 )
 
 // AuthorStat aggregates commit counts per author.
@@ -184,6 +184,7 @@ func parseTimestamp(v float64) (time.Time, bool) {
 	if v == 0 {
 		return time.Time{}, false
 	}
+
 	return time.UnixMilli(int64(v)), true
 }
 
@@ -206,6 +207,7 @@ func FormatAuthorStats(stats []AuthorStat) string {
 		}
 		_, _ = fmt.Fprintf(&b, "  %s  %d commits  (%d%%)\n", s.Email, s.Count, pct)
 	}
+
 	return b.String()
 }
 
@@ -220,6 +222,7 @@ func FormatTopFiles(stats []FileStat) string {
 	for _, s := range stats {
 		_, _ = fmt.Fprintf(&b, "  %s  %d changes\n", s.Path, s.Changes)
 	}
+
 	return b.String()
 }
 
@@ -234,6 +237,7 @@ func FormatTrends(trends []TrendPoint) string {
 	for _, t := range trends {
 		_, _ = fmt.Fprintf(&b, "  %s  %d commits\n", t.Date, t.Count)
 	}
+
 	return b.String()
 }
 
@@ -260,7 +264,7 @@ func ParseRepoSummary(resp *Response) RepoStats {
 // FormatRepoSummary renders RepoStats as human-readable text.
 func FormatRepoSummary(stats RepoStats) string {
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("Repository stats: %d commits indexed\n\n", stats.TotalCommits))
+	fmt.Fprintf(&b, "Repository stats: %d commits indexed\n\n", stats.TotalCommits)
 
 	if len(stats.AuthorStats) > 0 {
 		b.WriteString("By author:\n")

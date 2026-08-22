@@ -38,6 +38,7 @@ func NewContainerManager(containerName, hostPort string) *ContainerManager {
 	if hostPort == "" {
 		hostPort = "3223"
 	}
+
 	return &ContainerManager{
 		containerName: containerName,
 		hostPort:      hostPort,
@@ -59,6 +60,7 @@ func (m *ContainerManager) EnsureRunning(ctx context.Context) (string, error) {
 	case "running":
 		slog.Debug("helixdb: container already running",
 			"container", m.containerName)
+
 		return m.baseURL(), nil
 
 	case "exited", "paused":
@@ -90,6 +92,7 @@ func (m *ContainerManager) EnsureRunning(ctx context.Context) (string, error) {
 
 	slog.Debug("helixdb: container ready", "container", m.containerName,
 		"url", m.baseURL())
+
 	return m.baseURL(), nil
 }
 
@@ -101,6 +104,7 @@ func (m *ContainerManager) Stop(ctx context.Context) error {
 	slog.Debug("helixdb: stopping container", "container", m.containerName)
 	_ = m.runDocker(ctx, "rm", "-f", m.containerName)
 	m.startedByUs = false
+
 	return nil
 }
 
@@ -173,5 +177,6 @@ func (m *ContainerManager) runDocker(ctx context.Context, args ...string) error 
 	if err != nil {
 		return fmt.Errorf("docker %s: %w\n%s", strings.Join(args, " "), err, string(out))
 	}
+
 	return nil
 }

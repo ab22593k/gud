@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/helixdb/helix-db/sdks/go"
+	helix "github.com/helixdb/helix-db/sdks/go"
 )
 
 // BuildPersistCommitQuery constructs a WriteBatch that atomically stores a
@@ -67,6 +67,7 @@ func safeVarName(path string) string {
 	name = strings.ReplaceAll(name, ".", "_")
 	name = strings.ReplaceAll(name, "-", "_")
 	name = strings.ReplaceAll(name, ":", "_")
+
 	return name
 }
 
@@ -82,6 +83,7 @@ func FormatDiffStat(files []FileChange) string {
 		_, _ = fmt.Fprintf(&b, "  %s (%s: +%d/-%d)\n",
 			f.Path, f.ChangeType, f.LinesAdded, f.LinesDeleted)
 	}
+
 	return b.String()
 }
 

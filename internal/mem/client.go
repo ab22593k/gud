@@ -19,6 +19,7 @@ func NewHelixUnavailableError(cause error) error {
 	if cause == nil {
 		return ErrHelixUnavailable
 	}
+
 	return fmt.Errorf("%w: %w", ErrHelixUnavailable, cause)
 }
 
@@ -67,10 +68,12 @@ func NewDB(opts Options) *DB {
 	client, err := helix.NewClient(baseURL, helix.WithAPIKey(opts.APIKey))
 	if err != nil {
 		db.enabled = false
+
 		return db
 	}
 
 	db.client = client
+
 	return db
 }
 
@@ -114,6 +117,7 @@ func (db *DB) checkHealth(ctx context.Context) bool {
 		return false
 	}
 	defer resp.Body.Close()
+
 	return resp.StatusCode == http.StatusOK
 }
 
@@ -122,6 +126,7 @@ func (db *DB) Exec(ctx context.Context, req helix.Request, out any, opts ...heli
 	if !db.enabled || db.client == nil {
 		return ErrHelixUnavailable
 	}
+
 	return db.client.Exec(ctx, req, out, opts...)
 }
 

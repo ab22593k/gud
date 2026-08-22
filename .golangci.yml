@@ -38,11 +38,10 @@ linters:
         - "tt: *testing.T"
         - "i: int"
   exclusions:
-    generate:
-      rules:
-        - linters:
-            - lll
-          path: \.go
+    # Exclude machine-generated Go files (detected via standard "Code generated"
+    # markers) from linting. Replaces an invalid v1-style exclusions.generate
+    # block that golangci-lint v2 silently ignored.
+    generated: lax
     rules:
       - linters: [funlen]
         path: "_test\\.go"

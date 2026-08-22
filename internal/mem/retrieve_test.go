@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/helixdb/helix-db/sdks/go"
+	helix "github.com/helixdb/helix-db/sdks/go"
 )
 
 func TestBuildContextQuery_ValidDiff(t *testing.T) {
