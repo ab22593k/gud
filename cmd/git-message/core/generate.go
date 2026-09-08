@@ -99,12 +99,7 @@ func runGenerate(cmd *cobra.Command, _ []string) error {
 // commit history, submodule state, and the in-progress git operation, joined
 // by blank lines so the model can read them as separate sections.
 func buildPromptContext(ctx context.Context, app *AppContext, diff string, op git.Operation) string {
-	promptContext := buildRepoContext(ctx, app)
-	promptContext = joinContexts(promptContext, buildHistoryContext(ctx, app, diff))
-	promptContext = joinContexts(promptContext, buildSubmoduleContext(ctx, app, diff))
-	promptContext = joinContexts(promptContext, buildOperationContext(op))
-
-	return promptContext
+	return buildPromptContextParallel(ctx, app, diff, op)
 }
 
 // buildOperationContext returns a prompt fragment describing the in-progress
