@@ -33,8 +33,6 @@ const skipMarker = ".gud-skip"
 // This is a no-op if any profile is already configured (via CLI, env, or
 // config file), the repo root is unavailable, the skip marker exists,
 // or stdin is not a terminal (non-interactive mode).
-//
-//nolint:funlen // suggestion flow is cohesive; breaking it up would add complexity.
 func suggestProfileIfNeeded(ctx context.Context, cmd *cobra.Command, app *AppContext) error {
 	out := cmd.OutOrStdout()
 	in := cmd.InOrStdin()
@@ -61,14 +59,29 @@ func suggestProfileIfNeeded(ctx context.Context, cmd *cobra.Command, app *AppCon
 		return nil
 	}
 
-	// Compute repo stats
+	suggestions, err := fetchSuggestions(ctx, repoRoot)
+	if err != nil {
+		return err
+	}
+
+	if len(suggestions) == 0 {
+		return nil
+	}
+
+	return handleProfileSelection(ctx, app, out, in, cwd, suggestions)
+}
+
+// fetchSuggestions computes repo stats for repoRoot and ranks the remote
+// catalog against them. It returns an empty slice when the repo has no
+// files to analyze or no entry matches.
+func fetchSuggestions(ctx context.Context, repoRoot string) ([]profile.CatalogEntry, error) {
 	stats, err := detect.ComputeStats(repoRoot)
 	if err != nil {
-		return fmt.Errorf("compute stats: %w", err)
+		return nil, fmt.Errorf("compute stats: %w", err)
 	}
 
 	if stats.TotalFiles == 0 {
-		return nil
+		return nil, nil
 	}
 
 	// Fetch remote catalog
@@ -76,15 +89,20 @@ func suggestProfileIfNeeded(ctx context.Context, cmd *cobra.Command, app *AppCon
 
 	entries, err := profileManager.FetchCatalog(ctx)
 	if err != nil {
-		return fmt.Errorf("fetch catalog: %w", err)
+		return nil, fmt.Errorf("fetch catalog: %w", err)
 	}
 
 	// Rank and suggest
-	suggestions := detect.SuggestProfile(stats, entries)
-	if len(suggestions) == 0 {
-		return nil
-	}
+	return detect.SuggestProfile(stats, entries), nil
+}
 
+// handleProfileSelection shows the formatted suggestion prompt, reads the
+// user's choice, and dispatches it: apply the selected profile, skip (and
+// write the marker so future prompts are suppressed), or abort. An invalid
+// number is treated as a skip, not an error.
+func handleProfileSelection(ctx context.Context, app *AppContext, out io.Writer, in io.Reader,
+	cwd string, suggestions []profile.CatalogEntry,
+) error {
 	// Show suggestion prompt
 	_, _ = fmt.Fprint(out, detect.FormatSuggestionMessage(suggestions))
 
