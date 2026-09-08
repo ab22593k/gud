@@ -1,9 +1,12 @@
 package git
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -76,4 +79,54 @@ func GetHookDir(global bool) (string, error) {
 	}
 
 	return filepath.Join(".git", "hooks"), nil
+}
+
+// GetGlobalHooksPath returns the global core.hooksPath configuration value,
+// or an empty string when it is unset. Git does not automatically scan a
+// custom global hooks directory, so hooks installed outside .git/hooks only
+// run when core.hooksPath points at them.
+func GetGlobalHooksPath(ctx context.Context) (string, error) {
+	cmd := exec.CommandContext(ctx, "git", "config", "--global", "--get", "core.hooksPath")
+
+	out, err := cmd.Output()
+	if err != nil {
+		// git exits 1 when the key is unset; treat that as empty.
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && len(out) == 0 {
+			return "", nil
+		}
+
+		return "", fmt.Errorf("read global core.hooksPath: %w", err)
+	}
+
+	return strings.TrimSpace(string(out)), nil
+}
+
+// SetGlobalHooksPath sets the global core.hooksPath configuration value.
+func SetGlobalHooksPath(ctx context.Context, dir string) error {
+	cmd := exec.CommandContext(ctx, "git", "config", "--global", "core.hooksPath", dir)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("set global core.hooksPath: %w", err)
+	}
+
+	return nil
+}
+
+// UnsetGlobalHooksPath removes the global core.hooksPath configuration value.
+// It is a no-op when the key is not set.
+func UnsetGlobalHooksPath(ctx context.Context) error {
+	cmd := exec.CommandContext(ctx, "git", "config", "--global", "--unset", "core.hooksPath")
+
+	err := cmd.Run()
+	if err != nil {
+		// git exits 5 when the key is unset; uninstalling is idempotent.
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 5 {
+			return nil
+		}
+
+		return fmt.Errorf("unset global core.hooksPath: %w", err)
+	}
+
+	return nil
 }

@@ -1,6 +1,7 @@
 package git
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -119,6 +120,59 @@ func TestUninstallHook(t *testing.T) {
 
 	if _, err := os.Stat(hookPath); !os.IsNotExist(err) {
 		t.Errorf("hook file should be removed")
+	}
+}
+
+// TestGlobalHooksPathRoundtrip verifies the global core.hooksPath helpers
+// against a hermetic git config (GIT_CONFIG_GLOBAL) so the developer's real
+// global config is never touched. Covers the unset (""), set, and
+// idempotent-unset-of-unset-key transitions.
+//
+// Not parallel: GIT_CONFIG_GLOBAL must be set via t.Setenv, which is
+// incompatible with t.Parallel.
+func TestGlobalHooksPathRoundtrip(t *testing.T) {
+	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(t.TempDir(), "global-gitconfig"))
+
+	ctx := context.Background()
+
+	got, err := GetGlobalHooksPath(ctx)
+	if err != nil {
+		t.Fatalf("GetGlobalHooksPath on unset key: %v", err)
+	}
+
+	if got != "" {
+		t.Errorf("GetGlobalHooksPath() = %q on unset key, want empty", got)
+	}
+
+	if err := UnsetGlobalHooksPath(ctx); err != nil {
+		t.Errorf("UnsetGlobalHooksPath on unset key should be a no-op, got %v", err)
+	}
+
+	const want = "/home/tester/.config/gud/hooks"
+	if err := SetGlobalHooksPath(ctx, want); err != nil {
+		t.Fatalf("SetGlobalHooksPath: %v", err)
+	}
+
+	got, err = GetGlobalHooksPath(ctx)
+	if err != nil {
+		t.Fatalf("GetGlobalHooksPath after set: %v", err)
+	}
+
+	if got != want {
+		t.Errorf("GetGlobalHooksPath() = %q, want %q", got, want)
+	}
+
+	if err := UnsetGlobalHooksPath(ctx); err != nil {
+		t.Fatalf("UnsetGlobalHooksPath: %v", err)
+	}
+
+	got, err = GetGlobalHooksPath(ctx)
+	if err != nil {
+		t.Fatalf("GetGlobalHooksPath after unset: %v", err)
+	}
+
+	if got != "" {
+		t.Errorf("GetGlobalHooksPath() = %q after unset, want empty", got)
 	}
 }
 

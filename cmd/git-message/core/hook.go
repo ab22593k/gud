@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -32,7 +33,7 @@ var hookInstallCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		global := mustGet(cmd, "global", cmd.Flags().GetBool)
 
-		return runHookInstall(global)
+		return runHookInstall(context.Background(), global)
 	},
 }
 
@@ -42,7 +43,7 @@ var hookUninstallCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		global := mustGet(cmd, "global", cmd.Flags().GetBool)
 
-		return runHookUninstall(global)
+		return runHookUninstall(context.Background(), global)
 	},
 }
 
@@ -59,7 +60,7 @@ This is used internally by the git hook and should not be called directly.`,
 	},
 }
 
-func runHookInstall(global bool) error {
+func runHookInstall(ctx context.Context, global bool) error {
 	hookDir, err := git.GetHookDir(global)
 	if err != nil {
 		return fmt.Errorf("failed to get hook directory: %w", err)
@@ -83,12 +84,43 @@ func runHookInstall(global bool) error {
 		return fmt.Errorf("failed to install hook: %w", err)
 	}
 
+	if global {
+		if err := ensureGlobalHooksPath(ctx, hookDir); err != nil {
+			return err
+		}
+	}
+
 	fmt.Printf("Hook installed to %s\n", filepath.Join(hookDir, string(git.PrepareCommitMsg)))
 
 	return nil
 }
 
-func runHookUninstall(global bool) error {
+// ensureGlobalHooksPath points global core.hooksPath at the global hooks
+// directory so installed hooks actually run: git does not scan a custom
+// hooks directory on its own. An existing matching value is kept so
+// reinstall stays idempotent; a foreign value is reported as a warning and
+// left untouched, so gud never silently overrides the user's own hook
+// configuration.
+func ensureGlobalHooksPath(ctx context.Context, hookDir string) error {
+	current, err := git.GetGlobalHooksPath(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to read global core.hooksPath: %w", err)
+	}
+
+	switch current {
+	case "", hookDir:
+		if err := git.SetGlobalHooksPath(ctx, hookDir); err != nil {
+			return fmt.Errorf("failed to set global core.hooksPath: %w", err)
+		}
+	default:
+		slog.Warn("global core.hooksPath already set to a different directory; not overriding",
+			"current", current, "gudHooksDir", hookDir)
+	}
+
+	return nil
+}
+
+func runHookUninstall(ctx context.Context, global bool) error {
 	hookDir, err := git.GetHookDir(global)
 	if err != nil {
 		return fmt.Errorf("failed to get hook directory: %w", err)
@@ -96,6 +128,12 @@ func runHookUninstall(global bool) error {
 
 	if err := git.UninstallHook(hookDir, git.PrepareCommitMsg); err != nil {
 		return fmt.Errorf("failed to uninstall hook: %w", err)
+	}
+
+	if global {
+		if err := git.UnsetGlobalHooksPath(ctx); err != nil {
+			return fmt.Errorf("failed to unset global core.hooksPath: %w", err)
+		}
 	}
 
 	fmt.Println("Hook uninstalled")
