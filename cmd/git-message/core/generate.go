@@ -9,12 +9,18 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
+	"gud/internal/cache"
 	"gud/internal/detect"
 	"gud/internal/git"
 
 	"github.com/spf13/cobra"
 )
+
+// repoStatsCache memoizes per-repo file stats for 30s so repeated generations
+// in the same checkout skip the filesystem walk. Bounded to 64 repos.
+var repoStatsCache = cache.New[string, *detect.RepoStats](64, 30*time.Second)
 
 // maxHistory is the maximum number of recent commits the --history flag can request.
 // This prevents accidentally dumping hundreds of commits into the prompt and wasting tokens.
@@ -275,12 +281,21 @@ func buildRepoContext(ctx context.Context, app *AppContext) string {
 		return ""
 	}
 
-	stats, err := detect.ComputeStats(repoRoot)
+	if st, ok := repoStatsCache.Get(repoRoot); ok {
+		slog.Debug("repo stats cache hit", "root", repoRoot, "hits", repoStatsCache.Hits())
+
+		return detect.FormatRepoContext(st)
+	}
+
+	stats, err := detect.ComputeStatsWithContext(ctx, repoRoot)
 	if err != nil {
 		slog.Debug("failed to compute repo stats", "error", err)
 
 		return ""
 	}
+
+	repoStatsCache.Set(repoRoot, stats)
+	slog.Debug("repo stats cache miss", "root", repoRoot, "misses", repoStatsCache.Misses())
 
 	return detect.FormatRepoContext(stats)
 }
