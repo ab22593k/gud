@@ -155,3 +155,56 @@ func TestHandleProfileSelection_AppliesSelectedProfile(t *testing.T) {
 		t.Errorf("output missing %q:\n  got: %q", want, buf.String())
 	}
 }
+
+// TestHasSkipMarker verifies marker detection: false before the marker is
+// written, true after writeSkipMarker creates it, and false for a missing
+// directory — a stat failure must not read as "suggestion skipped".
+func TestHasSkipMarker(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+
+	if hasSkipMarker(dir) {
+		t.Fatal("hasSkipMarker() = true before the marker is written")
+	}
+
+	if hasSkipMarker(filepath.Join(dir, "missing")) {
+		t.Fatal("hasSkipMarker() = true for a nonexistent directory")
+	}
+
+	writeSkipMarker(dir)
+
+	if !hasSkipMarker(dir) {
+		t.Fatal("hasSkipMarker() = false after writeSkipMarker")
+	}
+}
+
+// TestWriteSkipMarker verifies the marker file: the documented skip text and
+// owner read/write permissions. writeSkipMarker is deliberately best-effort
+// (errors are swallowed) so a failed write never blocks a commit; that
+// contract is not exercised here because it would depend on umask/root.
+func TestWriteSkipMarker(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+
+	writeSkipMarker(dir)
+
+	data, err := os.ReadFile(filepath.Join(dir, skipMarker))
+	if err != nil {
+		t.Fatalf("read marker: %v", err)
+	}
+
+	if want := "# gud profile suggestion skipped\n"; string(data) != want {
+		t.Errorf("marker content = %q, want %q", string(data), want)
+	}
+
+	info, err := os.Stat(filepath.Join(dir, skipMarker))
+	if err != nil {
+		t.Fatalf("stat marker: %v", err)
+	}
+
+	if perm := info.Mode().Perm(); perm&0600 != 0600 {
+		t.Errorf("marker permissions = %o, want owner read/write (0600)", perm)
+	}
+}
