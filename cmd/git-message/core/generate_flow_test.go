@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -15,6 +16,9 @@ import (
 // git context (GIT_DIR, GIT_WORK_TREE, GIT_INDEX_FILE) is unset so git
 // invocations resolve the test's working directory; git rejects an empty
 // value for these variables, so they must be removed, not set to "".
+// GIT_CONFIG_GLOBAL/GIT_CONFIG_SYSTEM redirect the global and system git
+// configs to temp files so git commit signatures cannot depend on the
+// developer's identity, aliases, or hooks.
 //
 // Safe because these flow tests are sequential: parallel test bodies in the
 // package cannot run while a sequential test is executing.
@@ -24,6 +28,9 @@ func isolateConfig(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", "")
 	t.Setenv("GUD_CONFIG_PATH", "")
 	t.Setenv("GOOGLE_API_KEY", "")
+
+	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(t.TempDir(), "global-gitconfig"))
+	t.Setenv("GIT_CONFIG_SYSTEM", filepath.Join(t.TempDir(), "system-gitconfig"))
 
 	for _, key := range []string{"GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"} {
 		orig, had := os.LookupEnv(key)

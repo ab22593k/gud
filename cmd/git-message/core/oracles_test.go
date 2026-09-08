@@ -21,8 +21,10 @@ package core
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -154,13 +156,35 @@ func TestOracle_Explainability_ProfileNotFound(t *testing.T) {
 	}
 }
 
-// E: missing staged changes error is actionable.
+// E: missing staged changes error is actionable. The probe runs in a
+// throwaway repo so it asserts a genuinely empty index instead of whatever
+// the package's own repository happens to have staged.
 func TestOracle_Explainability_NoStagedDiff(t *testing.T) {
-	_, err := getStagedDiffOrError(t.Context())
-	if err != nil {
-		if !strings.Contains(err.Error(), "git add") {
-			t.Errorf("[E] error should tell user to 'git add', got: %v", err)
+	td := t.TempDir()
+
+	run := func(args ...string) {
+		t.Helper()
+		//nolint:gosec // test-only git invocation with fixed repo-local args
+		cmd := exec.CommandContext(context.Background(), "git", args...)
+		cmd.Dir = td
+
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v failed: %v\n%s", args, err, out)
 		}
+	}
+
+	run("init", "-q", "-b", "main")
+
+	t.Chdir(td)
+
+	_, err := getStagedDiffOrError(t.Context())
+	if err == nil {
+		t.Fatal("[E] freshly initialised repo should report no staged changes, got nil error")
+	}
+
+	if !strings.Contains(err.Error(), "git add") {
+		t.Errorf("[E] error should tell user to 'git add', got: %v", err)
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -125,6 +126,38 @@ func newOperationTestRepo(t *testing.T) {
 	t.Chdir(dir)
 }
 
+// isolateGitIdentity redirects HOME and the global/system git configs to
+// temp locations so the commits these tests make cannot read or mutate the
+// developer's git identity, aliases, commit.gpgsign, or hooks. Ambient
+// GIT_DIR/GIT_WORK_TREE/GIT_INDEX_FILE are unset for the same reason as
+// isolateConfig: git rejects empty values, so they must be removed, and the
+// tests are sequential.
+func isolateGitIdentity(t *testing.T) {
+	t.Helper()
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(t.TempDir(), "global-gitconfig"))
+	t.Setenv("GIT_CONFIG_SYSTEM", filepath.Join(t.TempDir(), "system-gitconfig"))
+
+	for _, key := range []string{"GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"} {
+		orig, had := os.LookupEnv(key)
+		if !had {
+			continue
+		}
+
+		if err := os.Unsetenv(key); err != nil {
+			t.Fatalf("unset %s: %v", key, err)
+		}
+
+		t.Cleanup(func() {
+			//nolint:usetesting // t.Setenv cannot restore a variable that was unset; os.Setenv is required here.
+			if err := os.Setenv(key, orig); err != nil {
+				t.Errorf("restore %s: %v", key, err)
+			}
+		})
+	}
+}
+
 func mustOutput(t *testing.T, dir string, args ...string) string {
 	t.Helper()
 	//nolint:gosec // test-only git invocation with fixed repo-local args
@@ -149,6 +182,8 @@ func TestInteractiveCommit_UsesPreparedMessage(t *testing.T) {
 	}
 
 	newOperationTestRepo(t)
+
+	isolateGitIdentity(t)
 
 	app := &AppContext{cfg: config.Config{WrapLine: 72}}
 	cmd := &cobra.Command{}
@@ -190,6 +225,8 @@ func TestInteractiveCommit_PreparedMessageWithIssues(t *testing.T) {
 	}
 
 	newOperationTestRepo(t)
+
+	isolateGitIdentity(t)
 
 	app := &AppContext{cfg: config.Config{WrapLine: 72, Issues: []int{42}}}
 	cmd := &cobra.Command{}
