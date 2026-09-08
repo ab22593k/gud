@@ -2,6 +2,8 @@ package core
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,6 +18,72 @@ import (
 func suggestionsForTest() []profile.CatalogEntry {
 	return []profile.CatalogEntry{
 		{Slug: "astrophysicist", Profession: "Astrophysicist", WorkMode: "physics"},
+	}
+}
+
+// TestFetchSuggestions_RanksStubbedCatalog verifies the rank path end to end
+// with a stubbed catalogFn: a Python-only temp repo produces stats whose top
+// extension ranks the matching catalog entry first, with no network.
+//
+// Not parallel: it swaps the package-level catalogFn.
+func TestFetchSuggestions_RanksStubbedCatalog(t *testing.T) {
+	orig := catalogFn
+
+	t.Cleanup(func() { catalogFn = orig })
+
+	catalogFn = func(context.Context) ([]profile.CatalogEntry, error) {
+		return []profile.CatalogEntry{
+			{Slug: "python-dev", Profession: "Python Developer", Summary: "writes python code"},
+			{Slug: "rust-dev", Profession: "Rust Developer", Summary: "writes rust code"},
+		}, nil
+	}
+
+	repo := t.TempDir()
+
+	for _, name := range []string{"main.py", "util.py"} {
+		if err := os.WriteFile(filepath.Join(repo, name), []byte("print(1)\n"), 0600); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+
+	got, err := fetchSuggestions(t.Context(), repo)
+	if err != nil {
+		t.Fatalf("fetchSuggestions: %v", err)
+	}
+
+	if len(got) != 1 {
+		t.Fatalf("fetchSuggestions() returned %d entries, want 1:\n%+v", len(got), got)
+	}
+
+	if got[0].Slug != "python-dev" {
+		t.Errorf("top suggestion = %q, want %q", got[0].Slug, "python-dev")
+	}
+}
+
+// TestFetchSuggestions_CatalogError verifies a catalog failure is wrapped
+// with "fetch catalog" context rather than silently returning nothing.
+func TestFetchSuggestions_CatalogError(t *testing.T) {
+	orig := catalogFn
+
+	t.Cleanup(func() { catalogFn = orig })
+
+	catalogFn = func(context.Context) ([]profile.CatalogEntry, error) {
+		return nil, errors.New("network down")
+	}
+
+	repo := t.TempDir()
+
+	if err := os.WriteFile(filepath.Join(repo, "x.py"), []byte("x\n"), 0600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	_, err := fetchSuggestions(t.Context(), repo)
+	if err == nil {
+		t.Fatal("fetchSuggestions() = nil error, want catalog failure wrapped")
+	}
+
+	if !strings.Contains(err.Error(), "fetch catalog") {
+		t.Errorf("error = %v, want 'fetch catalog' context", err)
 	}
 }
 

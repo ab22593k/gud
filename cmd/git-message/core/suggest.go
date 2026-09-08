@@ -71,6 +71,15 @@ func suggestProfileIfNeeded(ctx context.Context, cmd *cobra.Command, app *AppCon
 	return handleProfileSelection(ctx, app, out, in, cwd, suggestions)
 }
 
+// catalogFn fetches the remote profile catalog. Package-level so tests can
+// stub it (nil means the real profileManager.FetchCatalog), mirroring the
+// swappable-lookup convention used by AppContext.branchFn/operationFn.
+var catalogFn = func(ctx context.Context) ([]profile.CatalogEntry, error) {
+	initProfileManager()
+
+	return profileManager.FetchCatalog(ctx)
+}
+
 // fetchSuggestions computes repo stats for repoRoot and ranks the remote
 // catalog against them. It returns an empty slice when the repo has no
 // files to analyze or no entry matches.
@@ -85,9 +94,7 @@ func fetchSuggestions(ctx context.Context, repoRoot string) ([]profile.CatalogEn
 	}
 
 	// Fetch remote catalog
-	initProfileManager()
-
-	entries, err := profileManager.FetchCatalog(ctx)
+	entries, err := catalogFn(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("fetch catalog: %w", err)
 	}
