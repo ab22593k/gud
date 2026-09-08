@@ -1,4 +1,4 @@
-// A one-shot commit message generator.
+// One-Shot commit message generator.
 package main
 
 import (

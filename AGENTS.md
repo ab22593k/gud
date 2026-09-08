@@ -1,13 +1,8 @@
 # AGENTS.md
 
-This file is the project README for coding agents. Keep it concise, current, and
-limited to repository-specific facts. Read only the sections needed for the task.
-
 ## Project
 
-`gud` is a Go CLI that generates commit messages from staged Git changes.
-The canonical command is `git message`; `gud` is the product name. Preserve that
-distinction in command help, errors, documentation, and tests.
+`gud` is a One-Shot commit message generator. The canonical command is `git message`; `gud` is the product name. Preserve that distinction in command help, errors, documentation, and tests.
 
 The repository is a Go workspace using Go 1.26.3:
 
