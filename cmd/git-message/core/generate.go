@@ -28,10 +28,16 @@ var repoStatsCache = cache.New[string, *detect.RepoStats](64, 30*time.Second)
 const maxHistory = git.MaxRecentCommits
 
 // runGenerate is the default action: generate a commit message from staged changes.
-func runGenerate(cmd *cobra.Command, _ []string) error {
+func runGenerate(cmd *cobra.Command, args []string) error {
 	app, err := NewAppContext(cmd)
 	if err != nil {
 		return err
+	}
+
+	if rev, ok := amendTarget(cmd, args); ok {
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		return runAmendFlow(ctx, cmd, app, rev)
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

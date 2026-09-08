@@ -1,7 +1,11 @@
 package core
 
 import (
+	"context"
+	"os/exec"
 	"testing"
+
+	"gud/internal/git"
 
 	"github.com/spf13/cobra"
 )
@@ -37,5 +41,37 @@ func TestAmendTarget(t *testing.T) {
 					tc.flagArgs, tc.positional, gotRev, gotAmend, tc.wantRev, tc.wantAmend)
 			}
 		})
+	}
+}
+
+func TestIsHeadCommit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping temp-repo test in short mode")
+	}
+	dir := t.TempDir()
+	setup := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		cmd.Env = append(cmd.Environ(),
+			"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t",
+			"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	setup("init", "-q")
+	setup("commit", "-q", "--allow-empty", "-m", "only")
+	t.Chdir(dir)
+	ctx := context.Background()
+	sha, err := git.ResolveRevision(ctx, "HEAD")
+	if err != nil {
+		t.Fatalf("ResolveRevision(HEAD)=%v", err)
+	}
+	if !isHeadCommit(ctx, sha) {
+		t.Errorf("isHeadCommit(HEAD sha)=false, want true")
+	}
+	if isHeadCommit(ctx, "0000000000000000000000000000000000000000") {
+		t.Error("isHeadCommit(zero sha)=true, want false")
 	}
 }
