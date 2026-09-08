@@ -1,4 +1,4 @@
-// Generates meaningful git commit messages using LLM's.
+// A one-shot commit message generator.
 package main
 
 import (

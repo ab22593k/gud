@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"testing"
 
 	"gud/internal/profile"
@@ -96,6 +97,77 @@ func TestCategorizeByWorkMode(t *testing.T) {
 					t.Errorf("categorizeByWorkMode()[%d] = {name:%q, count:%d}, want {name:%q, count:%d}",
 						i, got[i].name, got[i].count, tt.want[i].name, tt.want[i].count)
 				}
+			}
+		})
+	}
+}
+
+// profileSummaryHint is the trailing instruction line printed by
+// printProfileSummary after the category summary.
+const profileSummaryHint = "Use 'git message --profile <slug>' or 'git message profile save <slug>' " +
+	"with one of the slugs below.\n"
+
+// TestPrintProfileSummary verifies the category summary header, per-category
+// count lines, and instruction line written to the output writer.
+func TestPrintProfileSummary(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		total int
+		cats  []category
+		want  string
+	}{
+		{
+			name:  "no profiles and no categories",
+			total: 0,
+			cats:  nil,
+			want: "\nFound 0 profiles in 0 categories:\n" +
+				"\n" +
+				"\n" +
+				profileSummaryHint +
+				"\n",
+		},
+		{
+			name:  "single category",
+			total: 3,
+			cats:  []category{{name: testPhysics, count: 3}},
+			want: "\nFound 3 profiles in 1 categories:\n" +
+				"\n" +
+				"  physics (3 profiles)\n" +
+				"\n" +
+				profileSummaryHint +
+				"\n",
+		},
+		{
+			name:  "multiple categories with total independent of category count",
+			total: 4,
+			cats: []category{
+				{name: testBiology, count: 2},
+				{name: "chemistry", count: 1},
+				{name: testPhysics, count: 1},
+			},
+			want: "\nFound 4 profiles in 3 categories:\n" +
+				"\n" +
+				"  biology (2 profiles)\n" +
+				"  chemistry (1 profiles)\n" +
+				"  physics (1 profiles)\n" +
+				"\n" +
+				profileSummaryHint +
+				"\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var buf bytes.Buffer
+			printProfileSummary(&buf, tt.total, tt.cats)
+
+			if got := buf.String(); got != tt.want {
+				t.Errorf("printProfileSummary(total=%d, cats=%d):\n  got:  %q\n  want: %q",
+					tt.total, len(tt.cats), got, tt.want)
 			}
 		})
 	}
