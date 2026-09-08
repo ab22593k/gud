@@ -2,6 +2,7 @@ package core
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 
 	"gud/internal/profile"
@@ -168,6 +169,52 @@ func TestPrintProfileSummary(t *testing.T) {
 			if got := buf.String(); got != tt.want {
 				t.Errorf("printProfileSummary(total=%d, cats=%d):\n  got:  %q\n  want: %q",
 					tt.total, len(tt.cats), got, tt.want)
+			}
+		})
+	}
+}
+
+// TestWriteCatalogEntry verifies the single-entry rendering contract:
+// a four-space indent, the slug left-aligned in a 50-column field, and the
+// summary truncated to 70 characters via truncate.
+func TestWriteCatalogEntry(t *testing.T) {
+	t.Parallel()
+
+	const slug = "astro"
+
+	// summaryAt builds a summary of exactly n 'x' characters plus an
+	// optional suffix, so boundary cases derive from the contract constant
+	// instead of hand-counted literals.
+	summaryAt := func(n int, suffix string) string {
+		return strings.Repeat("x", n) + suffix
+	}
+
+	at70 := summaryAt(70, "")
+	at69 := summaryAt(69, "")
+
+	tests := []struct {
+		name        string
+		slug        string
+		summary     string
+		wantSummary string
+	}{
+		{name: "short summary unchanged", slug: slug, summary: "stars", wantSummary: "stars"},
+		{name: "summary at 70 boundary unchanged", slug: slug, summary: at70, wantSummary: at70},
+		{name: "summary over 70 truncated with ellipsis", slug: slug, summary: at70 + "y", wantSummary: at70 + "..."},
+		{name: "70 chars returned as-is incl. space", slug: slug, summary: at69 + " ", wantSummary: at69 + " "},
+		{name: "space at cut point trimmed before ellipsis", slug: slug, summary: at69 + " y", wantSummary: at69 + "..."},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var buf bytes.Buffer
+			writeCatalogEntry(&buf, profile.CatalogEntry{Slug: tt.slug, Summary: tt.summary})
+
+			want := "    " + tt.slug + strings.Repeat(" ", 50-len(tt.slug)) + " " + tt.wantSummary + "\n"
+			if got := buf.String(); got != want {
+				t.Errorf("writeCatalogEntry():\n  got:  %q\n  want: %q", got, want)
 			}
 		})
 	}

@@ -268,8 +268,14 @@ func printDetailedEntries(w io.Writer, entries []profile.CatalogEntry) {
 			_, _ = fmt.Fprintf(w, "\n  [%s]\n", currentWorkMode)
 		}
 
-		_, _ = fmt.Fprintf(w, "    %-50s %s\n", e.Slug, truncate(e.Summary, 70))
+		writeCatalogEntry(w, e)
 	}
+}
+
+// writeCatalogEntry renders one catalog entry line: the slug left-aligned
+// in 50 columns followed by the summary truncated to 70 characters.
+func writeCatalogEntry(w io.Writer, e profile.CatalogEntry) {
+	_, _ = fmt.Fprintf(w, "    %-50s %s\n", e.Slug, truncate(e.Summary, 70))
 }
 
 var profileSaveCmd = &cobra.Command{
