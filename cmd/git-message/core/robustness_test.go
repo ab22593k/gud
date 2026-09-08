@@ -38,3 +38,18 @@ func TestJoinContexts_Order(t *testing.T) {
 		t.Fatalf("joinContexts order=%q, want a,b,c", got)
 	}
 }
+
+func TestTimedBuildPromptContext_EmitsNoError(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	app := &AppContext{}
+
+	got := buildPromptContext(ctx, app, "x", git.OperationNone)
+
+	if strings.Contains(got, "\x00") {
+		t.Fatalf("context contains NUL: %q", got)
+	}
+}

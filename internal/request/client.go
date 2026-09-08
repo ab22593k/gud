@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"gud/internal/obs"
+
 	"google.golang.org/adk/model"
 	"google.golang.org/adk/model/gemini"
 	"google.golang.org/genai"
@@ -120,7 +122,8 @@ func (c *Client) GenerateCommitMessageWithContent(
 		return "", errors.New("diff is required")
 	}
 
-	slog.Debug("generating commit message", "model", c.model, "detailLevel", detailLevel)
+	slog.Debug("generating commit message", "model", c.model, "detailLevel", detailLevel, "diff_bytes", len(diff),
+		"ctx_bytes", len(commitContext))
 
 	prompt := BuildCommitMessagePromptWithContent(diff, commitContext, detailLevel, hint, profile, systemContent, wrapLine)
 
@@ -133,7 +136,12 @@ func (c *Client) GenerateCommitMessageWithContent(
 	ctx, cancel := withDefaultTimeout(ctx, defaultGenerateTimeout)
 	defer cancel()
 
+	tm := obs.Start("model.generate")
+
 	result, err := generateContent(ctx, c, req)
+
+	tm.Done("model", c.model, "ok", err == nil)
+
 	if err != nil {
 		return "", fmt.Errorf("failed to generate content: %w", err)
 	}

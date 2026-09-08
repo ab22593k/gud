@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"gud/internal/git"
+	"gud/internal/obs"
 )
 
 // contextBuilderTimeout bounds each independent prompt-context builder so one
@@ -17,6 +18,9 @@ const contextBuilderTimeout = 5 * time.Second
 // degrade to "" (same contract as the sequential version). Join order is
 // fixed: repo, history, submodule, operation.
 func buildPromptContextParallel(ctx context.Context, app *AppContext, diff string, op git.Operation) string {
+	tm := obs.Start("ctx.build")
+	defer tm.Done()
+
 	type slot struct {
 		idx int
 		val string

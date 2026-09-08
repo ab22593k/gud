@@ -14,6 +14,7 @@ import (
 	"gud/internal/cache"
 	"gud/internal/detect"
 	"gud/internal/git"
+	"gud/internal/obs"
 
 	"github.com/spf13/cobra"
 )
@@ -87,6 +88,8 @@ func runGenerate(cmd *cobra.Command, _ []string) error {
 	units := git.ExtractCodeUnits(diff)
 
 	promptContext := buildPromptContext(ctx, app, diff, op)
+
+	obs.LogSizes(len(diff), len(promptContext))
 
 	// When git is mid-operation it has already prepared the message that
 	// preserves (merge, cherry-pick, revert, rebase, fixup) or combines
