@@ -171,3 +171,15 @@ func TestBuildCommitMessagePromptWithEmptyProfile(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildCommitMessagePrompt_ContainsDeterministicRules(t *testing.T) {
+	t.Parallel()
+
+	prompt := BuildCommitMessagePrompt("diff --git a/main.go b/main.go", "", DetailStandard, "", "")
+
+	for _, want := range []string{"imperative", "never end the subject", "blank line", "appear in the diff"} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("prompt missing deterministic rule %q", want)
+		}
+	}
+}

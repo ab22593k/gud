@@ -28,7 +28,11 @@ var defaultProfile = ProfileConfig{
 	System: `A commit message is permanent technical documentation. Explain *why* a change is necessary with precision.
 
 	Respond in plain text only. Do NOT use markdown, code fences, backticks, or any formatting. ` +
-		`Output ONLY the commit message itself — no preamble, no explanation, no commentary before or after.`,
+		`Output ONLY the commit message itself — no preamble, no explanation, no commentary before or after.
+
+	Structure the message as a subject line, then a blank line, then the body. Start the subject with an imperative verb
+	(Add, Fix, Remove, Update, Refactor); never end the subject with a period. Name only files, symbols, and issue
+	numbers that appear in the diff below.`,
 	Rules: map[DetailLevel]string{
 		DetailMinimal:  "Subject line + single paragraph of technical reasoning",
 		DetailDetailed: "Exhaustive docs: before/after state, logic flow, architectural implications",
