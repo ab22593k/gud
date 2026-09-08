@@ -11,13 +11,37 @@ import (
 )
 
 // isolateConfig points HOME and GUD_CONFIG_PATH at the test temp dir so the
-// mediator cannot pick up a real user-level gud config or API key.
+// mediator cannot pick up a real user-level gud config or API key. Ambient
+// git context (GIT_DIR, GIT_WORK_TREE, GIT_INDEX_FILE) is unset so git
+// invocations resolve the test's working directory; git rejects an empty
+// value for these variables, so they must be removed, not set to "".
+//
+// Safe because these flow tests are sequential: parallel test bodies in the
+// package cannot run while a sequential test is executing.
 func isolateConfig(t *testing.T) {
 	t.Helper()
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", "")
 	t.Setenv("GUD_CONFIG_PATH", "")
 	t.Setenv("GOOGLE_API_KEY", "")
+
+	for _, key := range []string{"GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"} {
+		orig, had := os.LookupEnv(key)
+		if !had {
+			continue
+		}
+
+		if err := os.Unsetenv(key); err != nil {
+			t.Fatalf("unset %s: %v", key, err)
+		}
+
+		t.Cleanup(func() {
+			//nolint:usetesting // t.Setenv cannot restore a variable that was unset; os.Setenv is required here.
+			if err := os.Setenv(key, orig); err != nil {
+				t.Errorf("restore %s: %v", key, err)
+			}
+		})
+	}
 }
 
 // setTestStreams redirects command output and gives Execute explicit empty
@@ -49,12 +73,19 @@ func setTestStreams(t *testing.T) {
 // valid repo but nothing staged, the default command fails fast with the
 // actionable "no staged changes" error before any HelixDB probe or client
 // initialisation.
+//
+// The test runs inside a throwaway repo (newCoreHistoryTestRepo chdirs into
+// it) so it asserts an empty index we control — without that it reads the
+// package's own repository index and fails whenever the gud checkout happens
+// to have staged changes.
 func TestRunGenerate_NoStagedChanges(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")
 	}
 
 	isolateConfig(t)
+
+	newCoreHistoryTestRepo(t)
 
 	setTestStreams(t)
 
