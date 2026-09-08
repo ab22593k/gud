@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"gud/internal/config"
+
+	"github.com/spf13/cobra"
 )
 
 func TestPromptAction(t *testing.T) {
@@ -104,6 +106,77 @@ func TestParseLogLevel(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestSetupLogLevel verifies the GUD_LOG_LEVEL → global slog level wiring.
+// slog.SetLogLoggerLevel returns the previous level, which gives a read-back
+// without capturing logger output.
+//
+// Not parallel: reads GUD_LOG_LEVEL (t.Setenv) and mutates the process-wide
+// slog default level; the cleanup restores the original.
+func TestSetupLogLevel(t *testing.T) {
+	tests := []struct {
+		name string
+		env  string
+		want slog.Level
+	}{
+		{name: "debug env sets debug", env: "debug", want: slog.LevelDebug},
+		{name: "warn env sets warn", env: "warn", want: slog.LevelWarn},
+		{name: "unset env leaves info", env: "", want: slog.LevelInfo},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			prev := slog.SetLogLoggerLevel(slog.LevelInfo)
+
+			t.Cleanup(func() { slog.SetLogLoggerLevel(prev) })
+
+			t.Setenv("GUD_LOG_LEVEL", tt.env)
+			setupLogLevel()
+
+			if got := slog.SetLogLoggerLevel(slog.LevelInfo); got != tt.want {
+				t.Errorf("setupLogLevel with GUD_LOG_LEVEL=%q left level %v, want %v", tt.env, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestMustGet verifies the flag-reading adapter: it returns the flag value
+// when the flag is registered and panics when it is not — a programming
+// error, since every mustGet call site references a flag defined in init().
+func TestMustGet(t *testing.T) {
+	t.Run("returns registered flag value", func(t *testing.T) {
+		t.Parallel()
+
+		cmd := &cobra.Command{}
+		cmd.Flags().Bool("verbose", true, "")
+
+		if got := mustGet(cmd, "verbose", cmd.Flags().GetBool); !got {
+			t.Errorf("mustGet(verbose) = %v, want true", got)
+		}
+	})
+
+	t.Run("panics on unregistered flag", func(t *testing.T) {
+		t.Parallel()
+
+		defer func() {
+			r := recover()
+			if r == nil {
+				t.Fatal("mustGet on unregistered flag did not panic")
+			}
+
+			msg, ok := r.(string)
+			if !ok {
+				t.Fatalf("panic value = %T, want string", r)
+			}
+
+			if !strings.Contains(msg, "config:") {
+				t.Errorf("panic message = %q, want 'config:' prefix", msg)
+			}
+		}()
+
+		mustGet(&cobra.Command{}, "no-such-flag", (&cobra.Command{}).Flags().GetBool)
+	})
 }
 
 // discardWriter is an io.Writer that discards all writes.
