@@ -37,6 +37,7 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 	if rev, ok := amendTarget(cmd, args); ok {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
+
 		return runAmendFlow(ctx, cmd, app, rev)
 	}
 

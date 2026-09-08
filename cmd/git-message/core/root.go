@@ -90,8 +90,8 @@ func addPersistentFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringSlice("issue", nil,
 		"Issue numbers this commit fixes (comma-separated, e.g. 123,456; adds a 'Fixes: #N' trailer per issue)")
 	cmd.PersistentFlags().Int("wrapline", 72, "Wrap all lines at this character width")
-	cmd.PersistentFlags().String("amend", "", "Regenerate the message of one previous commit (e.g. --amend HEAD~2; bare --amend targets HEAD)")
-	cmd.PersistentFlags().Lookup("amend").NoOptDefVal = "HEAD"
+	cmd.PersistentFlags().String("amend", "", "Regenerate one commit message (e.g. --amend HEAD~2)")
+	cmd.PersistentFlags().Lookup("amend").NoOptDefVal = amendHeadRev
 }
 
 func init() {

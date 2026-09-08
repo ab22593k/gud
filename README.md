@@ -15,10 +15,21 @@ git message                          Generate a commit message from staged chang
 git message --profile <slug>         Use a scientific agent profile
 git message --detail detailed        More verbose commit messages
 git message --issue 123,456          Reference fixed issues (adds "Fixes: #123" trailer per issue)
+git message --amend                  Regenerate the HEAD message
+git message --amend HEAD~2           Regenerate only the HEAD~2 message
 git message hook install             Install git prepare-commit-msg hook
 git message profile list --remote    Browse available AI profiles
 git message profile save <slug>      Download a profile
 ```
+
+## Amend a previous commit
+
+`--amend` regenerates the message for exactly one commit from that commit's
+own patch: `--amend HEAD~2` sees only the `HEAD~2` changes, never the
+`HEAD~1+HEAD~2` range. `HEAD` is amended in place; older commits are reworded
+with an interactive rebase, so the working tree must be clean and no
+merge, cherry-pick, revert, or rebase may be in progress. Merge commits and
+the root commit are refused.
 
 ## Operation-aware generation
 
