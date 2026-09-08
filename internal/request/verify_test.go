@@ -1,8 +1,13 @@
 package request
 
 import (
+	"context"
+	"iter"
 	"strings"
 	"testing"
+
+	"google.golang.org/adk/model"
+	"google.golang.org/genai"
 )
 
 func findingCodesForTest(fs []Finding) []string {
@@ -47,5 +52,69 @@ func TestVerifyMessage(t *testing.T) {
 				t.Errorf("VerifyMessage codes = [%s], want [%s]", got, want)
 			}
 		})
+	}
+}
+
+// scriptLLM yields canned responses in order, recording call count.
+type scriptLLM struct {
+	name      string
+	responses []string
+	calls     int
+}
+
+func (m *scriptLLM) Name() string { return m.name }
+
+func (m *scriptLLM) GenerateContent(
+	_ context.Context, _ *model.LLMRequest, _ bool,
+) iter.Seq2[*model.LLMResponse, error] {
+	m.calls++
+
+	text := m.responses[min(m.calls-1, len(m.responses)-1)]
+
+	return func(yield func(*model.LLMResponse, error) bool) {
+		yield(&model.LLMResponse{Content: genai.NewContentFromText(text, "model")}, nil)
+	}
+}
+
+func TestGenerate_RegeneratesOnFindings(t *testing.T) {
+	t.Parallel()
+
+	diff := "diff --git a/main.go b/main.go\n+++ b/main.go\n+package main\n"
+	llm := &scriptLLM{name: "s", responses: []string{
+		"fix: leak in other.go",
+		"fix: leak in main.go",
+	}}
+	client := NewClientWithGenerator(llm, "m")
+
+	got, err := client.GenerateCommitMessageWithContent(context.Background(), diff, "",
+		DetailStandard, "", "", "", defaultWrapLine)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	if llm.calls != 2 {
+		t.Errorf("calls = %d, want 2 (initial + 1 regeneration)", llm.calls)
+	}
+	if !strings.Contains(got, "main.go") {
+		t.Errorf("result = %q, want the regenerated grounded message", got)
+	}
+}
+
+func TestGenerate_ReturnsLastOnPersistentFindings(t *testing.T) {
+	t.Parallel()
+
+	diff := "diff --git a/main.go b/main.go\n+++ b/main.go\n+package main\n"
+	llm := &scriptLLM{name: "s", responses: []string{"fix: leak in other.go"}}
+	client := NewClientWithGenerator(llm, "m")
+
+	got, err := client.GenerateCommitMessageWithContent(context.Background(), diff, "",
+		DetailStandard, "", "", "", defaultWrapLine)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	if llm.calls != maxVerifyAttempts {
+		t.Errorf("calls = %d, want %d (bounded, then serve last)", llm.calls, maxVerifyAttempts)
+	}
+	if got == "" {
+		t.Error("result is empty, want last output served despite findings")
 	}
 }

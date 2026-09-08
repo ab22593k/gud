@@ -385,11 +385,12 @@ func TestOracle_Comparable_ModelNameMatchesConfigured(t *testing.T) {
 	}
 }
 
-// TestOracle_Claims_TemperatureIsZero verifies deterministic decoding: the
-// request config must pin Temperature to 0 so identical inputs produce
-// identical outputs (judge-temperature-0 principle). A nil Temperature would
-// silently fall back to the API default (~1.0, non-deterministic).
-func TestOracle_Claims_TemperatureIsZero(t *testing.T) {
+// TestOracle_Claims_NoDeprecatedSamplingParams verifies we never send
+// temperature/topK/topP: those sampling parameters are deprecated and ignored
+// by current Gemini models, and newest models reject requests carrying them
+// (HTTP 400). Determinism comes from system-prompt rules plus the
+// verify-then-regenerate loop, never from sampling knobs.
+func TestOracle_Claims_NoDeprecatedSamplingParams(t *testing.T) {
 	t.Parallel()
 
 	capture := &captureRequestLLM{name: "fake-llm"}
@@ -406,12 +407,15 @@ func TestOracle_Claims_TemperatureIsZero(t *testing.T) {
 		t.Fatal("LLM request or its Config was never captured")
 	}
 
-	temp := capture.captured.Config.Temperature
-	if temp == nil {
-		t.Fatal("req.Config.Temperature is nil, want explicit pointer to 0")
+	cfg := capture.captured.Config
+	if cfg.Temperature != nil {
+		t.Errorf("req.Config.Temperature = %v, want nil (deprecated, rejected by newest models)", *cfg.Temperature)
 	}
-	if *temp != 0 {
-		t.Errorf("req.Config.Temperature = %v, want 0 (deterministic decoding)", *temp)
+	if cfg.TopK != nil {
+		t.Errorf("req.Config.TopK = %v, want nil (deprecated)", *cfg.TopK)
+	}
+	if cfg.TopP != nil {
+		t.Errorf("req.Config.TopP = %v, want nil (deprecated)", *cfg.TopP)
 	}
 }
 

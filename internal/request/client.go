@@ -46,11 +46,6 @@ const (
 	defaultGenerateTimeout = 2 * time.Minute
 )
 
-// generationTemperature pins decoding to deterministic output: identical
-// diff+context inputs produce identical messages. Commit messages are
-// documentation, not creative writing, so there is no reason to sample.
-const generationTemperature float32 = 0
-
 // NewClient creates a new request client.
 // The caller is responsible for providing a context that can carry timeouts
 // and cancellation.
@@ -100,11 +95,6 @@ func NewClientWithGenerator(llm model.LLM, modelName string) *Client {
 	}
 }
 
-// float32Ptr returns a pointer to f for APIs taking optional scalars.
-func float32Ptr(f float32) *float32 {
-	return &f
-}
-
 // withDefaultTimeout returns a context with the given timeout if the caller's
 // context has no deadline. It preserves explicit caller deadlines so a
 // hook-mode or user-visible cancellation is never overridden by the default.
@@ -133,14 +123,14 @@ func (c *Client) GenerateCommitMessageWithContent(
 	}
 
 	slog.Debug("generating commit message", "model", c.model, "detailLevel", detailLevel, "diff_bytes", len(diff),
-		"ctx_bytes", len(commitContext), "temperature", generationTemperature)
+		"ctx_bytes", len(commitContext))
 
 	prompt := BuildCommitMessagePromptWithContent(diff, commitContext, detailLevel, hint, profile, systemContent, wrapLine)
 
 	req := &model.LLMRequest{
 		Model:    c.model,
 		Contents: genai.Text(prompt),
-		Config:   &genai.GenerateContentConfig{Temperature: float32Ptr(generationTemperature)},
+		Config:   &genai.GenerateContentConfig{},
 	}
 
 	ctx, cancel := withDefaultTimeout(ctx, defaultGenerateTimeout)
@@ -148,16 +138,55 @@ func (c *Client) GenerateCommitMessageWithContent(
 
 	tm := obs.Start("model.generate")
 
-	result, err := generateWithRetry(ctx, c, req)
+	result, err := generateVerified(ctx, c, req, diff, wrapLine)
 
 	tm.Done("model", c.model, "ok", err == nil)
 
 	if err != nil {
-		return "", fmt.Errorf("failed to generate content: %w", err)
+		return "", err
 	}
 
-	if result == "" {
-		return "", errors.New("generated message is empty")
+	return result, nil
+}
+
+// maxVerifyAttempts bounds verify-then-regenerate: 1 initial generation plus
+// at most 1 regeneration. Heuristic findings never fail the call — the last
+// output is always served — so this costs at most one extra call.
+const maxVerifyAttempts = 2
+
+// generateVerified generates a message and checks it against the diff,
+// regenerating when verification fails. Transport errors and empty outputs
+// return immediately with the historical error messages; persistent heuristic
+// findings serve the last output.
+func generateVerified(
+	ctx context.Context, c *Client, req *model.LLMRequest, diff string, wrapLine int,
+) (string, error) {
+	var result string
+
+	for attempt := 1; attempt <= maxVerifyAttempts; attempt++ {
+		var err error
+
+		result, err = generateWithRetry(ctx, c, req)
+		if err != nil {
+			return "", fmt.Errorf("failed to generate content: %w", err)
+		}
+
+		if result == "" {
+			return "", errors.New("generated message is empty")
+		}
+
+		findings := VerifyMessage(result, diff, wrapLine)
+		if len(findings) == 0 {
+			return result, nil
+		}
+
+		slog.Debug("message verification failed, regenerating",
+			"attempt", attempt, "findings", findingCodes(findings))
+
+		if attempt == maxVerifyAttempts {
+			slog.Debug("message verification still failing, serving last output",
+				"findings", findingCodes(findings))
+		}
 	}
 
 	return result, nil
