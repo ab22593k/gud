@@ -385,7 +385,38 @@ func TestOracle_Comparable_ModelNameMatchesConfigured(t *testing.T) {
 	}
 }
 
-// TestOracle_Claims_DefaultModelIsUsedWhenEmpty verifies that an empty model
+// TestOracle_Claims_TemperatureIsZero verifies deterministic decoding: the
+// request config must pin Temperature to 0 so identical inputs produce
+// identical outputs (judge-temperature-0 principle). A nil Temperature would
+// silently fall back to the API default (~1.0, non-deterministic).
+func TestOracle_Claims_TemperatureIsZero(t *testing.T) {
+	t.Parallel()
+
+	capture := &captureRequestLLM{name: "fake-llm"}
+	client := NewClientWithGenerator(capture, "gemini-flash-latest")
+
+	_, err := client.GenerateCommitMessage(context.Background(),
+		"diff --git a/main.go b/main.go", "",
+		DetailStandard, "", "")
+	if err != nil {
+		t.Fatalf("GenerateCommitMessage: %v", err)
+	}
+
+	if capture.captured == nil || capture.captured.Config == nil {
+		t.Fatal("LLM request or its Config was never captured")
+	}
+
+	temp := capture.captured.Config.Temperature
+	if temp == nil {
+		t.Fatal("req.Config.Temperature is nil, want explicit pointer to 0")
+	}
+	if *temp != 0 {
+		t.Errorf("req.Config.Temperature = %v, want 0 (deterministic decoding)", *temp)
+	}
+}
+
+// TestOracle_Claims_DefaultModelIsUsedWhenEmpty verifies that an empty model}
+
 // string in config defaults to the project constant, and that the default is
 // consistently applied to both the API call and the trailer.
 func TestOracle_Claims_DefaultModelIsUsedWhenEmpty(t *testing.T) {

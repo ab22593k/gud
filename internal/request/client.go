@@ -46,6 +46,11 @@ const (
 	defaultGenerateTimeout = 2 * time.Minute
 )
 
+// generationTemperature pins decoding to deterministic output: identical
+// diff+context inputs produce identical messages. Commit messages are
+// documentation, not creative writing, so there is no reason to sample.
+const generationTemperature float32 = 0
+
 // NewClient creates a new request client.
 // The caller is responsible for providing a context that can carry timeouts
 // and cancellation.
@@ -95,6 +100,11 @@ func NewClientWithGenerator(llm model.LLM, modelName string) *Client {
 	}
 }
 
+// float32Ptr returns a pointer to f for APIs taking optional scalars.
+func float32Ptr(f float32) *float32 {
+	return &f
+}
+
 // withDefaultTimeout returns a context with the given timeout if the caller's
 // context has no deadline. It preserves explicit caller deadlines so a
 // hook-mode or user-visible cancellation is never overridden by the default.
@@ -123,14 +133,14 @@ func (c *Client) GenerateCommitMessageWithContent(
 	}
 
 	slog.Debug("generating commit message", "model", c.model, "detailLevel", detailLevel, "diff_bytes", len(diff),
-		"ctx_bytes", len(commitContext))
+		"ctx_bytes", len(commitContext), "temperature", generationTemperature)
 
 	prompt := BuildCommitMessagePromptWithContent(diff, commitContext, detailLevel, hint, profile, systemContent, wrapLine)
 
 	req := &model.LLMRequest{
 		Model:    c.model,
 		Contents: genai.Text(prompt),
-		Config:   &genai.GenerateContentConfig{},
+		Config:   &genai.GenerateContentConfig{Temperature: float32Ptr(generationTemperature)},
 	}
 
 	ctx, cancel := withDefaultTimeout(ctx, defaultGenerateTimeout)
