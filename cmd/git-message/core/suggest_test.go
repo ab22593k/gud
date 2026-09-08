@@ -109,10 +109,10 @@ func TestHandleProfileSelection_DispatchPaths(t *testing.T) {
 
 // TestHandleProfileSelection_AppliesSelectedProfile verifies that a valid
 // numeric selection applies the profile to the app config and persists it
-// in gud.json in the working directory.
+// in gud.json in the caller-provided working directory.
 //
-// Not parallel: applySelectedProfile resolves gud.json's location from the
-// process CWD, so the test must chdir exclusively.
+// Not parallel: it swaps the package-level profileManager; all profileManager
+// swap sites in this package are sequential for the same reason.
 func TestHandleProfileSelection_AppliesSelectedProfile(t *testing.T) {
 	orig := profileManager
 
@@ -127,7 +127,6 @@ func TestHandleProfileSelection_AppliesSelectedProfile(t *testing.T) {
 	}
 
 	workDir := t.TempDir()
-	t.Chdir(workDir)
 
 	var buf bytes.Buffer
 

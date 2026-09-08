@@ -139,13 +139,17 @@ func handleProfileSelection(ctx context.Context, app *AppContext, out io.Writer,
 
 		selected := suggestions[idx-1]
 
-		return applySelectedProfile(ctx, app, out, selected)
+		return applySelectedProfile(ctx, app, out, cwd, selected)
 	}
 }
 
 // applySelectedProfile caches the profile, updates app config, and writes
-// gud.json in the working directory so the selection persists across invocations.
-func applySelectedProfile(ctx context.Context, app *AppContext, out io.Writer, entry profile.CatalogEntry) error {
+// gud.json in the given directory so the selection persists across
+// invocations. cwd is injected by the caller (the process working directory
+// in production) so this function stays independent of process state.
+func applySelectedProfile(ctx context.Context, app *AppContext, out io.Writer, cwd string,
+	entry profile.CatalogEntry,
+) error {
 	// Download and cache if not already cached
 	if !profileManager.IsCached(entry.Slug) {
 		_, _ = fmt.Fprintf(out, "Downloading profile %q...\n", entry.Slug)
@@ -154,13 +158,6 @@ func applySelectedProfile(ctx context.Context, app *AppContext, out io.Writer, e
 		}
 
 		_, _ = fmt.Fprintf(out, "Profile %q saved.\n", entry.Slug)
-	}
-
-	// Write gud.json in CWD (where the mediator's CWDProvider looks for it).
-	// This ensures the selection persists across invocations.
-	cwd, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("get cwd: %w", err)
 	}
 
 	projCfg := config.Config{
@@ -183,7 +180,7 @@ func applySelectedProfile(ctx context.Context, app *AppContext, out io.Writer, e
 //
 // G117: marshaling APIKey is safe — writing to a local config file.
 //
-//nolint:gosec // G304: path is constructed from os.Getwd(), not user input.
+//nolint:gosec // G304: path is constructed from the caller-provided directory, not user input.
 func writeProjectConfig(dir string, cfg config.Config) error {
 	path := filepath.Join(dir, "gud.json")
 
