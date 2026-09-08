@@ -138,3 +138,50 @@ func TestAppendDeletedContext(t *testing.T) {
 		})
 	}
 }
+
+// TestJoinContexts verifies the join used to assemble the final prompt
+// context from staged-diff and repo/history context sections.
+func TestJoinContexts(t *testing.T) {
+	tests := []struct {
+		name string
+		a    string
+		b    string
+		want string
+	}{
+		{
+			name: "both empty yields empty",
+			a:    "",
+			b:    "",
+			want: "",
+		},
+		{
+			name: "empty a returns b",
+			a:    "",
+			b:    "repo context",
+			want: "repo context",
+		},
+		{
+			name: "empty b returns a",
+			a:    "staged diff",
+			b:    "",
+			want: "staged diff",
+		},
+		{
+			name: "both non-empty joined by blank line",
+			a:    "staged diff",
+			b:    "repo context",
+			want: "staged diff\n\nrepo context",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := joinContexts(tt.a, tt.b)
+			if got != tt.want {
+				t.Errorf("joinContexts():\n  got:  %q\n  want: %q", got, tt.want)
+			}
+		})
+	}
+}
