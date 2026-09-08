@@ -80,10 +80,7 @@ func runGenerate(cmd *cobra.Command, _ []string) error {
 
 	units := git.ExtractCodeUnits(diff)
 
-	promptContext := buildRepoContext(ctx, app)
-	promptContext = joinContexts(promptContext, buildHistoryContext(ctx, app, diff))
-	promptContext = joinContexts(promptContext, buildSubmoduleContext(ctx, app, diff))
-	promptContext = joinContexts(promptContext, buildOperationContext(op))
+	promptContext := buildPromptContext(ctx, app, diff, op)
 
 	// When git is mid-operation it has already prepared the message that
 	// preserves (merge, cherry-pick, revert, rebase, fixup) or combines
@@ -96,6 +93,18 @@ func runGenerate(cmd *cobra.Command, _ []string) error {
 	}
 
 	return interactiveCommit(ctx, cmd, app, diff, promptContext, units, op, prepared)
+}
+
+// buildPromptContext assembles the auxiliary prompt context: repo overview,
+// commit history, submodule state, and the in-progress git operation, joined
+// by blank lines so the model can read them as separate sections.
+func buildPromptContext(ctx context.Context, app *AppContext, diff string, op git.Operation) string {
+	promptContext := buildRepoContext(ctx, app)
+	promptContext = joinContexts(promptContext, buildHistoryContext(ctx, app, diff))
+	promptContext = joinContexts(promptContext, buildSubmoduleContext(ctx, app, diff))
+	promptContext = joinContexts(promptContext, buildOperationContext(op))
+
+	return promptContext
 }
 
 // buildOperationContext returns a prompt fragment describing the in-progress
