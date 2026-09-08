@@ -121,3 +121,48 @@ func TestUninstallHook(t *testing.T) {
 		t.Errorf("hook file should be removed")
 	}
 }
+
+// TestGetHookDir verifies the hook directory selection: the repo-local
+// .git/hooks, and the global directory under gud's XDG config home
+// (~/.config/gud/hooks), which matches the global config location.
+func TestGetHookDir(t *testing.T) {
+	t.Parallel()
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("failed to get home directory: %v", err)
+	}
+
+	tests := []struct {
+		name    string
+		global  bool
+		want    string
+		wantErr bool
+	}{
+		{
+			name:   "local returns .git/hooks",
+			global: false,
+			want:   filepath.Join(".git", "hooks"),
+		},
+		{
+			name:   "global returns ~/.config/gud/hooks",
+			global: true,
+			want:   filepath.Join(home, ".config", "gud", "hooks"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := GetHookDir(tt.global)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("GetHookDir(global=%v) error = %v, wantErr %v", tt.global, err, tt.wantErr)
+			}
+
+			if got != tt.want {
+				t.Errorf("GetHookDir(global=%v) = %q, want %q", tt.global, got, tt.want)
+			}
+		})
+	}
+}

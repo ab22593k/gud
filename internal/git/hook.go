@@ -63,7 +63,8 @@ func UninstallHook(hookDir string, hookType HookType) error {
 }
 
 // GetHookDir returns the appropriate hooks directory.
-// If global is true, returns ~/.git-hooks/, otherwise .git/hooks/.
+// If global is true, returns ~/.config/gud/hooks/ (gud's XDG config home,
+// matching the global config location), otherwise .git/hooks/.
 func GetHookDir(global bool) (string, error) {
 	if global {
 		home, err := os.UserHomeDir()
@@ -71,7 +72,7 @@ func GetHookDir(global bool) (string, error) {
 			return "", fmt.Errorf("failed to get home directory: %w", err)
 		}
 
-		return filepath.Join(home, ".git-hooks"), nil
+		return filepath.Join(home, ".config", "gud", "hooks"), nil
 	}
 
 	return filepath.Join(".git", "hooks"), nil
