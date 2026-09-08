@@ -35,7 +35,31 @@ Invoked as 'git message'; 'gud message' is the same command.`,
 func Execute() error {
 	setupLogLevel()
 
+	rootCmd.SetArgs(normalizeAmendArgs(os.Args[1:]))
+
 	return rootCmd.Execute()
+}
+
+// normalizeAmendArgs rewrites a space-separated "--amend <rev>" pair into
+// "--amend=<rev>". Cobra rejects bare positionals on a command with
+// subcommands ("unknown command"), so without this the space form never
+// reaches RunE. A following token starting with "-" is left alone (bare
+// --amend targets HEAD via NoOptDefVal).
+func normalizeAmendArgs(args []string) []string {
+	out := make([]string, 0, len(args))
+
+	for i := 0; i < len(args); i++ {
+		if args[i] == amendFlag && i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
+			out = append(out, amendFlag+"="+args[i+1])
+			i++
+
+			continue
+		}
+
+		out = append(out, args[i])
+	}
+
+	return out
 }
 
 const (

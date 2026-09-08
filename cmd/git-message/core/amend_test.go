@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"os/exec"
+	"slices"
 	"testing"
 
 	"gud/internal/git"
@@ -21,11 +22,11 @@ func TestAmendTarget(t *testing.T) {
 		wantAmend  bool
 	}{
 		{"unset", []string{}, nil, "", false},
-		{"bare flag means HEAD", []string{"--amend"}, nil, "HEAD", true},
-		{"space form", []string{"--amend"}, []string{"HEAD~2"}, "HEAD~2", true},
-		{"equals form", []string{"--amend=HEAD~2"}, nil, "HEAD~2", true},
-		{"explicit value wins over positional", []string{"--amend=HEAD~1"}, []string{"HEAD~2"}, "HEAD~1", true},
-		{"sha rev", []string{"--amend=abc1234"}, nil, "abc1234", true},
+		{"bare flag means HEAD", []string{amendFlag}, nil, "HEAD", true},
+		{"space form", []string{amendFlag}, []string{"HEAD~2"}, "HEAD~2", true},
+		{"equals form", []string{amendFlag + "=HEAD~2"}, nil, "HEAD~2", true},
+		{"explicit value wins over positional", []string{amendFlag + "=HEAD~1"}, []string{"HEAD~2"}, "HEAD~1", true},
+		{"sha rev", []string{amendFlag + "=abc1234"}, nil, "abc1234", true},
 	}
 
 	for _, tc := range cases {
@@ -90,5 +91,32 @@ func TestIsHeadCommit(t *testing.T) {
 
 	if isHeadCommit(ctx, "0000000000000000000000000000000000000000") {
 		t.Error("isHeadCommit(zero sha)=true, want false")
+	}
+}
+
+func TestNormalizeAmendArgs(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		in   []string
+		want []string
+	}{
+		{"no amend", []string{"--profile", "x"}, []string{"--profile", "x"}},
+		{"bare last", []string{amendFlag}, []string{amendFlag}},
+		{"space form joined", []string{amendFlag, "HEAD~2"}, []string{amendFlag + "=HEAD~2"}},
+		{"equals untouched", []string{amendFlag + "=HEAD~2"}, []string{amendFlag + "=HEAD~2"}},
+		{"flag next stays bare", []string{amendFlag, "--profile", "x"}, []string{amendFlag, "--profile", "x"}},
+		{"empty", nil, []string{}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := normalizeAmendArgs(tc.in); !slices.Equal(got, tc.want) {
+				t.Errorf("normalizeAmendArgs(%v)=%v, want %v", tc.in, got, tc.want)
+			}
+		})
 	}
 }
