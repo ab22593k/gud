@@ -15,9 +15,10 @@ func TestBuildPromptContextParallel_PreservesOrderAndDegrades(t *testing.T) {
 	// not block. Timeout the whole call at 10s to catch sequential hangs.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+
 	app := &AppContext{}
 	got := buildPromptContextParallel(ctx, app, "diff --git a/x", git.OperationNone)
-	// OperationNone (0) contributes "", repo/history/submodule degrade to "" in
+	// git.OperationNone ("") contributes "", repo/history/submodule degrade to "" in
 	// temp env without repo — result must be "" and must return fast.
 	if strings.Contains(got, "\x00") {
 		t.Fatalf("buildPromptContextParallel contains NUL, got %q", got)
@@ -31,6 +32,7 @@ func TestBuildPromptContextParallel_PreservesOrderAndDegrades(t *testing.T) {
 
 func TestJoinContexts_Order(t *testing.T) {
 	t.Parallel()
+
 	got := joinContexts(joinContexts("a", "b"), "c")
 	if got != "a\n\nb\n\nc" {
 		t.Fatalf("joinContexts order=%q, want a,b,c", got)
