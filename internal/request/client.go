@@ -138,7 +138,7 @@ func (c *Client) GenerateCommitMessageWithContent(
 
 	tm := obs.Start("model.generate")
 
-	result, err := generateContent(ctx, c, req)
+	result, err := generateWithRetry(ctx, c, req)
 
 	tm.Done("model", c.model, "ok", err == nil)
 
@@ -151,6 +151,51 @@ func (c *Client) GenerateCommitMessageWithContent(
 	}
 
 	return result, nil
+}
+
+// isTransientErr reports whether err looks retryable: timeouts, 429, 5xx,
+// or unavailable/connection-reset phrases. Auth errors (401/403) and empty
+// responses are not transient.
+func isTransientErr(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	msg := strings.ToLower(err.Error())
+	for _, s := range []string{
+		"timeout", "deadline exceeded", "unavailable", "connection reset",
+		"connection refused", "429", "500", "502", "503", "504",
+	} {
+		if strings.Contains(msg, s) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// generateWithRetry calls generateContent with up to 2 retries on transient
+// errors (200ms then 500ms backoff). It respects ctx cancellation.
+func generateWithRetry(ctx context.Context, c *Client, req *model.LLMRequest) (string, error) {
+	backoffs := []time.Duration{200 * time.Millisecond, 500 * time.Millisecond}
+
+	var result string
+
+	var err error
+
+	for attempt := 0; ; attempt++ {
+		result, err = generateContent(ctx, c, req)
+		if err == nil || ctx.Err() != nil || !isTransientErr(err) || attempt >= len(backoffs) {
+			return result, err
+		}
+
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-time.After(backoffs[attempt]):
+			slog.Debug("retrying model call", "attempt", attempt+1, "error", err)
+		}
+	}
 }
 
 func generateContent(ctx context.Context, c *Client, req *model.LLMRequest) (string, error) {

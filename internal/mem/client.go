@@ -142,6 +142,11 @@ func (db *DB) EnsureSchema(ctx context.Context) error {
 		return ErrHelixUnavailable
 	}
 
+	sctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	ctx = sctx
+
 	indexes := []*helix.Traversal{
 		// Tenant-partitioned text indexes for the Commit label.
 		helix.G().CreateTextIndexNodes("Commit", "message", DefaultTenantProperty),

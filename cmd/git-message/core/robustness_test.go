@@ -53,3 +53,22 @@ func TestTimedBuildPromptContext_EmitsNoError(t *testing.T) {
 		t.Fatalf("context contains NUL: %q", got)
 	}
 }
+
+func TestHookTimeout_BoundsGeneration(t *testing.T) {
+	t.Parallel()
+
+	if hookTimeout != 2*time.Minute {
+		t.Fatalf("hookTimeout=%v, want 2m", hookTimeout)
+	}
+}
+
+func TestHookDiff_PreservesFullDiff(t *testing.T) {
+	t.Parallel()
+
+	big := strings.Repeat("x", 200000)
+	got := appendDeletedContext(big, "")
+
+	if got != big {
+		t.Fatalf("appendDeletedContext len=%d, want full diff len=%d", len(got), len(big))
+	}
+}
