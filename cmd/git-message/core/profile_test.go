@@ -174,6 +174,45 @@ func TestPrintProfileSummary(t *testing.T) {
 	}
 }
 
+// TestFindProfession verifies slug lookup over the remote catalog: exact
+// match, miss, empty catalog, and first-match-wins on duplicate slugs
+// (documenting the linear-scan contract).
+func TestFindProfession(t *testing.T) {
+	t.Parallel()
+
+	entries := []profile.CatalogEntry{
+		{Slug: "astro", Profession: "Astrophysicist"},
+		{Slug: "bio", Profession: "Molecular Biologist"},
+		{Slug: "astro", Profession: "First Astro Wins"},
+	}
+
+	tests := []struct {
+		slug    string
+		entries []profile.CatalogEntry
+		want    string
+	}{
+		{slug: "astro", entries: entries, want: "Astrophysicist"},
+		{slug: "bio", entries: entries, want: "Molecular Biologist"},
+		{slug: "missing", entries: entries, want: ""},
+		{slug: "astro", entries: nil, want: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.slug, func(t *testing.T) {
+			t.Parallel()
+
+			got := findProfession(tt.slug, tt.entries)
+			if got != tt.want {
+				t.Errorf("findProfession(%q) = %q, want %q", tt.slug, got, tt.want)
+			}
+		})
+	}
+
+	if got := findProfession("astro", entries); got != "Astrophysicist" {
+		t.Errorf("duplicate slugs: first entry must win, got %q", got)
+	}
+}
+
 // TestWriteCatalogEntry verifies the single-entry rendering contract:
 // a four-space indent, the slug left-aligned in a 50-column field, and the
 // summary truncated to 70 characters via truncate.

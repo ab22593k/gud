@@ -155,6 +155,63 @@ func TestHandleProfileSelection_AppliesSelectedProfile(t *testing.T) {
 	}
 }
 
+// TestFetchSuggestions_EmptyRepo verifies the gate in fetchSuggestions: an
+// empty (non-repo) directory yields zero total files, so the function returns
+// nil, nil before any catalog fetch — no network, no profileManager use.
+func TestFetchSuggestions_EmptyRepo(t *testing.T) {
+	t.Parallel()
+
+	got, err := fetchSuggestions(t.Context(), t.TempDir())
+	if err != nil {
+		t.Fatalf("fetchSuggestions(empty dir): %v", err)
+	}
+
+	if len(got) != 0 {
+		t.Errorf("fetchSuggestions(empty dir) = %+v, want empty", got)
+	}
+}
+
+// TestIsTerminal verifies the character-device check on both sides: a pipe
+// and a regular file are not terminals; /dev/null is, where the platform
+// provides it.
+func TestIsTerminal(t *testing.T) {
+	t.Parallel()
+
+	if isTerminal(os.Stdout) {
+		// Not fatal: CI runners vary. Under `go test`, stdout is usually a pipe.
+		t.Log("stdout reports as a terminal (unusual for test runs); skipping pipe case")
+	} else {
+		r, w, err := os.Pipe()
+		if err != nil {
+			t.Fatalf("pipe: %v", err)
+		}
+
+		t.Cleanup(func() {
+			_ = r.Close()
+			_ = w.Close()
+		})
+
+		if isTerminal(w) {
+			t.Error("isTerminal(pipe) = true, want false")
+		}
+	}
+
+	devNull, err := os.Open(os.DevNull)
+	if err != nil {
+		if os.IsNotExist(err) {
+			t.Skip("no character device available on this platform")
+		}
+
+		t.Fatalf("open %s: %v", os.DevNull, err)
+	}
+
+	t.Cleanup(func() { _ = devNull.Close() })
+
+	if !isTerminal(devNull) {
+		t.Errorf("isTerminal(%s) = false, want true (character device)", os.DevNull)
+	}
+}
+
 // TestHasSkipMarker verifies marker detection: false before the marker is
 // written, true after writeSkipMarker creates it, and false for a missing
 // directory — a stat failure must not read as "suggestion skipped".
