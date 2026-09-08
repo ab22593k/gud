@@ -4,6 +4,7 @@
 package detect
 
 import (
+	"context"
 	"fmt"
 	"io/fs"
 	"os"
@@ -235,6 +236,58 @@ func ComputeStats(repoRoot string) (*RepoStats, error) {
 	})
 	if err != nil {
 		return &RepoStats{FilesByExtension: make(map[string]int)}, err
+	}
+
+	return stats, nil
+}
+
+// MaxFilesForStats caps files counted by ComputeStatsWithContext so a huge
+// monorepo cannot blow memory or prompt size.
+const MaxFilesForStats = 20000
+
+// ComputeStatsWithContext walks repoRoot like ComputeStats but aborts early
+// on ctx cancellation and stops counting after MaxFilesForStats files.
+func ComputeStatsWithContext(ctx context.Context, repoRoot string) (*RepoStats, error) {
+	stats := &RepoStats{FilesByExtension: make(map[string]int)}
+	matcher := loadGitignore(repoRoot)
+
+	err := filepath.WalkDir(repoRoot, func(p string, d fs.DirEntry, err error) error {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
+		if err != nil {
+			return nil //nolint:nilerr // documented: unreadable paths are skipped silently
+		}
+
+		if d.IsDir() {
+			if d.Name() == ".git" {
+				return filepath.SkipDir
+			}
+
+			if p != repoRoot && matcher.ignored(relPath(repoRoot, p)) {
+				return filepath.SkipDir
+			}
+
+			return nil
+		}
+
+		if stats.TotalFiles >= MaxFilesForStats {
+			return filepath.SkipAll
+		}
+
+		ext := strings.ToLower(filepath.Ext(p))
+		if ext == "" {
+			ext = "(no extension)"
+		}
+
+		stats.FilesByExtension[ext]++
+		stats.TotalFiles++
+
+		return nil
+	})
+	if err != nil {
+		return stats, err
 	}
 
 	return stats, nil
