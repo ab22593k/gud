@@ -34,6 +34,8 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	defer func() { _ = app.Close() }()
+
 	if rev, ok := amendTarget(cmd, args); ok {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()

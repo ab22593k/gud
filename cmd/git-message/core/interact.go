@@ -341,6 +341,6 @@ func persistToHelixDB(ctx context.Context, app *AppContext, diff, hash, message 
 
 	var rawResp map[string]any
 	if err := db.Exec(ctx, query, &rawResp); err != nil {
-		slog.Debug("helixdb: failed to persist commit", "error", err)
+		slog.Warn("helixdb: failed to persist commit", "error", err)
 	}
 }

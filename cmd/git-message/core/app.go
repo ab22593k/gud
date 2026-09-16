@@ -122,6 +122,26 @@ func (a *AppContext) HelixDB() *mem.DB {
 	return a.helixDB
 }
 
+// Close releases the embedded HelixDB handle, flushing pending writes and
+// releasing the on-disk lock. It is nil-safe and idempotent: a nil AppContext,
+// an AppContext without a DB, and repeated calls are all no-ops returning nil.
+// Callers that created the AppContext via NewAppContext must defer Close right
+// after creation so every return path after InitHelixDB releases the handle.
+func (a *AppContext) Close() error {
+	if a == nil {
+		return nil
+	}
+
+	db := a.helixDB
+	a.helixDB = nil
+
+	if db == nil {
+		return nil
+	}
+
+	return db.Close()
+}
+
 // InitClient creates the request client from the resolved configuration.
 // Must be called at most once with a context that supports cancellation.
 func (a *AppContext) InitClient(ctx context.Context) error {
@@ -144,6 +164,11 @@ func (a *AppContext) InitClient(ctx context.Context) error {
 // first invocation migrates in one batched transaction and records a
 // version marker; steady-state invocations hit the marker and pay zero
 // HelixDB transactions.
+//
+// The handle is per-process against a shared on-disk store. A second
+// concurrent process opening the same store may fail to acquire it and
+// degrades to disabled mode via NewDB; Close flushes and releases the lock
+// promptly, so callers must defer AppContext.Close.
 func (a *AppContext) InitHelixDB(ctx context.Context) error {
 	db := mem.NewDB(mem.Options{Enabled: true})
 
@@ -156,6 +181,8 @@ func (a *AppContext) InitHelixDB(ctx context.Context) error {
 	if !db.IsAvailable(ctx) {
 		slog.Debug("helixdb: embedded not available, degraded mode", "dir", db.DataDir())
 
+		_ = db.Close()
+
 		return nil
 	}
 
@@ -163,6 +190,8 @@ func (a *AppContext) InitHelixDB(ctx context.Context) error {
 	// once, steady-state invocations hit the marker with zero transactions,
 	// so a pre-existing database never misses the indexes.
 	if err := db.EnsureSchema(ctx); err != nil {
+		_ = db.Close()
+
 		return fmt.Errorf("helixdb schema: %w", err)
 	}
 

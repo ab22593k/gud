@@ -50,6 +50,11 @@ type Options struct {
 // DB wraps a helix.Client opened against an embedded database with
 // lifecycle management and degraded-mode support. DB must always be
 // used as a pointer.
+//
+// The handle is per-process against a shared on-disk store. A second
+// concurrent process opening the same DataDir/Database may fail to acquire
+// the store and degrades to disabled via NewDB; Close flushes pending writes
+// and releases the lock promptly, so owners must Close exactly once per open.
 type DB struct {
 	client   *helix.Client
 	dataDir  string
@@ -60,8 +65,9 @@ type DB struct {
 // NewDB opens an embedded HelixDB at DataDir/Database. If opts.Enabled
 // is false the client is nil and all operations return
 // ErrHelixUnavailable. When the embedded runtime is unavailable (standard
-// Go module without native bindings) the DB is disabled so callers
-// degrade gracefully.
+// Go module without native bindings) or a concurrent process holds the
+// store, the DB degrades to disabled so callers proceed without memory
+// instead of failing the commit.
 func NewDB(opts Options) *DB {
 	dataDir := opts.DataDir
 	if dataDir == "" {
@@ -112,7 +118,8 @@ func (db *DB) IsAvailable(_ context.Context) bool {
 	return db.enabled && db.client != nil
 }
 
-// Close releases the embedded handle. Nil-safe; degraded DBs are a no-op.
+// Close releases the embedded handle, flushing pending writes and freeing
+// the on-disk lock for the next invocation. Nil-safe; degraded DBs are a no-op.
 func (db *DB) Close() error {
 	if db == nil || db.client == nil {
 		return nil
