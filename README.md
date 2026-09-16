@@ -75,6 +75,11 @@ always on and uses an embedded HelixDB database in the OS user cache
 (`~/.cache/gud/helixdb`), so a single database is reused across all your
 projects with no server or Docker setup. Repos are
 isolated per `repo_path` (the tenant key), so project data never mixes.
+The tenant key is the absolute repo root from `git rev-parse --show-toplevel`
+used verbatim: renaming, moving, or symlink-aliasing a checkout creates a
+distinct tenant whose memory starts empty. Prompts never receive the absolute
+path — related-history scopes show `branch@basename` only, so home-directory
+and username segments stay local.
 
 ```bash
 git message

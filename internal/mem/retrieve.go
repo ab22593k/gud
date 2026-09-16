@@ -2,6 +2,7 @@ package mem
 
 import (
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -350,6 +351,11 @@ func extractResultItems(raw any) []any {
 
 // FormatContextRecords formats a set of CommitRecords as a human-readable
 // string for inclusion in the LLM prompt. Returns empty string if nil/empty.
+//
+// The bracketed scope shows branch and repo basename only. RepoPath doubles
+// as the Helix tenant key and is an absolute path that often contains the OS
+// username, so the full path must never reach the prompt; truncateAuthor
+// masking would otherwise be undone by the scope suffix.
 func FormatContextRecords(records []CommitRecord) string {
 	if len(records) == 0 {
 		return ""
@@ -359,11 +365,46 @@ func FormatContextRecords(records []CommitRecord) string {
 	b.WriteString("Related commit history (from HelixDB memory):\n")
 
 	for _, r := range records {
-		_, _ = fmt.Fprintf(&b, "  %s %s by %s [%s@%s]\n",
-			truncateSHA(r.SHA), r.Message, truncateAuthor(r.Author), r.Branch, r.RepoPath)
+		_, _ = fmt.Fprintf(&b, "  %s %s by %s [%s]\n",
+			truncateSHA(r.SHA), r.Message, truncateAuthor(r.Author), formatScope(r.Branch, r.RepoPath))
 	}
 
 	return b.String()
+}
+
+// formatScope builds the bracketed scope for LLM display from branch and repo
+// path, using only the repo basename. Empty inputs degrade gracefully: when
+// only one side is present it is shown alone, when both are empty the scope
+// is empty.
+func formatScope(branch, repoPath string) string {
+	repo := displayRepoName(repoPath)
+
+	switch {
+	case branch != "" && repo != "":
+		return branch + "@" + repo
+	case branch != "":
+		return branch
+	case repo != "":
+		return repo
+	default:
+		return ""
+	}
+}
+
+// displayRepoName returns the final path element for LLM display so absolute
+// paths (e.g. /home/alice/project) never leak home-directory or username
+// segments. It returns "" for empty or root-only inputs.
+func displayRepoName(p string) string {
+	if p == "" {
+		return ""
+	}
+
+	base := filepath.Base(p)
+	if base == "." || base == "/" || base == string(filepath.Separator) {
+		return ""
+	}
+
+	return base
 }
 
 // BuildMemoryContextQuery retrieves active (non-deleted, non-expired) Memory

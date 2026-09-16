@@ -283,6 +283,73 @@ func TestFormatContextRecords_NotEmpty(t *testing.T) {
 	}
 }
 
+func TestFormatContextRecords_HidesAbsolutePath(t *testing.T) {
+	records := []CommitRecord{
+		{
+			SHA: "abc123456789", Message: "feat: add login", Author: "Alice <alice@example.com>",
+			RepoPath: "/home/alice/secret-project", Branch: "main",
+		},
+	}
+
+	result := FormatContextRecords(records)
+
+	if strings.Contains(result, "/home/alice") {
+		t.Errorf("absolute path leaked into prompt context, got %q", result)
+	}
+
+	if strings.Contains(result, "alice@example.com") {
+		t.Errorf("full email leaked into prompt context, got %q", result)
+	}
+
+	if !strings.Contains(result, "main@secret-project") {
+		t.Errorf("expected basename scope 'main@secret-project', got %q", result)
+	}
+}
+
+func TestFormatScope(t *testing.T) {
+	tests := []struct {
+		name     string
+		branch   string
+		repoPath string
+		want     string
+	}{
+		{name: "branch and absolute path", branch: "main", repoPath: "/home/alice/project", want: "main@project"},
+		{name: "branch and bare name", branch: "main", repoPath: "/repo", want: "main@repo"},
+		{name: "branch only when repo empty", branch: "main", repoPath: "", want: "main"},
+		{name: "repo only when branch empty", branch: "", repoPath: "/home/alice/project", want: "project"},
+		{name: "empty when both empty", branch: "", repoPath: "", want: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := formatScope(tt.branch, tt.repoPath); got != tt.want {
+				t.Errorf("formatScope(%q, %q) = %q, want %q", tt.branch, tt.repoPath, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDisplayRepoName(t *testing.T) {
+	tests := []struct {
+		path string
+		want string
+	}{
+		{path: "/home/alice/secret-project", want: "secret-project"},
+		{path: "/repo", want: "repo"},
+		{path: "project", want: "project"},
+		{path: "", want: ""},
+		{path: "/", want: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			if got := displayRepoName(tt.path); got != tt.want {
+				t.Errorf("displayRepoName(%q) = %q, want %q", tt.path, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestBuildContextQuery_BranchFilter(t *testing.T) {
 	t.Parallel()
 

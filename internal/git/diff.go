@@ -81,6 +81,11 @@ func runGitConfig(ctx context.Context, key string) (string, error) {
 }
 
 // GetRepoRoot returns the absolute path to the git repository root.
+//
+// The returned string is the Helix tenant key (repo_path/tenantId): callers
+// must persist and query with this exact string. A rename, move, or
+// symlink alias of the checkout produces a different key and therefore a
+// separate tenant with no access to prior memory.
 func GetRepoRoot(ctx context.Context) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", "rev-parse", "--show-toplevel")
 

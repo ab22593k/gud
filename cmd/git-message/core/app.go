@@ -206,6 +206,10 @@ func (a *AppContext) InitHelixDB(ctx context.Context) error {
 // RepoRoot returns the absolute path to the git repository root, caching the
 // result so that repeated calls within the same invocation use the cached
 // value and avoid a redundant subprocess spawn.
+//
+// The value doubles as the Helix tenant key: persist and query paths must use
+// this exact string, as a renamed, moved, or symlink-aliased checkout yields
+// a distinct tenant with isolated memory.
 func (a *AppContext) RepoRoot(ctx context.Context) (string, error) {
 	if !a.repoRootOK {
 		a.repoRoot, a.repoRootErr = git.GetRepoRoot(ctx)

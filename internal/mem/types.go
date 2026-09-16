@@ -33,7 +33,12 @@ type CodeUnitRef struct {
 }
 
 // CommitData holds all data about a commit for persistence into HelixDB.
-// tenantId is set to repoPath to isolate commits by repository.
+// RepoPath is the absolute repo root (see git.GetRepoRoot) and doubles as
+// tenantId to isolate commits by repository. Key stability: the tenant key is
+// the exact RepoPath string used at persist time, so the same string must be
+// used at query time; renaming, moving, or symlink-aliasing the checkout
+// yields a distinct tenant and prior memory will not be found. LLM display
+// must use the repo basename (see formatScope), never the full RepoPath.
 type CommitData struct {
 	SHA            string
 	Message        string
