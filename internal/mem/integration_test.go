@@ -8,46 +8,33 @@ import (
 	"time"
 )
 
-const testPort = "2232"
-
-// TestMain is only responsible for the integration test binary.
-// Unit tests (Test functions without the Integration prefix) run
-// independently and are not affected by this file since Go test
-// only calls TestMain once per package.
-
-// startManagedContainer starts a HelixDB container via ContainerManager and returns cleanup.
-func startManagedContainer(t *testing.T) (*ContainerManager, *DB) {
+// startEmbeddedDB opens an isolated embedded database in a temp dir.
+// Skips when native bindings are unavailable or integration is not enabled.
+func startEmbeddedDB(t *testing.T) *DB {
 	t.Helper()
 
-	mgr := NewContainerManager("gud-helixdb-int", testPort)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
-	defer cancel()
-
-	url, err := mgr.EnsureRunning(ctx)
-	if err != nil {
-		_ = mgr.Stop(context.Background()) // best-effort teardown
-
-		t.Fatalf("EnsureRunning: %v", err)
-	}
-
-	db := NewDB(Options{BaseURL: url, Enabled: true})
-	if !db.Enabled() {
-		_ = mgr.Stop(context.Background()) // best-effort teardown
-
-		t.Fatal("DB not enabled after EnsureRunning")
-	}
-
-	return mgr, db
-}
-
-func TestIntegration_EnsureSchema(t *testing.T) {
 	if os.Getenv("RUN_HELIXDB_INTEGRATION") == "" {
 		t.Skip("set RUN_HELIXDB_INTEGRATION=1 to run")
 	}
 
-	mgr, db := startManagedContainer(t)
-	defer func() { _ = mgr.Stop(context.Background()) }() // best-effort teardown
+	db := NewDB(Options{DataDir: t.TempDir(), Database: "gud-test", Enabled: true})
+	if !db.Enabled() {
+		t.Skip("embedded native bindings unavailable")
+	}
+
+	t.Cleanup(func() { _ = db.Close() })
+
+	if err := db.EnsureSchema(context.Background()); err != nil {
+		_ = db.Close()
+
+		t.Fatalf("EnsureSchema failed: %v", err)
+	}
+
+	return db
+}
+
+func TestIntegration_EnsureSchema(t *testing.T) {
+	db := startEmbeddedDB(t)
 
 	ctx := context.Background()
 	if err := db.EnsureSchema(ctx); err != nil {
@@ -58,17 +45,9 @@ func TestIntegration_EnsureSchema(t *testing.T) {
 }
 
 func TestIntegration_PersistAndQueryCommit(t *testing.T) {
-	if os.Getenv("RUN_HELIXDB_INTEGRATION") == "" {
-		t.Skip("set RUN_HELIXDB_INTEGRATION=1 to run")
-	}
-
-	mgr, db := startManagedContainer(t)
-	defer func() { _ = mgr.Stop(context.Background()) }() // best-effort teardown
+	db := startEmbeddedDB(t)
 
 	ctx := context.Background()
-	if err := db.EnsureSchema(ctx); err != nil {
-		t.Fatalf("EnsureSchema failed: %v", err)
-	}
 
 	commit := CommitData{
 		SHA:            "abc123",
@@ -113,17 +92,9 @@ func TestIntegration_PersistAndQueryCommit(t *testing.T) {
 }
 
 func TestIntegration_AuthorStats(t *testing.T) {
-	if os.Getenv("RUN_HELIXDB_INTEGRATION") == "" {
-		t.Skip("set RUN_HELIXDB_INTEGRATION=1 to run")
-	}
-
-	mgr, db := startManagedContainer(t)
-	defer func() { _ = mgr.Stop(context.Background()) }() // best-effort teardown
+	db := startEmbeddedDB(t)
 
 	ctx := context.Background()
-	if err := db.EnsureSchema(ctx); err != nil {
-		t.Fatalf("EnsureSchema failed: %v", err)
-	}
 
 	for _, c := range []CommitData{
 		{
@@ -162,17 +133,9 @@ func TestIntegration_AuthorStats(t *testing.T) {
 }
 
 func TestIntegration_Trends(t *testing.T) {
-	if os.Getenv("RUN_HELIXDB_INTEGRATION") == "" {
-		t.Skip("set RUN_HELIXDB_INTEGRATION=1 to run")
-	}
-
-	mgr, db := startManagedContainer(t)
-	defer func() { _ = mgr.Stop(context.Background()) }() // best-effort teardown
+	db := startEmbeddedDB(t)
 
 	ctx := context.Background()
-	if err := db.EnsureSchema(ctx); err != nil {
-		t.Fatalf("EnsureSchema failed: %v", err)
-	}
 
 	now := time.Now()
 	for _, c := range []CommitData{
@@ -213,57 +176,4 @@ func TestIntegration_Trends(t *testing.T) {
 	}
 
 	t.Logf("trends:\n%s", output)
-}
-
-const containerMgrTestPort = "16970"
-
-func TestIntegration_ContainerManager(t *testing.T) {
-	if os.Getenv("RUN_HELIXDB_INTEGRATION") == "" {
-		t.Skip("set RUN_HELIXDB_INTEGRATION=1 to run")
-	}
-
-	ctx := context.Background()
-
-	mgr := NewContainerManager("gud-helixdb-int-mgr", containerMgrTestPort)
-
-	// EnsureRunning should start a new container.
-	url, err := mgr.EnsureRunning(ctx)
-	if err != nil {
-		t.Fatalf("EnsureRunning failed: %v", err)
-	}
-
-	if url != "http://localhost:"+containerMgrTestPort {
-		t.Errorf("expected url http://localhost:%s, got %s", testPort, url)
-	}
-
-	if !mgr.StartedByUs() {
-		t.Error("expected StartedByUs to be true after EnsureRunning")
-	}
-
-	if !mgr.IsRunning(ctx) {
-		t.Error("expected IsRunning to be true after EnsureRunning")
-	}
-
-	// Calling EnsureRunning again should be a no-op (container already running).
-	url2, err := mgr.EnsureRunning(ctx)
-	if err != nil {
-		t.Fatalf("EnsureRunning (second call) failed: %v", err)
-	}
-
-	if url2 != url {
-		t.Errorf("expected same url, got %s", url2)
-	}
-
-	// Stop should work and mark container as gone.
-	if err := mgr.Stop(ctx); err != nil {
-		t.Fatalf("Stop failed: %v", err)
-	}
-
-	if mgr.StartedByUs() {
-		t.Error("expected StartedByUs to be false after Stop")
-	}
-
-	if mgr.IsRunning(ctx) {
-		t.Error("expected IsRunning to be false after Stop")
-	}
 }

@@ -8,9 +8,6 @@ import (
 
 const (
 	// DefaultTenantProperty is the canonical property name for tenant isolation.
-	// DefaultBaseURL is the HelixDB server URL used when none is configured.
-	DefaultBaseURL = "http://localhost:3223"
-
 	DefaultTenantProperty = "tenantId"
 
 	// DefaultEmbeddingDimension is the vector dimension used for embedding

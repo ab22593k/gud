@@ -3,96 +3,98 @@ package mem
 import (
 	"context"
 	"errors"
-	"net/http"
-	"net/http/httptest"
-	"sync/atomic"
+	"strings"
 	"testing"
 )
 
-func TestNewDB_DefaultURL(t *testing.T) {
-	db := NewDB(Options{})
+func TestNewDB_Defaults(t *testing.T) {
+	db := NewDB(Options{Enabled: false})
 	if db == nil {
 		t.Fatal("expected non-nil DB")
 	}
 
-	if db.BaseURL() != DefaultBaseURL {
-		t.Errorf("expected default URL, got %q", db.BaseURL())
+	if db.DataDir() == "" {
+		t.Error("expected non-empty DataDir")
+	}
+
+	if !strings.Contains(db.DataDir(), "gud") {
+		t.Errorf("expected DataDir to contain gud, got %q", db.DataDir())
+	}
+
+	if db.Database() != DefaultDatabase {
+		t.Errorf("expected database %q, got %q", DefaultDatabase, db.Database())
 	}
 }
 
-func TestNewDB_CustomURL(t *testing.T) {
-	db := NewDB(Options{BaseURL: "http://helix-cloud:3223"})
-	if db.BaseURL() != "http://helix-cloud:3223" {
-		t.Errorf("expected custom URL, got %q", db.BaseURL())
+func TestNewDB_CustomDir(t *testing.T) {
+	db := NewDB(Options{DataDir: "/tmp/gud-test-helix", Database: "testdb", Enabled: false})
+	if db.DataDir() != "/tmp/gud-test-helix" {
+		t.Errorf("expected custom DataDir, got %q", db.DataDir())
+	}
+
+	if db.Database() != "testdb" {
+		t.Errorf("expected custom database, got %q", db.Database())
 	}
 }
 
-func TestNewDB_WithAPIKey(t *testing.T) {
-	db := NewDB(Options{BaseURL: DefaultBaseURL, APIKey: "hx_test_key"})
-	if db.APIKey() != "hx_test_key" {
-		t.Errorf("expected API key to be set, got %q", db.APIKey())
+func TestDefaultDataDir_NonEmpty(t *testing.T) {
+	dir := DefaultDataDir()
+	if dir == "" {
+		t.Fatal("expected non-empty default data dir")
+	}
+
+	if !strings.Contains(dir, "helixdb") {
+		t.Errorf("expected default dir to contain helixdb, got %q", dir)
 	}
 }
 
-func TestDB_IsAvailable_NoConnection(t *testing.T) {
-	db := NewDB(Options{BaseURL: DefaultBaseURL})
-	// Should not panic; returns false gracefully
-	available := db.IsAvailable(context.Background())
-	if available {
-		t.Log("expected unavailable, got available (may be false positive if HelixDB is running on 2232)")
+func TestDB_DisabledIsUnavailable(t *testing.T) {
+	db := NewDB(Options{Enabled: false})
+	if db.Enabled() {
+		t.Error("expected disabled DB")
+	}
+
+	if db.IsAvailable(context.Background()) {
+		t.Error("expected IsAvailable false when disabled")
+	}
+
+	if err := db.Exec(context.Background(), BuildTrendsQuery("/repo"), nil); !errors.Is(err, ErrHelixUnavailable) {
+		t.Errorf("expected ErrHelixUnavailable, got %v", err)
+	}
+
+	if err := db.Close(); err != nil {
+		t.Errorf("expected nil Close on disabled DB, got %v", err)
 	}
 }
 
-// countHealthRequests starts a fake HelixDB health endpoint that counts
-// requests and returns the given status code.
-func countHealthRequests(t *testing.T, status int) (*DB, *atomic.Int64) {
-	t.Helper()
+func TestNewDB_EmbeddedGracefulWithoutBindings(t *testing.T) {
+	dir := t.TempDir()
 
-	var hits atomic.Int64
+	db := NewDB(Options{DataDir: dir, Database: "gud-test", Enabled: true})
+	if db.DataDir() != dir {
+		t.Errorf("expected DataDir %q, got %q", dir, db.DataDir())
+	}
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		hits.Add(1)
-		w.WriteHeader(status)
-	}))
-	t.Cleanup(srv.Close)
-
-	db := NewDB(Options{BaseURL: srv.URL, Enabled: true})
+	// Without native bindings NewDB disables itself; with bindings it
+	// stays enabled. Both states must degrade gracefully.
 	if !db.Enabled() {
-		t.Fatal("expected DB to be enabled")
-	}
-
-	return db, &hits
-}
-
-// TestDB_IsAvailable_CachesUp verifies that repeated IsAvailable calls issue
-// exactly one health request when the server is up, returning true each time.
-func TestDB_IsAvailable_CachesUp(t *testing.T) {
-	db, hits := countHealthRequests(t, http.StatusOK)
-
-	for range 3 {
-		if !db.IsAvailable(context.Background()) {
-			t.Fatal("expected IsAvailable to be true")
-		}
-	}
-
-	if got := hits.Load(); got != 1 {
-		t.Errorf("expected 1 health request, got %d", got)
-	}
-}
-
-// TestDB_IsAvailable_CachesDown verifies that a server reporting non-200 is
-// probed only once and stays unavailable on subsequent calls.
-func TestDB_IsAvailable_CachesDown(t *testing.T) {
-	db, hits := countHealthRequests(t, http.StatusInternalServerError)
-
-	for range 3 {
 		if db.IsAvailable(context.Background()) {
-			t.Fatal("expected IsAvailable to be false")
+			t.Error("expected IsAvailable false when embedded unavailable")
 		}
+
+		if err := db.Close(); err != nil {
+			t.Errorf("expected nil Close when unavailable, got %v", err)
+		}
+
+		return
 	}
 
-	if got := hits.Load(); got != 1 {
-		t.Errorf("expected 1 health request, got %d", got)
+	if !db.IsAvailable(context.Background()) {
+		t.Error("expected IsAvailable true when embedded opened")
+	}
+
+	if err := db.Close(); err != nil {
+		t.Errorf("Close failed: %v", err)
 	}
 }
 

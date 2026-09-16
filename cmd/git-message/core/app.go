@@ -20,9 +20,8 @@ type ConfigGetter interface {
 }
 
 // AppContext bundles resolved application configuration with the request client
-// and optional HelixDB connection. gud never manages a HelixDB server itself:
-// it connects to a shared, externally-run instance at the default URL
-// , so one database is reused across projects and repos.
+// and optional HelixDB connection. gud uses an embedded HelixDB database in
+// the OS user cache dir, so one database is reused across projects and repos.
 type AppContext struct {
 	cfg     config.Config
 	client  *request.Client
@@ -139,23 +138,22 @@ func (a *AppContext) InitClient(ctx context.Context) error {
 	return nil
 }
 
-// InitHelixDB creates the HelixDB connection. Memory is always enabled: gud
-// connects to a shared, externally-run HelixDB server at the default URL
+// InitHelixDB opens the embedded HelixDB database. Memory is always enabled.
 //
-// Schema migration (EnsureSchema) runs whenever the DB is reachable. It is
-// idempotent and fast (verified ~15ms on a warm server), and guarantees a
-// pre-existing server never misses the indexes.
+// Schema migration (EnsureSchema) runs whenever the DB is available. It is
+// idempotent and fast, and guarantees a pre-existing database never misses
+// the indexes.
 func (a *AppContext) InitHelixDB(ctx context.Context) error {
 	db := mem.NewDB(mem.Options{Enabled: true})
 
 	if !db.Enabled() {
-		slog.Debug("helixdb: client creation failed, degraded mode")
+		slog.Debug("helixdb: embedded open failed, degraded mode")
 
 		return nil
 	}
 
 	if !db.IsAvailable(ctx) {
-		slog.Debug("helixdb: server not reachable, degraded mode", "url", db.BaseURL())
+		slog.Debug("helixdb: embedded not available, degraded mode", "dir", db.DataDir())
 
 		return nil
 	}

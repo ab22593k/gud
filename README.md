@@ -71,15 +71,12 @@ git message --profile astrophysicist
 ## Memory
 
 gud persists commit history to HelixDB for context-aware generation. Memory is
-always on and connects to the default server at `http://localhost:3223`; gud
-never starts or stops a HelixDB server itself — it connects to one shared
-server, so a single database is reused across all your projects. Repos are
+always on and uses an embedded HelixDB database in the OS user cache
+(`~/.cache/gud/helixdb`), so a single database is reused across all your
+projects with no server or Docker setup. Repos are
 isolated per `repo_path` (the tenant key), so project data never mixes.
 
 ```bash
-# Start one HelixDB server with persistent disk storage, once per machine:
-helix start --disk   # or: docker run -d --name helixdb -p 3223:8080 ghcr.io/helixdb/enterprise-dev
-
 git message
 ```
 

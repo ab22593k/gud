@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
-	"sync"
+	"os"
+	"path/filepath"
 	"time"
 
 	helix "github.com/helixdb/helix-db/sdks/go"
@@ -23,49 +23,70 @@ func NewHelixUnavailableError(cause error) error {
 	return fmt.Errorf("%w: %w", ErrHelixUnavailable, cause)
 }
 
-// Options configures a DB connection.
+// DefaultDatabase is the embedded logical database name.
+const DefaultDatabase = "gud"
+
+// DefaultDataDir returns the default embedded storage root:
+// $XDG_CACHE_HOME/gud/helixdb (os.UserCacheDir), falling back to
+// ~/.cache/gud/helixdb when the cache dir is unavailable.
+func DefaultDataDir() string {
+	if dir, err := os.UserCacheDir(); err == nil && dir != "" {
+		return filepath.Join(dir, "gud", "helixdb")
+	}
+
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		return filepath.Join(home, ".cache", "gud", "helixdb")
+	}
+
+	return filepath.Join(".", ".helixdb")
+}
+
+// Options configures an embedded DB connection.
 type Options struct {
-	BaseURL string
-	APIKey  string
-	Enabled bool
+	DataDir  string
+	Database string
+	Enabled  bool
 }
 
-// DB wraps a helix.Client with lifecycle management and degraded-mode support.
-// DB must always be used as a pointer: it embeds a sync.Once, so copying by
-// value would break the availability memoisation.
+// DB wraps a helix.Client opened against an embedded database with
+// lifecycle management and degraded-mode support. DB must always be
+// used as a pointer.
 type DB struct {
-	client  *helix.Client
-	baseURL string
-	apiKey  string
-	enabled bool
-
-	// availability memoises the result of the first health check. Server
-	// state cannot change within a single invocation, so repeated IsAvailable
-	// calls must not each pay the 2s health timeout (a down server would
-	// otherwise add up to ~6s of worst-case latency per invocation).
-	availOnce   sync.Once
-	availResult bool
+	client   *helix.Client
+	dataDir  string
+	database string
+	enabled  bool
 }
 
-// NewDB creates a new DB wrapper. If opts.Enabled is false, the client is nil
-// and all operations return ErrHelixUnavailable.
+// NewDB opens an embedded HelixDB at DataDir/Database. If opts.Enabled
+// is false the client is nil and all operations return
+// ErrHelixUnavailable. When the embedded runtime is unavailable (standard
+// Go module without native bindings) the DB is disabled so callers
+// degrade gracefully.
 func NewDB(opts Options) *DB {
-	baseURL := opts.BaseURL
-	if baseURL == "" {
-		baseURL = DefaultBaseURL
+	dataDir := opts.DataDir
+	if dataDir == "" {
+		dataDir = DefaultDataDir()
 	}
 
-	db := &DB{
-		baseURL: baseURL,
-		apiKey:  opts.APIKey,
-		enabled: opts.Enabled,
+	database := opts.Database
+	if database == "" {
+		database = DefaultDatabase
 	}
+
+	db := &DB{dataDir: dataDir, database: database, enabled: opts.Enabled}
 
 	if !opts.Enabled {
 		return db
 	}
 
-	client, err := helix.NewClient(baseURL, helix.WithAPIKey(opts.APIKey))
+	if err := os.MkdirAll(dataDir, 0o750); err != nil {
+		db.enabled = false
+
+		return db
+	}
+
+	client, err := helix.NewEmbeddedClient(helix.DiskSource{Root: dataDir, Database: database})
 	if err != nil {
 		db.enabled = false
 
@@ -77,55 +98,33 @@ func NewDB(opts Options) *DB {
 	return db
 }
 
-// BaseURL returns the configured base URL.
-func (db *DB) BaseURL() string { return db.baseURL }
+// DataDir returns the embedded storage root.
+func (db *DB) DataDir() string { return db.dataDir }
 
-// APIKey returns the configured API key.
-func (db *DB) APIKey() string { return db.apiKey }
+// Database returns the embedded logical database name.
+func (db *DB) Database() string { return db.database }
 
 // Enabled returns whether HelixDB integration is enabled.
 func (db *DB) Enabled() bool { return db.enabled && db.client != nil }
 
-// IsAvailable checks if the HelixDB server is reachable via its health
-// endpoint. The first call performs the actual health probe (2s timeout);
-// the result is cached for the lifetime of the DB so subsequent calls within
-// the same invocation are free. The probe is independent of the caller's
-// context (the 2s timeout in checkHealth bounds it) so a short-lived or
-// cancelled context can never poison the cache.
+// IsAvailable reports whether the embedded database is open. There is
+// no network probe: availability is purely process-local.
 func (db *DB) IsAvailable(_ context.Context) bool {
-	if !db.enabled || db.client == nil {
-		return false
-	}
-	//nolint:contextcheck // intentional Background use: the cached probe must
-	// survive a cancelled caller context (bounded by its own 2s timeout).
-	db.availOnce.Do(func() {
-		db.availResult = db.checkHealth(context.Background())
-	})
-
-	return db.availResult
+	return db.enabled && db.client != nil
 }
 
-// checkHealth probes the server health endpoint with a 2-second timeout.
-func (db *DB) checkHealth(ctx context.Context) bool {
-	healthCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(healthCtx, http.MethodGet, db.baseURL+"/health", nil)
-	if err != nil {
-		return false
+// Close releases the embedded handle. Nil-safe; degraded DBs are a no-op.
+func (db *DB) Close() error {
+	if db == nil || db.client == nil {
+		return nil
 	}
 
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return false
-	}
-
-	defer func() { _ = resp.Body.Close() }() // read-only probe: close error irrelevant
-
-	return resp.StatusCode == http.StatusOK
+	return db.client.Close()
 }
 
-// Exec runs a HelixDB query.
+// Exec runs a HelixDB query against the embedded engine. Server routing
+// options (WriterOnly, WarmOnly, AwaitDurability) are rejected by the
+// SDK in embedded mode, so callers must not pass them.
 func (db *DB) Exec(ctx context.Context, req helix.Request, out any, opts ...helix.ExecOption) error {
 	if !db.enabled || db.client == nil {
 		return ErrHelixUnavailable

@@ -1,6 +1,6 @@
 module gud/internal/request
 
-go 1.26.3
+go 1.26.8
 
 require (
 	google.golang.org/adk v1.4.0

@@ -2,7 +2,6 @@ package mem
 
 import (
 	"context"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -10,8 +9,7 @@ import (
 	helix "github.com/helixdb/helix-db/sdks/go"
 )
 
-// e2e helpers reuse the existing startManagedContainer from integration_test.go
-// and testPort = "2232".
+// e2e helpers reuse startEmbeddedDB from integration_test.go.
 
 const testTenant = "/test/repo"
 
@@ -40,12 +38,7 @@ func findSHAInResults(records []CommitRecord, sha string) bool {
 // TestIntegration_BM25ContextQueryByDiff persists commits with varied diff
 // text and verifies that BM25 text search retrieves relevant commits.
 func TestIntegration_BM25ContextQueryByDiff(t *testing.T) {
-	if os.Getenv("RUN_HELIXDB_INTEGRATION") == "" {
-		t.Skip("set RUN_HELIXDB_INTEGRATION=1 to run")
-	}
-
-	mgr, db := startManagedContainer(t)
-	defer func() { _ = mgr.Stop(context.Background()) }() // best-effort teardown
+	db := startEmbeddedDB(t)
 
 	ctx := context.Background()
 	if err := db.EnsureSchema(ctx); err != nil {
@@ -107,12 +100,7 @@ func TestIntegration_BM25ContextQueryByDiff(t *testing.T) {
 // TestIntegration_BM25ContextQueryByFiles persists commits with file names
 // in their messages and verifies retrieval by file-based search.
 func TestIntegration_BM25ContextQueryByFiles(t *testing.T) {
-	if os.Getenv("RUN_HELIXDB_INTEGRATION") == "" {
-		t.Skip("set RUN_HELIXDB_INTEGRATION=1 to run")
-	}
-
-	mgr, db := startManagedContainer(t)
-	defer func() { _ = mgr.Stop(context.Background()) }() // best-effort teardown
+	db := startEmbeddedDB(t)
 
 	ctx := context.Background()
 	if err := db.EnsureSchema(ctx); err != nil {
@@ -160,12 +148,7 @@ func TestIntegration_BM25ContextQueryByFiles(t *testing.T) {
 // TestIntegration_EntityAwareRecall persists a commit with code units and
 // verifies that BuildEntityContextQuery retrieves it by element key.
 func TestIntegration_EntityAwareRecall(t *testing.T) {
-	if os.Getenv("RUN_HELIXDB_INTEGRATION") == "" {
-		t.Skip("set RUN_HELIXDB_INTEGRATION=1 to run")
-	}
-
-	mgr, db := startManagedContainer(t)
-	defer func() { _ = mgr.Stop(context.Background()) }() // best-effort teardown
+	db := startEmbeddedDB(t)
 
 	ctx := context.Background()
 	if err := db.EnsureSchema(ctx); err != nil {
@@ -215,12 +198,7 @@ func TestIntegration_EntityAwareRecall(t *testing.T) {
 // create → categorize → mention entity → query by category → update version
 // → verify old superseded → soft-delete → verify excluded from recall.
 func TestIntegration_MemoryLifecycleFull(t *testing.T) {
-	if os.Getenv("RUN_HELIXDB_INTEGRATION") == "" {
-		t.Skip("set RUN_HELIXDB_INTEGRATION=1 to run")
-	}
-
-	mgr, db := startManagedContainer(t)
-	defer func() { _ = mgr.Stop(context.Background()) }() // best-effort teardown
+	db := startEmbeddedDB(t)
 
 	ctx := context.Background()
 	if err := db.EnsureSchema(ctx); err != nil {
@@ -402,12 +380,7 @@ func TestIntegration_MemoryLifecycleFull(t *testing.T) {
 // TestIntegration_TenantIsolation verifies that commits and memories in
 // one tenant are invisible when querying from another tenant.
 func TestIntegration_TenantIsolation(t *testing.T) {
-	if os.Getenv("RUN_HELIXDB_INTEGRATION") == "" {
-		t.Skip("set RUN_HELIXDB_INTEGRATION=1 to run")
-	}
-
-	mgr, db := startManagedContainer(t)
-	defer func() { _ = mgr.Stop(context.Background()) }() // best-effort teardown
+	db := startEmbeddedDB(t)
 
 	ctx := context.Background()
 	if err := db.EnsureSchema(ctx); err != nil {
@@ -475,12 +448,7 @@ func TestIntegration_TenantIsolation(t *testing.T) {
 // TestIntegration_VectorSearch persists a commit with a 1536-dim embedding
 // and retrieves it via BuildHybridContextQuery vector search.
 func TestIntegration_VectorSearch(t *testing.T) {
-	if os.Getenv("RUN_HELIXDB_INTEGRATION") == "" {
-		t.Skip("set RUN_HELIXDB_INTEGRATION=1 to run")
-	}
-
-	mgr, db := startManagedContainer(t)
-	defer func() { _ = mgr.Stop(context.Background()) }() // best-effort teardown
+	db := startEmbeddedDB(t)
 
 	ctx := context.Background()
 	if err := db.EnsureSchema(ctx); err != nil {
@@ -549,12 +517,7 @@ func TestIntegration_VectorSearch(t *testing.T) {
 // TestIntegration_TopFilesStats persists commits with file changes
 // and verifies that BuildTopFilesQuery returns correct file counts.
 func TestIntegration_TopFilesStats(t *testing.T) {
-	if os.Getenv("RUN_HELIXDB_INTEGRATION") == "" {
-		t.Skip("set RUN_HELIXDB_INTEGRATION=1 to run")
-	}
-
-	mgr, db := startManagedContainer(t)
-	defer func() { _ = mgr.Stop(context.Background()) }() // best-effort teardown
+	db := startEmbeddedDB(t)
 
 	ctx := context.Background()
 	if err := db.EnsureSchema(ctx); err != nil {
@@ -626,12 +589,7 @@ func TestIntegration_TopFilesStats(t *testing.T) {
 // TestIntegration_CategoryMemories verifies the full cycle: create category,
 // create memory, categorize it, then recall via BuildCategoryMemoriesQuery.
 func TestIntegration_CategoryMemoriesQuery(t *testing.T) {
-	if os.Getenv("RUN_HELIXDB_INTEGRATION") == "" {
-		t.Skip("set RUN_HELIXDB_INTEGRATION=1 to run")
-	}
-
-	mgr, db := startManagedContainer(t)
-	defer func() { _ = mgr.Stop(context.Background()) }() // best-effort teardown
+	db := startEmbeddedDB(t)
 
 	ctx := context.Background()
 	if err := db.EnsureSchema(ctx); err != nil {
@@ -752,12 +710,7 @@ func TestIntegration_CategoryMemoriesQuery(t *testing.T) {
 // TestIntegration_BM25ContextQueryNoResults verifies that a context query
 // for a non-matching diff returns no results.
 func TestIntegration_BM25ContextQueryNoResults(t *testing.T) {
-	if os.Getenv("RUN_HELIXDB_INTEGRATION") == "" {
-		t.Skip("set RUN_HELIXDB_INTEGRATION=1 to run")
-	}
-
-	mgr, db := startManagedContainer(t)
-	defer func() { _ = mgr.Stop(context.Background()) }() // best-effort teardown
+	db := startEmbeddedDB(t)
 
 	ctx := context.Background()
 	if err := db.EnsureSchema(ctx); err != nil {

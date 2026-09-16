@@ -4,7 +4,7 @@
 
 `gud` is a One-Shot commit message generator. The canonical command is `git message`; `gud` is the product name. Preserve that distinction in command help, errors, documentation, and tests.
 
-The repository is a Go workspace using Go 1.26.3:
+The repository is a Go workspace using Go 1.26.8:
 
 - `cmd/git-message`: CLI entry point and Cobra command handlers.
 - `internal/config`: configuration types, providers, and precedence handling.
