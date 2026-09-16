@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"gud/internal/profile"
 
@@ -219,5 +220,48 @@ func TestPickerStateTransition_DoneQuitsOnAnyKey(t *testing.T) {
 	_, cmd := dm.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	if cmd == nil {
 		t.Error("key in StateDone cmd = nil, want quit command")
+	}
+}
+
+func TestPickerStartDownload_Timeout(t *testing.T) {
+	// Not parallel: it mutates the package-level downloadTimeout.
+	old := downloadTimeout
+	downloadTimeout = 50 * time.Millisecond
+
+	t.Cleanup(func() { downloadTimeout = old })
+
+	m := NewPicker(testEntries(), func(ctx context.Context, _ string) error {
+		<-ctx.Done()
+
+		return ctx.Err()
+	}, nil)
+
+	start := time.Now()
+	msg := m.startDownload("plumber")()
+	elapsed := time.Since(start)
+
+	failed, ok := msg.(downloadFailedMsg)
+	if !ok {
+		t.Fatalf("startDownload cmd() = %T, want downloadFailedMsg", msg)
+	}
+
+	if !errors.Is(failed.err, context.DeadlineExceeded) {
+		t.Errorf("err = %v, want context.DeadlineExceeded", failed.err)
+	}
+
+	if elapsed >= 5*time.Second {
+		t.Errorf("download took %v, want prompt return on timeout", elapsed)
+	}
+}
+
+func TestPickerStartDownload_FastSucceeds(t *testing.T) {
+	t.Parallel()
+
+	m := NewPicker(testEntries(), func(_ context.Context, _ string) error {
+		return nil
+	}, nil)
+
+	if msg := m.startDownload("plumber")(); msg != (downloadDoneMsg{slug: "plumber"}) {
+		t.Errorf("startDownload cmd() = %#v, want downloadDoneMsg for plumber", msg)
 	}
 }

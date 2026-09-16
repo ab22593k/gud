@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"gud/internal/profile"
 
@@ -53,6 +54,10 @@ func (i catalogItem) Description() string {
 func (i catalogItem) FilterValue() string {
 	return i.entry.Profession + " " + i.entry.Summary + " " + i.entry.WorkMode + " " + i.entry.Slug
 }
+
+// downloadTimeout bounds a single profile download triggered from the picker.
+// It is a var so tests can shrink it. It does not bound the browsing session.
+var downloadTimeout = 15 * time.Second
 
 // DownloadFunc is the signature for the profile download function.
 // The TUI calls this when the user selects a profile to save.
@@ -216,7 +221,10 @@ func (m PickerModel) handleSelect() (tea.Model, tea.Cmd) {
 func (m PickerModel) startDownload(slug string) tea.Cmd {
 	return func() tea.Msg {
 		if m.download != nil {
-			if err := m.download(m.ctx, slug); err != nil {
+			ctx, cancel := context.WithTimeout(m.ctx, downloadTimeout)
+			defer cancel()
+
+			if err := m.download(ctx, slug); err != nil {
 				return downloadFailedMsg{slug: slug, err: err}
 			}
 		}
