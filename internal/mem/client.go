@@ -60,14 +60,17 @@ type DB struct {
 	dataDir  string
 	database string
 	enabled  bool
+
+	unavailableCause error
 }
 
 // NewDB opens an embedded HelixDB at DataDir/Database. If opts.Enabled
 // is false the client is nil and all operations return
 // ErrHelixUnavailable. When the embedded runtime is unavailable (standard
-// Go module without native bindings) or a concurrent process holds the
-// store, the DB degrades to disabled so callers proceed without memory
-// instead of failing the commit.
+// Go SDK v0.3.1 without native bindings, which is HTTP-only by design) or a
+// concurrent process holds the store, the DB degrades to disabled so callers
+// proceed without memory instead of failing the commit. Use UnavailableCause
+// to inspect why a DB degraded.
 func NewDB(opts Options) *DB {
 	dataDir := opts.DataDir
 	if dataDir == "" {
@@ -87,6 +90,7 @@ func NewDB(opts Options) *DB {
 
 	if err := os.MkdirAll(dataDir, 0o750); err != nil {
 		db.enabled = false
+		db.unavailableCause = err
 
 		return db
 	}
@@ -94,6 +98,7 @@ func NewDB(opts Options) *DB {
 	client, err := helix.NewEmbeddedClient(helix.DiskSource{Root: dataDir, Database: database})
 	if err != nil {
 		db.enabled = false
+		db.unavailableCause = err
 
 		return db
 	}
@@ -108,6 +113,17 @@ func (db *DB) DataDir() string { return db.dataDir }
 
 // Database returns the embedded logical database name.
 func (db *DB) Database() string { return db.database }
+
+// UnavailableCause reports why NewDB degraded to disabled, or nil when the
+// DB did not fail to open (explicitly disabled or successfully opened).
+// Nil-safe: a nil DB reports nil.
+func (db *DB) UnavailableCause() error {
+	if db == nil {
+		return nil
+	}
+
+	return db.unavailableCause
+}
 
 // Enabled returns whether HelixDB integration is enabled.
 func (db *DB) Enabled() bool { return db.enabled && db.client != nil }

@@ -161,7 +161,10 @@ func (a *AppContext) InitClient(ctx context.Context) error {
 	return nil
 }
 
-// InitHelixDB opens the embedded HelixDB database. Memory is always enabled.
+// InitHelixDB opens the embedded HelixDB database. Memory is attempted on
+// every invocation but degrades to disabled when the embedded runtime cannot
+// open (standard Go SDK v0.3.1 builds are HTTP-only without separate native
+// bindings). See mem.DB.UnavailableCause for the recorded open failure.
 //
 // Schema migration (EnsureSchema) runs whenever the DB is available. The
 // first invocation migrates in one batched transaction and records a
@@ -176,7 +179,9 @@ func (a *AppContext) InitHelixDB(ctx context.Context) error {
 	db := mem.NewDB(mem.Options{Enabled: true})
 
 	if !db.Enabled() {
-		slog.Debug("helixdb: embedded open failed, degraded mode")
+		slog.Debug("helixdb: embedded open failed, degraded mode",
+			"dir", db.DataDir(), "database", db.Database(), "error", db.UnavailableCause(),
+			"hint", "Go SDK v0.3.1 is HTTP-only; standard builds degrade without separate native bindings")
 
 		return nil
 	}

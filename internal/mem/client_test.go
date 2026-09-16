@@ -86,6 +86,10 @@ func TestNewDB_EmbeddedGracefulWithoutBindings(t *testing.T) {
 			t.Errorf("expected nil Close when unavailable, got %v", err)
 		}
 
+		if got := db.UnavailableCause(); got == nil {
+			t.Error("expected non-nil UnavailableCause when embedded open failed")
+		}
+
 		return
 	}
 
@@ -95,6 +99,14 @@ func TestNewDB_EmbeddedGracefulWithoutBindings(t *testing.T) {
 
 	if err := db.Close(); err != nil {
 		t.Errorf("Close failed: %v", err)
+	}
+}
+
+func TestNewDB_DisabledHasNoCause(t *testing.T) {
+	db := NewDB(Options{Enabled: false})
+
+	if got := db.UnavailableCause(); got != nil {
+		t.Errorf("expected nil UnavailableCause when explicitly disabled, got %v", got)
 	}
 }
 

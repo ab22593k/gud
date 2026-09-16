@@ -71,9 +71,13 @@ git message --profile astrophysicist
 ## Memory
 
 gud persists commit history to HelixDB for context-aware generation. Memory is
-always on and uses an embedded HelixDB database in the OS user cache
-(`~/.cache/gud/helixdb`), so a single database is reused across all your
-projects with no server or Docker setup. Repos are
+attempted on every invocation using an embedded HelixDB database in the OS user
+cache (`~/.cache/gud/helixdb`), so a single database is reused across all your
+projects with no server or Docker setup. Standard builds use Go SDK v0.3.1,
+which is HTTP-only without separately generated native bindings, so embedded
+open is expected to fail and degrade to memory-off; run with
+`GUD_LOG_LEVEL=debug` to see the recorded open cause (`dir`, `database`,
+`error`). Repos are
 isolated per `repo_path` (the tenant key), so project data never mixes.
 The tenant key is the absolute repo root from `git rev-parse --show-toplevel`
 used verbatim: renaming, moving, or symlink-aliasing a checkout creates a
