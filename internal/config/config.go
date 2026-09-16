@@ -62,6 +62,10 @@ const (
 	maxWrap    = 200
 )
 
+// DefaultWrapLine is the canonical default for wrapping commit-message lines.
+// request.defaultWrapLine aliases this so the 72-char default has one source.
+const DefaultWrapLine = 72
+
 // Validate returns a copy of the config with normalized and clamped values.
 // Invalid or out-of-range values are replaced with sensible defaults.
 func (c Config) Validate() Config {
@@ -161,6 +165,6 @@ func (c Config) Merge(override Config) Config {
 func DefaultConfig() Config {
 	return Config{
 		DetailLevel: DetailStandard,
-		WrapLine:    72,
+		WrapLine:    DefaultWrapLine,
 	}
 }

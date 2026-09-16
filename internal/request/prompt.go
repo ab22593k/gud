@@ -3,19 +3,23 @@ package request
 import (
 	"fmt"
 	"strings"
+
+	"gud/internal/config"
 )
 
-// DetailLevel represents the level of detail for the commit message.
-type DetailLevel string
+// DetailLevel controls commit-message verbosity. Canonical source is
+// config.DetailLevel; this alias keeps prompt construction and config in sync.
+type DetailLevel = config.DetailLevel
 
 const (
-	DetailMinimal  DetailLevel = "minimal"
-	DetailStandard DetailLevel = "standard"
-	DetailDetailed DetailLevel = "detailed"
+	DetailMinimal  = config.DetailMinimal
+	DetailStandard = config.DetailStandard
+	DetailDetailed = config.DetailDetailed
 )
 
-// ProfileName represents the name of a profile configuration.
-type ProfileName string
+// ProfileName identifies an AI agent profile. Canonical source is
+// config.ProfileName.
+type ProfileName = config.ProfileName
 
 type ProfileConfig struct {
 	Name   string
@@ -40,24 +44,39 @@ var defaultProfile = ProfileConfig{
 	},
 }
 
-const defaultWrapLine = 72
+const defaultWrapLine = config.DefaultWrapLine
 
 // BuildPrompt creates a full prompt for generating a commit message.
 func (p ProfileConfig) BuildPrompt(detailLevel DetailLevel, hint, context, diff string) string {
 	return p.BuildPromptWithContent(detailLevel, hint, context, diff, p.System, defaultWrapLine)
 }
 
-// BuildPromptWithContent creates a full prompt with a custom system prompt.
+// BuildPromptWithContent creates a full prompt using systemContent in place of
+// the receiver's System. An empty systemContent falls back to p.System, then
+// to the default profile System. It never appends the default alongside the
+// custom content.
 func (p ProfileConfig) BuildPromptWithContent(
 	detailLevel DetailLevel, hint, context, diff, systemContent string, wrapLine int,
 ) string {
+	system := systemContent
+	if system == "" {
+		system = p.System
+	}
+
+	if system == "" {
+		system = defaultProfile.System
+	}
+
+	rules := p.Rules
+	if len(rules) == 0 {
+		rules = defaultProfile.Rules
+	}
+
 	var sb strings.Builder
 
-	sb.WriteString(systemContent)
+	sb.WriteString(system)
 	sb.WriteString("\n")
-	sb.WriteString(defaultProfile.System)
-	sb.WriteString("\n")
-	writeLabeled(&sb, "", ruleForLevel(detailLevel, p.Rules))
+	writeLabeled(&sb, "", ruleForLevel(detailLevel, rules))
 	fmt.Fprintf(&sb, "Wrap all lines at %d characters.\n", wrapLine)
 	writeLabeled(&sb, "Focus: ", hint)
 	writeLabeled(&sb, "Context: ", context)

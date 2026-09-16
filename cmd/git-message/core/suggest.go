@@ -84,7 +84,7 @@ var catalogFn = func(ctx context.Context) ([]profile.CatalogEntry, error) {
 // catalog against them. It returns an empty slice when the repo has no
 // files to analyze or no entry matches.
 func fetchSuggestions(ctx context.Context, repoRoot string) ([]profile.CatalogEntry, error) {
-	stats, err := detect.ComputeStats(repoRoot)
+	stats, err := detect.ComputeStatsWithContext(ctx, repoRoot)
 	if err != nil {
 		return nil, fmt.Errorf("compute stats: %w", err)
 	}

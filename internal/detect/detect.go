@@ -197,49 +197,16 @@ func globToRegexp(pattern string) string {
 }
 
 // ComputeStats walks the repo root directory and counts files by extension.
-// It always skips the .git directory, prunes directories ignored by the
-// repository's root .gitignore, and skips any unreadable paths silently.
-// Returns an empty RepoStats with zero values if the repo root is unreadable.
+// It delegates to ComputeStatsWithContext with a background context, so the
+// .git skip, .gitignore pruning, unreadable-path tolerance, and MaxFilesForStats
+// cap are defined once.
 func ComputeStats(repoRoot string) (*RepoStats, error) {
-	stats := &RepoStats{
-		FilesByExtension: make(map[string]int),
-	}
-	matcher := loadGitignore(repoRoot)
-
-	err := filepath.WalkDir(repoRoot, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return nil //nolint:nilerr // documented: unreadable paths are skipped silently
-		}
-
-		if d.IsDir() {
-			if d.Name() == ".git" {
-				return filepath.SkipDir
-			}
-			// The repo root itself is never pruned: a catch-all pattern
-			// (e.g. "*") must not abort the walk.
-			if p != repoRoot && matcher.ignored(relPath(repoRoot, p)) {
-				return filepath.SkipDir
-			}
-
-			return nil
-		}
-
-		ext := strings.ToLower(filepath.Ext(p))
-		if ext == "" {
-			ext = "(no extension)"
-		}
-
-		stats.FilesByExtension[ext]++
-		stats.TotalFiles++
-
-		return nil
-	})
-	if err != nil {
-		return &RepoStats{FilesByExtension: make(map[string]int)}, err
-	}
-
-	return stats, nil
+	return ComputeStatsWithContext(context.Background(), repoRoot)
 }
+
+// noExtensionKey marks files without an extension in FilesByExtension. It is
+// plumbing for counts, never a keyword for profile suggestion.
+const noExtensionKey = "(no extension)"
 
 // MaxFilesForStats caps files counted by ComputeStatsWithContext so a huge
 // monorepo cannot blow memory or prompt size.
@@ -278,7 +245,7 @@ func ComputeStatsWithContext(ctx context.Context, repoRoot string) (*RepoStats, 
 
 		ext := strings.ToLower(filepath.Ext(p))
 		if ext == "" {
-			ext = "(no extension)"
+			ext = noExtensionKey
 		}
 
 		stats.FilesByExtension[ext]++

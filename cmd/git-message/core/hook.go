@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"gud/internal/git"
-	"gud/internal/request"
 
 	"github.com/spf13/cobra"
 )
@@ -196,8 +195,8 @@ func generateAndWriteMsg(ctx context.Context, app *AppContext, diff, msgFile str
 	profileContent := resolveProfileContent(string(cfg.Profile))
 
 	msg, err := app.Client().GenerateCommitMessageWithContent(
-		ctx, diff, "", request.DetailLevel(cfg.DetailLevel),
-		cfg.Hint, request.ProfileName(cfg.Profile), profileContent, cfg.WrapLine,
+		ctx, diff, "", cfg.DetailLevel,
+		cfg.Hint, cfg.Profile, profileContent, cfg.WrapLine,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to generate commit message: %w", err)

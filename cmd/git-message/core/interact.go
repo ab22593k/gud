@@ -15,7 +15,6 @@ import (
 
 	"gud/internal/git"
 	"gud/internal/mem"
-	"gud/internal/request"
 	"gud/internal/tui"
 
 	"github.com/spf13/cobra"
@@ -129,8 +128,8 @@ func generateCommitMessage(ctx context.Context, app *AppContext, diff, promptCon
 	profileContent := resolveProfileContent(string(cfg.Profile))
 
 	msg, err := showProgress(ctx, "Rolling in, obscuring the landscape of the codebase...", func() (string, error) {
-		return app.Client().GenerateCommitMessageWithContent(ctx, diff, promptContext, request.DetailLevel(cfg.DetailLevel),
-			cfg.Hint, request.ProfileName(cfg.Profile), profileContent, cfg.WrapLine)
+		return app.Client().GenerateCommitMessageWithContent(ctx, diff, promptContext, cfg.DetailLevel,
+			cfg.Hint, cfg.Profile, profileContent, cfg.WrapLine)
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to generate commit message: %w", err)

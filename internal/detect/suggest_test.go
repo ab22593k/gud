@@ -111,6 +111,63 @@ func TestSuggestProfile_Top3ByScore(t *testing.T) {
 	}
 }
 
+func TestTopExtensionKeywords_SkipsNoExtension(t *testing.T) {
+	t.Parallel()
+
+	stats := &RepoStats{
+		FilesByExtension: map[string]int{"(no extension)": 10, ".go": 5, ".md": 2},
+		TotalFiles:       17,
+	}
+
+	got := topExtensionKeywords(stats)
+
+	for _, kw := range got {
+		if kw == "(no extension)" {
+			t.Errorf("keywords contain literal %q, got %v", "(no extension)", got)
+		}
+	}
+
+	foundGo := false
+
+	for _, kw := range got {
+		if kw == "go" {
+			foundGo = true
+		}
+	}
+
+	if !foundGo {
+		t.Errorf("keywords should include real extension 'go', got %v", got)
+	}
+}
+
+func TestScoreEntry_WholeWordOnly(t *testing.T) {
+	t.Parallel()
+
+	entry := profile.CatalogEntry{
+		Slug: "django-dev", Profession: "Django Developer", Summary: "Python web apps with Django",
+	}
+
+	if got := scoreEntry(entry, []string{"go"}); got != 0 {
+		t.Errorf("scoreEntry(django, [go]) = %d, want 0 (no substring match)", got)
+	}
+
+	goEntry := profile.CatalogEntry{
+		Slug: "go-dev", Profession: "Go Developer", Summary: "Go applications",
+	}
+
+	if got := scoreEntry(goEntry, []string{"go"}); got != 1 {
+		t.Errorf("scoreEntry(go-dev, [go]) = %d, want 1", got)
+	}
+
+	pyEntry := profile.CatalogEntry{
+		Slug: "python-dev", Profession: "Python Developer", Summary: "writes python code",
+	}
+
+	if got := scoreEntry(pyEntry, []string{"py"}); got != 1 {
+		t.Errorf("scoreEntry(python-dev, [py]) = %d, want 1 (prefix abbreviation)", got)
+	}
+}
+
 func TestFormatSuggestionMessage_Empty(t *testing.T) {
 	t.Parallel()
 

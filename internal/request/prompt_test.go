@@ -183,3 +183,45 @@ func TestBuildCommitMessagePrompt_ContainsDeterministicRules(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildPromptWithContent_ReplacesDefault(t *testing.T) {
+	t.Parallel()
+
+	const custom = "CUSTOM SYSTEM PROMPT FOR TESTING"
+
+	prompt := BuildCommitMessagePromptWithContent(
+		"diff --git a/main.go b/main.go", "", DetailStandard, "", "", custom, defaultWrapLine)
+
+	if !strings.Contains(prompt, custom) {
+		t.Errorf("custom system content missing, got:\n%s", prompt)
+	}
+
+	if strings.Contains(prompt, "permanent technical documentation") {
+		t.Errorf("default system appended alongside custom content, got:\n%s", prompt)
+	}
+}
+
+func TestBuildPromptWithContent_EmptyFallsBackToDefault(t *testing.T) {
+	t.Parallel()
+
+	prompt := BuildCommitMessagePromptWithContent(
+		"diff --git a/main.go b/main.go", "", DetailStandard, "", "", "", defaultWrapLine)
+
+	if !strings.Contains(prompt, "permanent technical documentation") {
+		t.Errorf("empty content should fall back to default system, got:\n%s", prompt)
+	}
+
+	if strings.HasPrefix(prompt, "\n") {
+		t.Errorf("fallback prompt should not start with blank line, got %q", prompt)
+	}
+}
+
+func TestBuildCommitMessagePrompt_NoDuplicateDefault(t *testing.T) {
+	t.Parallel()
+
+	prompt := BuildCommitMessagePrompt("diff --git a/main.go b/main.go", "", DetailStandard, "", "")
+
+	if n := strings.Count(prompt, "permanent technical documentation"); n != 1 {
+		t.Errorf("default system appears %d times, want exactly 1", n)
+	}
+}
