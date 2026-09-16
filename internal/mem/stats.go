@@ -34,6 +34,11 @@ type TrendPoint struct {
 	IsWeek bool
 }
 
+// maxStatsCommits bounds history materialization in stats queries so
+// long-lived repos cannot OOM or stall. Totals stay exact via Count();
+// per-commit breakdowns are a recent sample.
+const maxStatsCommits = 1000
+
 // BuildRepoSummaryQuery constructs a ReadQuery that counts commits by author
 // and by file for a given repo.
 func BuildRepoSummaryQuery(repoPath string) helix.Request {
@@ -47,7 +52,8 @@ func BuildRepoSummaryQuery(repoPath string) helix.Request {
 	b.VarAs("by_author", helix.G().
 		NWithLabel("Commit").
 		Has("repo_path", repoPath).
-		ValueMap("$id", "author"))
+		ValueMap("$id", "author").
+		Limit(maxStatsCommits))
 
 	b.VarAs("files", helix.G().
 		NWithLabel("Commit").
@@ -60,13 +66,15 @@ func BuildRepoSummaryQuery(repoPath string) helix.Request {
 }
 
 // BuildAuthorStatsQuery returns a query that groups commits by author for a repo.
+// Results are capped at maxStatsCommits to bound memory on long-lived repos.
 func BuildAuthorStatsQuery(repoPath string) helix.Request {
 	b := helix.ReadQuery("author_stats")
 
 	b.VarAs("by_author", helix.G().
 		NWithLabel("Commit").
 		Has("repo_path", repoPath).
-		ValueMap("$id", "author", "message"))
+		ValueMap("$id", "author", "message").
+		Limit(maxStatsCommits))
 
 	return b.Returning("by_author")
 }
@@ -86,15 +94,16 @@ func BuildTopFilesQuery(repoPath string, limit int) helix.Request {
 	return b.Returning("files")
 }
 
-// BuildTrendsQuery returns a query that fetches all commits for a repo
-// with their timestamps, for trend analysis.
+// BuildTrendsQuery returns a query that fetches recent commits for a repo
+// with their timestamps, for trend analysis. Capped at maxStatsCommits.
 func BuildTrendsQuery(repoPath string) helix.Request {
 	b := helix.ReadQuery("trends")
 
 	b.VarAs("commits", helix.G().
 		NWithLabel("Commit").
 		Has("repo_path", repoPath).
-		ValueMap("$id", "timestamp", "author"))
+		ValueMap("$id", "timestamp", "author").
+		Limit(maxStatsCommits))
 
 	return b.Returning("commits")
 }
