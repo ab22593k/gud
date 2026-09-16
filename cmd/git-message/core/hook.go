@@ -154,8 +154,6 @@ func runHookMode(cmd *cobra.Command, msgFile string) error {
 		return err
 	}
 
-	defer func() { _ = app.Close() }()
-
 	ctx, cancel := context.WithTimeout(context.Background(), hookTimeout)
 	defer cancel()
 

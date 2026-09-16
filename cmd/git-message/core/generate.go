@@ -34,8 +34,6 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	defer func() { _ = app.Close() }()
-
 	if rev, ok := amendTarget(cmd, args); ok {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
@@ -73,6 +71,8 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 	if err := app.InitHelixDB(ctx); err != nil {
 		slog.Debug("helixdb init failed, proceeding without", "error", err)
 	}
+
+	defer app.CloseHelixDB()
 
 	if err := app.InitClient(ctx); err != nil {
 		// During an operation stop the message is git's prepared one, so an

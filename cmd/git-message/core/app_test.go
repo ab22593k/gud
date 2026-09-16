@@ -15,7 +15,7 @@ func TestInitHelixDB_NeverFails(t *testing.T) {
 
 	app := &AppContext{cfg: config.Config{}}
 
-	t.Cleanup(func() { _ = app.Close() })
+	t.Cleanup(app.CloseHelixDB)
 
 	if err := app.InitHelixDB(context.Background()); err != nil {
 		t.Fatalf("InitHelixDB should never fail, got: %v", err)
@@ -26,50 +26,39 @@ func TestInitHelixDB_NeverFails(t *testing.T) {
 	}
 }
 
-// TestAppContext_Close verifies the close contract: nil-safe, no-DB-safe,
-// and idempotent with HelixDB() cleared after the first call.
-func TestAppContext_Close(t *testing.T) {
+// TestAppContext_CloseHelixDB verifies the close contract: closing with no DB
+// is a no-op returning nothing, closing twice is safe, and after InitHelixDB
+// plus CloseHelixDB, HelixDB() is nil.
+func TestAppContext_CloseHelixDB(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name string
-		app  *AppContext
+		name     string
+		app      *AppContext
+		withInit bool
 	}{
 		{name: "nil app", app: nil},
 		{name: "no DB", app: &AppContext{}},
+		{name: "init then close", app: &AppContext{cfg: config.Config{}}, withInit: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			if err := tt.app.Close(); err != nil {
-				t.Errorf("Close()=%v, want nil", err)
+			if tt.withInit {
+				if err := tt.app.InitHelixDB(context.Background()); err != nil {
+					t.Fatalf("InitHelixDB()=%v, want nil", err)
+				}
 			}
 
-			if err := tt.app.Close(); err != nil {
-				t.Errorf("second Close()=%v, want nil idempotent", err)
+			tt.app.CloseHelixDB()
+
+			if tt.app != nil && tt.app.HelixDB() != nil {
+				t.Error("HelixDB()!=nil after CloseHelixDB, want cleared")
 			}
+
+			tt.app.CloseHelixDB()
 		})
-	}
-
-	app := &AppContext{cfg: config.Config{}}
-
-	t.Cleanup(func() { _ = app.Close() })
-
-	if err := app.InitHelixDB(context.Background()); err != nil {
-		t.Fatalf("InitHelixDB()=%v, want nil", err)
-	}
-
-	if err := app.Close(); err != nil {
-		t.Fatalf("Close()=%v, want nil", err)
-	}
-
-	if app.HelixDB() != nil {
-		t.Error("HelixDB()!=nil after Close, want cleared")
-	}
-
-	if err := app.Close(); err != nil {
-		t.Errorf("second Close()=%v, want nil idempotent", err)
 	}
 }

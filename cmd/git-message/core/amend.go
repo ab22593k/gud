@@ -136,8 +136,6 @@ func resolveAmendCommit(ctx context.Context, app *AppContext, rev string) (amend
 // There is no Helix persist on amend: the rewritten SHA supersedes any stored
 // record.
 func runAmendFlow(ctx context.Context, cmd *cobra.Command, app *AppContext, rev string) error {
-	defer func() { _ = app.Close() }()
-
 	job, err := resolveAmendCommit(ctx, app, rev)
 	if err != nil {
 		return err
@@ -146,6 +144,8 @@ func runAmendFlow(ctx context.Context, cmd *cobra.Command, app *AppContext, rev 
 	if err := app.InitHelixDB(ctx); err != nil {
 		slog.Debug("helixdb init failed, proceeding without", "error", err)
 	}
+
+	defer app.CloseHelixDB()
 
 	if err := app.InitClient(ctx); err != nil {
 		return err

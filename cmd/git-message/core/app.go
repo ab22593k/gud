@@ -122,24 +122,27 @@ func (a *AppContext) HelixDB() *mem.DB {
 	return a.helixDB
 }
 
-// Close releases the embedded HelixDB handle, flushing pending writes and
-// releasing the on-disk lock. It is nil-safe and idempotent: a nil AppContext,
-// an AppContext without a DB, and repeated calls are all no-ops returning nil.
-// Callers that created the AppContext via NewAppContext must defer Close right
-// after creation so every return path after InitHelixDB releases the handle.
-func (a *AppContext) Close() error {
+// CloseHelixDB releases the embedded HelixDB handle, flushing pending writes
+// and releasing the on-disk lock. It is nil-safe and idempotent: a nil
+// AppContext, an AppContext without a DB, and repeated calls are all no-ops.
+// A close failure is logged at debug level and discarded. Pair every
+// successful InitHelixDB with a deferred CloseHelixDB so every return path
+// below it releases the handle.
+func (a *AppContext) CloseHelixDB() {
 	if a == nil {
-		return nil
+		return
 	}
 
 	db := a.helixDB
 	a.helixDB = nil
 
 	if db == nil {
-		return nil
+		return
 	}
 
-	return db.Close()
+	if err := db.Close(); err != nil {
+		slog.Debug("helixdb: close failed", "error", err)
+	}
 }
 
 // InitClient creates the request client from the resolved configuration.
@@ -167,8 +170,8 @@ func (a *AppContext) InitClient(ctx context.Context) error {
 //
 // The handle is per-process against a shared on-disk store. A second
 // concurrent process opening the same store may fail to acquire it and
-// degrades to disabled mode via NewDB; Close flushes and releases the lock
-// promptly, so callers must defer AppContext.Close.
+// degrades to disabled mode via NewDB; CloseHelixDB flushes and releases the
+// lock promptly, so callers must defer AppContext.CloseHelixDB.
 func (a *AppContext) InitHelixDB(ctx context.Context) error {
 	db := mem.NewDB(mem.Options{Enabled: true})
 
