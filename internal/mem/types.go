@@ -1,6 +1,7 @@
 package mem
 
 import (
+	"encoding/json"
 	"time"
 
 	helix "github.com/helixdb/helix-db/sdks/go"
@@ -260,13 +261,23 @@ type EntityData struct {
 
 // ToProps converts EntityData to a helix.Props for persisting as an Entity node.
 func (e *EntityData) ToProps() helix.Props {
-	props := helix.Props{
+	props := make(helix.Props, 0, 5)
+
+	props = append(props,
 		helix.Prop("entityKey", helix.String(e.EntityKey)),
 		helix.Prop(DefaultTenantProperty, helix.String(e.TenantID)),
 		helix.Prop("name", helix.String(e.Name)),
 		helix.Prop("kind", helix.String(e.Kind)),
-		helix.Prop("metadata", helix.String("")),
+	)
+
+	if len(e.Metadata) == 0 {
+		return props
 	}
 
-	return props
+	data, err := json.Marshal(e.Metadata)
+	if err != nil {
+		return props
+	}
+
+	return append(props, helix.Prop("metadata", helix.String(string(data))))
 }

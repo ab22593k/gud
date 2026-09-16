@@ -1,8 +1,11 @@
 package mem
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
+
+	helix "github.com/helixdb/helix-db/sdks/go"
 )
 
 func TestCommitData_ToProperties(t *testing.T) {
@@ -162,12 +165,78 @@ func TestEntityData_ToProps(t *testing.T) {
 		TenantID:  "tenant-acme",
 		Name:      "NewServer",
 		Kind:      "function",
+		Metadata:  map[string]string{"type": "destination", "lang": "go"},
 	}
 
 	props := ent.ToProps()
 	if len(props) == 0 {
 		t.Fatal("expected non-empty props")
 	}
+
+	raw, ok := findPropString(t, props, "metadata")
+	if !ok {
+		t.Fatal("expected metadata property")
+	}
+
+	var got map[string]string
+	if err := json.Unmarshal([]byte(raw), &got); err != nil {
+		t.Fatalf("metadata is not valid JSON: %v", err)
+	}
+
+	for k, want := range ent.Metadata {
+		if got[k] != want {
+			t.Errorf("metadata[%q] = %q, want %q", k, got[k], want)
+		}
+	}
+}
+
+func TestEntityData_ToProps_NoMetadata(t *testing.T) {
+	for _, metadata := range []map[string]string{nil, {}} {
+		ent := EntityData{
+			EntityKey: "tenant-acme:NewServer",
+			TenantID:  "tenant-acme",
+			Name:      "NewServer",
+			Kind:      "function",
+			Metadata:  metadata,
+		}
+
+		if _, ok := findPropString(t, ent.ToProps(), "metadata"); ok {
+			t.Errorf("expected no metadata property for %v", metadata)
+		}
+	}
+}
+
+func findPropString(t *testing.T, props helix.Props, name string) (string, bool) {
+	t.Helper()
+
+	for _, p := range props {
+		if p.Name != name {
+			continue
+		}
+
+		b, err := json.Marshal(p)
+		if err != nil {
+			t.Fatalf("marshal prop %q failed: %v", name, err)
+		}
+
+		var pair []json.RawMessage
+		if err := json.Unmarshal(b, &pair); err != nil || len(pair) != 2 {
+			t.Fatalf("unexpected prop JSON for %q: %s", name, string(b))
+		}
+
+		var payload struct {
+			Value map[string]string `json:"value"`
+		}
+		if err := json.Unmarshal(pair[1], &payload); err != nil {
+			t.Fatalf("decode prop %q value failed: %v", name, err)
+		}
+
+		s, ok := payload.Value["string"]
+
+		return s, ok
+	}
+
+	return "", false
 }
 
 func TestCommitRecord_FromHelixNode(t *testing.T) {
