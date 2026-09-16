@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 
 	helix "github.com/helixdb/helix-db/sdks/go"
 )
@@ -131,70 +130,4 @@ func (db *DB) Exec(ctx context.Context, req helix.Request, out any, opts ...heli
 	}
 
 	return db.client.Exec(ctx, req, out, opts...)
-}
-
-// EnsureSchema creates indexes and ensures the graph schema exists.
-// This is idempotent and safe to call on every startup.
-// Uses tenant-partitioned indexes where applicable for multi-repo isolation.
-func (db *DB) EnsureSchema(ctx context.Context) error {
-	if !db.enabled || db.client == nil {
-		return ErrHelixUnavailable
-	}
-
-	sctx, cancel := context.WithTimeout(ctx, 3*time.Second)
-	defer cancel()
-
-	ctx = sctx
-
-	indexes := []*helix.Traversal{
-		// Tenant-partitioned text indexes for the Commit label.
-		helix.G().CreateTextIndexNodes("Commit", "message", DefaultTenantProperty),
-		helix.G().CreateTextIndexNodes("Commit", "diff_text", DefaultTenantProperty),
-		helix.G().CreateTextIndexNodes("File", "path", DefaultTenantProperty),
-		helix.G().CreateTextIndexNodes("CodeElement", "signature", DefaultTenantProperty),
-		helix.G().CreateTextIndexNodes("CodeElement", "name", DefaultTenantProperty),
-		helix.G().CreateTextIndexNodes("Memory", "content", DefaultTenantProperty),
-
-		// Tenant-partitioned vector index for Commit embeddings.
-		helix.G().CreateVectorIndexNodes(
-			"Commit", "embedding", DefaultEmbeddingDimension, helix.VectorDistanceCosine, DefaultTenantProperty,
-		),
-		helix.G().CreateVectorIndexNodes(
-			"Memory", "embedding", DefaultEmbeddingDimension, helix.VectorDistanceCosine, DefaultTenantProperty,
-		),
-
-		// Commit equality indexes.
-		helix.G().CreateIndexIfNotExists(helix.NodeEqualityIndex("Commit", "id")),
-		helix.G().CreateIndexIfNotExists(helix.NodeEqualityIndex("Commit", "repo_path")),
-		helix.G().CreateIndexIfNotExists(helix.NodeRangeIndex("Commit", "timestamp")),
-
-		// Tenant-scoped equality indexes.
-		helix.G().CreateIndexIfNotExists(helix.NodeEqualityIndex("Author", "email")),
-		helix.G().CreateIndexIfNotExists(helix.NodeEqualityIndex("Repo", "path")),
-		helix.G().CreateIndexIfNotExists(helix.NodeEqualityIndex("File", "path")),
-
-		// CodeElement indexes for entity-aware queries.
-		helix.G().CreateIndexIfNotExists(helix.NodeEqualityIndex("CodeElement", "elementKey")),
-		helix.G().CreateIndexIfNotExists(helix.NodeEqualityIndex("CodeElement", "name")),
-
-		// Memory indexes for the general memory model.
-		helix.G().CreateIndexIfNotExists(helix.NodeEqualityIndex("Memory", "memoryId")),
-		helix.G().CreateIndexIfNotExists(helix.NodeEqualityIndex("Memory", "userId")),
-		helix.G().CreateIndexIfNotExists(helix.NodeRangeIndex("Memory", "createdAt")),
-		helix.G().CreateIndexIfNotExists(helix.NodeRangeIndex("Memory", "salience")),
-
-		// Category and Entity indexes.
-		helix.G().CreateIndexIfNotExists(helix.NodeEqualityIndex("Category", "categoryKey")),
-		helix.G().CreateIndexIfNotExists(helix.NodeEqualityIndex("Entity", "entityKey")),
-		helix.G().CreateIndexIfNotExists(helix.NodeEqualityIndex("Entity", "name")),
-	}
-
-	for _, idx := range indexes {
-		req := helix.WriteQuery("schema_migration").VarAs("_", idx).Returning()
-		if err := db.client.Exec(ctx, req, nil); err != nil {
-			return fmt.Errorf("schema migration: %w", err)
-		}
-	}
-
-	return nil
 }

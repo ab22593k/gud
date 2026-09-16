@@ -140,9 +140,10 @@ func (a *AppContext) InitClient(ctx context.Context) error {
 
 // InitHelixDB opens the embedded HelixDB database. Memory is always enabled.
 //
-// Schema migration (EnsureSchema) runs whenever the DB is available. It is
-// idempotent and fast, and guarantees a pre-existing database never misses
-// the indexes.
+// Schema migration (EnsureSchema) runs whenever the DB is available. The
+// first invocation migrates in one batched transaction and records a
+// version marker; steady-state invocations hit the marker and pay zero
+// HelixDB transactions.
 func (a *AppContext) InitHelixDB(ctx context.Context) error {
 	db := mem.NewDB(mem.Options{Enabled: true})
 
@@ -158,9 +159,9 @@ func (a *AppContext) InitHelixDB(ctx context.Context) error {
 		return nil
 	}
 
-	// EnsureSchema is idempotent and fast on an open embedded database, so
-	// always run it rather than assuming a pre-existing database already
-	// has the schema.
+	// EnsureSchema is versioned and batched: the first invocation migrates
+	// once, steady-state invocations hit the marker with zero transactions,
+	// so a pre-existing database never misses the indexes.
 	if err := db.EnsureSchema(ctx); err != nil {
 		return fmt.Errorf("helixdb schema: %w", err)
 	}
