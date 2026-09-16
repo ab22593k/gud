@@ -7,6 +7,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"gud/internal/profile"
 	"gud/internal/tui"
@@ -15,6 +16,10 @@ import (
 )
 
 const profileCmdName = "profile"
+
+// fetchCatalogTimeout bounds the remote catalog fetch, which otherwise
+// blocks unbounded on http.DefaultClient.
+const fetchCatalogTimeout = 15 * time.Second
 
 var profileManager *profile.Manager
 
@@ -127,7 +132,12 @@ func listRemoteProfiles(cmd *cobra.Command) error {
 
 	_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Fetching profile catalog from K-Dense-AI/scientific-agents...")
 
-	entries, err := profileManager.FetchCatalog(context.Background())
+	// Bound the fetch: FetchCatalog uses http.DefaultClient (no client
+	// timeout), so without this a stalled connection hangs the command.
+	fetchCtx, cancel := context.WithTimeout(context.Background(), fetchCatalogTimeout)
+	defer cancel()
+
+	entries, err := profileManager.FetchCatalog(fetchCtx)
 	if err != nil {
 		return fmt.Errorf("fetch catalog: %w", err)
 	}

@@ -158,8 +158,9 @@ func (a *AppContext) InitHelixDB(ctx context.Context) error {
 		return nil
 	}
 
-	// EnsureSchema is idempotent and cheap on a warm server, so always run it
-	// rather than assuming a pre-existing server already has the schema.
+	// EnsureSchema is idempotent and fast on an open embedded database, so
+	// always run it rather than assuming a pre-existing database already
+	// has the schema.
 	if err := db.EnsureSchema(ctx); err != nil {
 		return fmt.Errorf("helixdb schema: %w", err)
 	}
