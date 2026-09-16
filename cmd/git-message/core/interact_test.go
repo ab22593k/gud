@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -77,6 +78,28 @@ func writeEditorScript(t *testing.T, content string) string {
 	}
 
 	return path
+}
+
+func TestPersistToHelixDB_DegradedNoop(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		app  *AppContext
+	}{
+		{name: "nil DB", app: &AppContext{}},
+		{name: "disabled DB", app: &AppContext{helixDB: mem.NewDB(mem.Options{})}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			// persistToHelixDB is fire-and-forget and returns nothing; in
+			// degraded mode it must return without touching git or HelixDB.
+			persistToHelixDB(context.Background(), tt.app, "diff", "abc123", "msg", nil)
+		})
+	}
 }
 
 func TestToFileChanges(t *testing.T) {
