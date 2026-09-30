@@ -217,3 +217,224 @@ func runGitDiff(ctx context.Context, args ...string) (string, error) {
 
 	return out.String(), nil
 }
+
+// RenamedFile is a staged rename old→new path pair whose content hunks are
+// excluded from the prompt by default.
+type RenamedFile struct {
+	OldPath string
+	NewPath string
+}
+
+// FilterRemovedContent splits a unified diff (`git diff --cached` or
+// `git show --patch` output) into per-file blocks and, unless include is
+// true, drops the content blocks of deleted files and renames. It returns
+// the kept diff and, in diff order, the removed references: deleted paths
+// and rename old→new pairs. Removed references are reported in both modes
+// so callers can name removed paths even when their content is included;
+// every dropped block yields exactly one reference. With include=true the
+// kept diff is the input unchanged.
+func FilterRemovedContent(diff string, include bool) (kept string, deleted []string, renamed []RenamedFile) {
+	if diff == "" {
+		return "", nil, nil
+	}
+
+	blocks := splitDiffBlocks(diff)
+
+	var keptBlocks []string
+
+	for _, b := range blocks {
+		if from, to, ok := parseRenameBlock(b); ok {
+			renamed = append(renamed, RenamedFile{OldPath: from, NewPath: to})
+
+			if include {
+				keptBlocks = append(keptBlocks, b)
+			}
+
+			continue
+		}
+
+		if path, ok := parseDeletedBlock(b); ok {
+			deleted = append(deleted, path)
+
+			if include {
+				keptBlocks = append(keptBlocks, b)
+			}
+
+			continue
+		}
+
+		keptBlocks = append(keptBlocks, b)
+	}
+
+	if len(deleted) == 0 && len(renamed) == 0 {
+		return diff, nil, nil
+	}
+
+	if include {
+		return diff, deleted, renamed
+	}
+
+	return joinDiffBlocks(blocks, keptBlocks), deleted, renamed
+}
+
+// splitDiffBlocks splits diff at `diff --git ` boundaries, preserving any
+// preamble (e.g. `git show` headers) as the first block. Diffs without
+// `diff --git ` headers (bare `---`/`+++` fixtures) form a single block.
+func splitDiffBlocks(diff string) []string {
+	const header = "diff --git "
+
+	var blocks []string
+
+	start := 0
+
+	for {
+		idx := indexLinePrefix(diff, header, start)
+		if idx < 0 {
+			break
+		}
+
+		if idx > start {
+			blocks = append(blocks, diff[start:idx])
+		}
+
+		start = idx
+
+		next := indexLinePrefix(diff, header, idx+len(header))
+		if next < 0 {
+			blocks = append(blocks, diff[start:])
+
+			return blocks
+		}
+
+		blocks = append(blocks, diff[start:next])
+		start = next
+	}
+
+	if len(blocks) == 0 {
+		return []string{diff}
+	}
+
+	return blocks
+}
+
+// joinDiffBlocks rebuilds the diff from kept blocks. Blocks carry their
+// original separators, so joining is plain concatenation.
+func joinDiffBlocks(all, kept []string) string {
+	keep := make(map[string]int, len(kept))
+	for _, b := range kept {
+		keep[b]++
+	}
+
+	var out strings.Builder
+
+	for _, b := range all {
+		if keep[b] > 0 {
+			keep[b]--
+
+			out.WriteString(b)
+		}
+	}
+
+	return out.String()
+}
+
+// indexLinePrefix returns the byte index of the first line at or after start
+// beginning with prefix, or -1. Matching is line-anchored so hunk bodies
+// mentioning the prefix mid-line are ignored.
+func indexLinePrefix(s, prefix string, start int) int {
+	for i := start; i < len(s); {
+		lineStart := i
+		if lineStart == 0 || s[lineStart-1] == '\n' {
+			if strings.HasPrefix(s[lineStart:], prefix) {
+				return lineStart
+			}
+		}
+
+		next := strings.IndexByte(s[i:], '\n')
+		if next < 0 {
+			return -1
+		}
+
+		i += next + 1
+	}
+
+	return -1
+}
+
+// parseRenameBlock reports whether block is a rename (has `rename from/to`
+// headers) and returns the old and new paths.
+func parseRenameBlock(block string) (from, to string, ok bool) {
+	lines := strings.Split(block, "\n")
+
+	for _, line := range lines {
+		if after, found := strings.CutPrefix(line, "rename from "); found {
+			from = strings.TrimSpace(after)
+		}
+
+		if after, found := strings.CutPrefix(line, "rename to "); found {
+			to = strings.TrimSpace(after)
+		}
+	}
+
+	if from == "" || to == "" {
+		return "", "", false
+	}
+
+	return from, to, true
+}
+
+// parseDeletedBlock reports whether block deletes a file and returns its
+// path. Detection covers text deletions (`+++ /dev/null`, `deleted file
+// mode`) and binary deletions (`Binary files ... and /dev/null differ`).
+func parseDeletedBlock(block string) (string, bool) {
+	lines := strings.Split(block, "\n")
+
+	for i, line := range lines {
+		if strings.HasPrefix(line, "+++ /dev/null") && i > 0 {
+			if after, ok := strings.CutPrefix(lines[i-1], "--- a/"); ok {
+				return strings.TrimSpace(after), true
+			}
+		}
+
+		if strings.HasPrefix(line, "deleted file mode ") {
+			if path := deletedBlockPath(block); path != "" {
+				return path, true
+			}
+		}
+
+		if strings.HasPrefix(line, "Binary files ") && strings.HasSuffix(line, " and /dev/null differ") {
+			if path := deletedBlockPath(block); path != "" {
+				return path, true
+			}
+		}
+	}
+
+	return "", false
+}
+
+// deletedBlockPath resolves a deleted file's path from its block, preferring
+// the `--- a/<path>` line and falling back to the `diff --git a/<p> b/<q>`
+// header's old path.
+func deletedBlockPath(block string) string {
+	lines := strings.Split(block, "\n")
+
+	for i, line := range lines {
+		if strings.HasPrefix(line, "+++ /dev/null") && i > 0 {
+			if after, ok := strings.CutPrefix(lines[i-1], "--- a/"); ok {
+				return strings.TrimSpace(after)
+			}
+		}
+	}
+
+	for _, line := range lines {
+		if after, ok := strings.CutPrefix(line, "diff --git a/"); ok {
+			if cut, _, found := strings.Cut(after, " b/"); found {
+				return strings.TrimSpace(cut)
+			}
+
+			return strings.TrimSpace(after)
+		}
+	}
+
+	return ""
+}

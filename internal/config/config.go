@@ -23,6 +23,12 @@ type ProfileName string
 // History is the exception: it is a *int because 0 is a meaningful value that
 // disables recent-commit context. nil means "not set" in an override layer; a
 // non-nil pointer — including one pointing to 0 — means "explicitly set".
+//
+// IncludeRemovedContent follows the same pointer pattern: it is a *bool
+// because false is both the default and a meaningful explicit value. nil
+// means "not set" (default exclusion applies); non-nil means "explicitly
+// set" by that layer, so an explicit opt-in survives Merge while an unset
+// flag never clobbers lower layers.
 type Config struct {
 	DetailLevel DetailLevel
 	Profile     ProfileName
@@ -34,6 +40,9 @@ type Config struct {
 	// Issues are the issue-tracker numbers this commit fixes. nil means "not
 	// set"; each number adds a "Fixes: #N" git trailer before "Assisted-by:".
 	Issues []int
+	// IncludeRemovedContent opts back in to deleted/renamed file content in
+	// the generation prompt. nil means "not set" (exclusion applies).
+	IncludeRemovedContent *bool
 }
 
 // Ptr returns a pointer to a copy of v, expressing "explicitly set to v" —
@@ -54,6 +63,12 @@ func (c Config) HistoryValue() int {
 	}
 
 	return *c.History
+}
+
+// IncludeRemovedContentValue returns the effective opt-in, treating an unset
+// value as false (default exclusion). It is a nil-safe accessor.
+func (c Config) IncludeRemovedContentValue() bool {
+	return c.IncludeRemovedContent != nil && *c.IncludeRemovedContent
 }
 
 const (
@@ -144,6 +159,10 @@ func (c Config) Merge(override Config) Config {
 
 	if override.History != nil {
 		merged.History = override.History
+	}
+
+	if override.IncludeRemovedContent != nil {
+		merged.IncludeRemovedContent = override.IncludeRemovedContent
 	}
 
 	if override.APIKey != "" {

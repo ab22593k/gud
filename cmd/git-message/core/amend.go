@@ -118,6 +118,11 @@ func resolveAmendCommit(ctx context.Context, app *AppContext, rev string) (amend
 		return job, err
 	}
 
+	// The prompt carries the target commit's patch with removed content
+	// excluded unless opted in; removed names are retained either way, so a
+	// deletion-only commit still yields a names-only prompt.
+	diff = composePromptDiff(diff, app.Config().IncludeRemovedContentValue())
+
 	if strings.TrimSpace(diff) == "" {
 		return job, fmt.Errorf("cannot amend %s: commit has no changes", rev)
 	}

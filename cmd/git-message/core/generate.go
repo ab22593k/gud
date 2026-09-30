@@ -55,7 +55,7 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 	// nothing staged should get the "no staged changes" error immediately,
 	// not a HelixDB probe or a profile suggestion that may write
 	// .gud-skip/gud.json. InitHelixDB/InitClient run after this check.
-	diff, err := getStagedDiffOrError(ctx)
+	diff, err := getStagedDiffOrError(ctx, app.Config().IncludeRemovedContentValue())
 	if err != nil {
 		if op == git.OperationNone {
 			return err
@@ -217,34 +217,60 @@ func requireProfile(profileName string) error {
 	return nil
 }
 
-// getStagedDiffOrError retrieves the staged diff and returns an error if none exists.
-func getStagedDiffOrError(ctx context.Context) (string, error) {
-	diff, deleted, err := getStagedDiffAndDeleted(ctx)
+// getStagedDiffOrError retrieves the staged prompt diff and returns an error
+// if nothing is staged. Removed content is excluded unless includeRemoved is
+// set; removed names count as content, so a names-only stage proceeds instead
+// of reporting "no staged changes".
+func getStagedDiffOrError(ctx context.Context, includeRemoved bool) (string, error) {
+	changes, err := git.GetStagedChanges(ctx)
 	if err != nil {
 		return "", err
 	}
 
-	if strings.TrimSpace(diff) == "" {
+	composed := composePromptDiff(changes.Diff, includeRemoved)
+	if strings.TrimSpace(composed) == "" {
 		return "", errors.New("no staged changes found. Use 'git add' to stage changes")
 	}
 
-	return appendDeletedContext(diff, deleted), nil
+	return composed, nil
 }
 
-// getStagedDiffAndDeleted retrieves both the staged diff and the list of
-// deleted file names from a single git subprocess call.
-func getStagedDiffAndDeleted(ctx context.Context) (diff, deleted string, err error) {
+// composePromptDiff filters removed content from a raw staged diff and
+// appends removed-name sections, producing the final prompt diff. With
+// includeRemoved the raw diff is kept in full and names are still appended.
+func composePromptDiff(raw string, includeRemoved bool) string {
+	kept, deleted, renamed := git.FilterRemovedContent(raw, includeRemoved)
+
+	out := kept
+	if len(deleted) > 0 {
+		out = appendDeletedContext(out, strings.Join(deleted, "\n")+"\n")
+	}
+
+	out = appendRenamedContext(out, renamed)
+
+	if strings.TrimSpace(kept) == "" {
+		out = strings.TrimLeft(out, "\n")
+	}
+
+	return out
+}
+
+// getStagedDiffAndDeleted retrieves the staged diff with removed content
+// excluded unless includeRemoved is set, plus the removed references: the
+// deleted file names and the rename old→new pairs.
+func getStagedDiffAndDeleted(ctx context.Context, includeRemoved bool) (diff, deleted string,
+	renamed []git.RenamedFile, err error) {
 	changes, err := git.GetStagedChanges(ctx)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to get staged changes: %w", err)
+		return "", "", nil, fmt.Errorf("failed to get staged changes: %w", err)
 	}
 
-	diff = changes.Diff
-	if len(changes.Deleted) > 0 {
-		deleted = strings.Join(changes.Deleted, "\n") + "\n"
+	kept, remDeleted, remRenamed := git.FilterRemovedContent(changes.Diff, includeRemoved)
+	if len(remDeleted) > 0 {
+		deleted = strings.Join(remDeleted, "\n") + "\n"
 	}
 
-	return diff, deleted, nil
+	return kept, deleted, remRenamed, nil
 }
 
 // appendDeletedContext appends a note about deleted files to the diff if any exist.
@@ -276,6 +302,30 @@ func appendDeletedContext(diff, deleted string) string {
 		}
 
 		b.WriteString(line)
+	}
+
+	b.WriteString("\n")
+
+	return b.String()
+}
+
+// appendRenamedContext appends a note about renamed files to the diff if any
+// exist, mirroring appendDeletedContext with old → new pairs.
+func appendRenamedContext(diff string, renamed []git.RenamedFile) string {
+	if len(renamed) == 0 {
+		return diff
+	}
+
+	var b strings.Builder
+	b.WriteString(diff)
+	b.WriteString("\n\nRenamed files:\n")
+
+	for i, r := range renamed {
+		if i > 0 {
+			b.WriteString("\n")
+		}
+
+		b.WriteString(strings.TrimSpace(r.OldPath) + " -> " + strings.TrimSpace(r.NewPath))
 	}
 
 	b.WriteString("\n")

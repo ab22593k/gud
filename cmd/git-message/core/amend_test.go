@@ -2,10 +2,13 @@ package core
 
 import (
 	"context"
+	"os"
 	"os/exec"
 	"slices"
+	"strings"
 	"testing"
 
+	"gud/internal/config"
 	"gud/internal/git"
 
 	"github.com/spf13/cobra"
@@ -118,5 +121,73 @@ func TestNormalizeAmendArgs(t *testing.T) {
 				t.Errorf("normalizeAmendArgs(%v)=%v, want %v", tc.in, got, tc.want)
 			}
 		})
+	}
+}
+
+// TestResolveAmendCommit_FiltersRemovedContent commits a deletion as HEAD and
+// verifies the amend prompt diff excludes removed lines while naming the
+// file; opt-in restores full content.
+func TestResolveAmendCommit_FiltersRemovedContent(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping temp-repo test in short mode")
+	}
+
+	dir := t.TempDir()
+
+	setup := func(args ...string) {
+		t.Helper()
+
+		cmd := exec.CommandContext(context.Background(), "git", args...)
+		cmd.Dir = dir
+		cmd.Env = append(cmd.Environ(),
+			"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t",
+			"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t")
+
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+
+	setup("init", "-q", "-b", "main")
+
+	if err := os.WriteFile(dir+"/doomed.go", []byte("package doomed\n// removed line\n"), 0600); err != nil {
+		t.Fatalf("write doomed.go: %v", err)
+	}
+
+	if err := os.WriteFile(dir+"/keep.go", []byte("package main\n"), 0600); err != nil {
+		t.Fatalf("write keep.go: %v", err)
+	}
+
+	setup("add", ".")
+	setup("commit", "-q", "-m", "init")
+	setup("rm", "-q", "doomed.go")
+	setup("commit", "-q", "-m", "delete doomed")
+
+	t.Chdir(dir)
+
+	ctx := context.Background()
+
+	job, err := resolveAmendCommit(ctx, &AppContext{}, "HEAD")
+	if err != nil {
+		t.Fatalf("resolveAmendCommit(HEAD) error = %v", err)
+	}
+
+	if strings.Contains(job.diff, "removed line") {
+		t.Errorf("amend diff leaks deleted content:\n%s", job.diff)
+	}
+
+	if !strings.Contains(job.diff, "doomed.go") {
+		t.Errorf("amend diff missing deleted name:\n%s", job.diff)
+	}
+
+	optIn := &AppContext{cfg: config.Config{IncludeRemovedContent: config.Ptr(true)}}
+
+	full, err := resolveAmendCommit(ctx, optIn, "HEAD")
+	if err != nil {
+		t.Fatalf("resolveAmendCommit(HEAD, opt-in) error = %v", err)
+	}
+
+	if !strings.Contains(full.diff, "removed line") {
+		t.Errorf("opt-in amend diff missing deleted content:\n%s", full.diff)
 	}
 }

@@ -161,22 +161,40 @@ func runHookMode(cmd *cobra.Command, msgFile string) error {
 
 // runHookModeInternal generates a commit message and writes it to the message file.
 func runHookModeInternal(ctx context.Context, msgFile string, app *AppContext) error {
-	diff, deleted, err := getStagedDiffAndDeleted(ctx)
+	diff, ok, err := buildHookPromptDiff(ctx, app.Config().IncludeRemovedContentValue())
 	if err != nil {
 		return fmt.Errorf("failed to get staged changes: %w", err)
 	}
 
-	if strings.TrimSpace(diff) == "" {
+	if !ok {
 		return nil
 	}
-
-	diff = appendDeletedContext(diff, deleted)
 
 	if err := app.InitClient(ctx); err != nil {
 		return err
 	}
 
 	return generateAndWriteMsg(ctx, app, diff, msgFile)
+}
+
+// buildHookPromptDiff builds the hook-mode prompt diff: staged content with
+// removed hunks excluded unless includeRemoved, plus removed-name sections.
+// The second return reports whether any prompt content exists; a names-only
+// stage counts as content so the hook proceeds instead of silently skipping.
+func buildHookPromptDiff(ctx context.Context, includeRemoved bool) (string, bool, error) {
+	diff, deleted, renamed, err := getStagedDiffAndDeleted(ctx, includeRemoved)
+	if err != nil {
+		return "", false, err
+	}
+
+	if strings.TrimSpace(diff) == "" && strings.TrimSpace(deleted) == "" && len(renamed) == 0 {
+		return "", false, nil
+	}
+
+	diff = appendDeletedContext(diff, deleted)
+	diff = appendRenamedContext(diff, renamed)
+
+	return diff, true, nil
 }
 
 // generateAndWriteMsg generates a commit message and writes it to the message file.

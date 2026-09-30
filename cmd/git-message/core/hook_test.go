@@ -3,7 +3,9 @@ package core
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"gud/internal/git"
@@ -173,5 +175,94 @@ func TestHookInstallKeepsForeignHooksPath(t *testing.T) {
 
 	if got != foreign {
 		t.Errorf("core.hooksPath = %q, want foreign value %q preserved", got, foreign)
+	}
+}
+
+// TestBuildHookPromptDiff verifies hook-mode prompt construction: removed
+// hunks excluded by default with names retained, full content under opt-in,
+// and names-only stages reported as content (never silently skipped).
+func TestBuildHookPromptDiff(t *testing.T) {
+	newPromptDiffTestRepo(t)
+
+	run := func(args ...string) {
+		t.Helper()
+		//nolint:gosec // test-only git invocation with fixed repo-local args
+		cmd := exec.CommandContext(context.Background(), "git", args...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v failed: %v\n%s", args, err, out)
+		}
+	}
+
+	if err := os.WriteFile("keep.go", []byte("package main\n\n// changed\n"), 0600); err != nil {
+		t.Fatalf("write keep.go: %v", err)
+	}
+
+	run("add", "keep.go")
+	run("rm", "-q", "doomed.go")
+	run("mv", "moved.txt", "renamed.txt")
+
+	ctx := context.Background()
+
+	prompt, ok, err := buildHookPromptDiff(ctx, false)
+	if err != nil {
+		t.Fatalf("buildHookPromptDiff(include=false) error = %v", err)
+	}
+
+	if !ok {
+		t.Fatal("buildHookPromptDiff(include=false) reports no content for a staged change")
+	}
+
+	if !strings.Contains(prompt, "// changed") {
+		t.Errorf("hook prompt missing modified hunks:\n%s", prompt)
+	}
+
+	if strings.Contains(prompt, "package doomed") {
+		t.Errorf("hook prompt leaks deleted content:\n%s", prompt)
+	}
+
+	if !strings.Contains(prompt, "doomed.go") {
+		t.Errorf("hook prompt missing deleted name:\n%s", prompt)
+	}
+
+	if !strings.Contains(prompt, "moved.txt -> renamed.txt") {
+		t.Errorf("hook prompt missing rename pair:\n%s", prompt)
+	}
+
+	full, ok, err := buildHookPromptDiff(ctx, true)
+	if err != nil {
+		t.Fatalf("buildHookPromptDiff(include=true) error = %v", err)
+	}
+
+	if !ok {
+		t.Fatal("buildHookPromptDiff(include=true) reports no content for a staged change")
+	}
+
+	if !strings.Contains(full, "package doomed") {
+		t.Errorf("opt-in hook prompt missing deleted content:\n%s", full)
+	}
+
+	// Deletion-only stage: names are content, so the hook must proceed.
+	run("reset", "-q")
+	run("rm", "-q", "doomed.go")
+
+	namesOnly, ok, err := buildHookPromptDiff(ctx, false)
+	if err != nil {
+		t.Fatalf("buildHookPromptDiff(names-only) error = %v", err)
+	}
+
+	if !ok {
+		t.Error("names-only stage must report content so the hook does not silently skip")
+	}
+
+	if !strings.Contains(namesOnly, "doomed.go") {
+		t.Errorf("names-only hook prompt missing deleted name:\n%s", namesOnly)
+	}
+
+	// Truly empty stage: no content, hook stays silent.
+	run("reset", "-q")
+	run("checkout", "-q", "--", ".")
+
+	if _, ok, err := buildHookPromptDiff(ctx, false); err != nil || ok {
+		t.Errorf("empty stage: buildHookPromptDiff = (_, %v, %v), want (_, false, nil)", ok, err)
 	}
 }

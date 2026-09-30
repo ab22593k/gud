@@ -8,3 +8,8 @@ target/
 !.agents/types/
 .env
 pomona.md
+
+# Go build artifacts
+*.exe
+*.test
+*.out

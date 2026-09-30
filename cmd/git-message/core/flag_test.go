@@ -639,3 +639,48 @@ func TestHookCommandHelp(t *testing.T) {
 		t.Errorf("hook help output should contain 'run', got %q", output)
 	}
 }
+
+// TestConfigFromCmdIncludeRemovedContent verifies the opt-in flag layering:
+// absent leaves the field unset (nil, so lower layers win); an explicit flag
+// sets it to true.
+func TestConfigFromCmdIncludeRemovedContent(t *testing.T) {
+	t.Parallel()
+
+	if cfg := configFromCmd(flagCommand(t)); cfg.IncludeRemovedContent != nil {
+		t.Errorf("configFromCmd(no flags).IncludeRemovedContent = %v, want nil (unset)",
+			*cfg.IncludeRemovedContent)
+	}
+
+	cfg := configFromCmd(flagCommand(t, "--full-diff"))
+	if cfg.IncludeRemovedContent == nil {
+		t.Fatal("configFromCmd(--full-diff) left IncludeRemovedContent unset (nil)")
+	}
+
+	if !*cfg.IncludeRemovedContent {
+		t.Errorf("IncludeRemovedContent = false, want true (explicit opt-in)")
+	}
+}
+
+// TestRootCommandHelpIncludesRemovedContent verifies the help documents the
+// opt-in flag, its default (excluded), and its effect.
+func TestRootCommandHelpIncludesRemovedContent(t *testing.T) {
+	origOut := rootCmd.OutOrStdout()
+
+	t.Cleanup(func() {
+		rootCmd.SetOut(origOut)
+		rootCmd.SetArgs(nil)
+	})
+
+	var buf bytes.Buffer
+	rootCmd.SetOut(&buf)
+	rootCmd.SetArgs([]string{testHelpFlag})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("help command failed: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "--full-diff") {
+		t.Errorf("help output should include --full-diff flag, got %q", output)
+	}
+}

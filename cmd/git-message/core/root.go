@@ -116,6 +116,8 @@ func addPersistentFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().Int("wrapline", 72, "Wrap all lines at this character width")
 	cmd.PersistentFlags().String("amend", "", "Regenerate one commit message (e.g. --amend HEAD~2)")
 	cmd.PersistentFlags().Lookup("amend").NoOptDefVal = amendHeadRev
+	cmd.PersistentFlags().Bool("full-diff", false,
+		"Include deleted and renamed file content in the prompt (default: excluded, names only)")
 }
 
 func init() {
@@ -166,6 +168,12 @@ func configFromCmd(cmd *cobra.Command) config.Config {
 
 	if flags.Changed("issue") {
 		cfg.Issues = parseIssueList(mustGet(cmd, "issue", flags.GetStringSlice))
+	}
+
+	if flags.Changed("full-diff") {
+		// Pointer (not plain bool) so an unset flag stays nil and never
+		// clobbers lower layers, mirroring the History precedent.
+		cfg.IncludeRemovedContent = config.Ptr(mustGet(cmd, "full-diff", flags.GetBool))
 	}
 
 	return cfg
