@@ -172,8 +172,8 @@ func FormatSuggestionMessage(suggestions []profile.CatalogEntry) string {
 	}
 
 	var sb strings.Builder
-	sb.WriteString("\nNo AI profile configured for this repository.\n\n")
-	sb.WriteString("Based on your project's file types, these profiles may be relevant:\n\n")
+	sb.WriteString("\nNo AI persona configured for this repository.\n\n")
+	sb.WriteString("Based on your project's file types, these personas may be relevant:\n\n")
 
 	for i, s := range suggestions {
 		summary := s.Summary
@@ -186,7 +186,7 @@ func FormatSuggestionMessage(suggestions []profile.CatalogEntry) string {
 		fmt.Fprintf(&sb, "  [%d] %-35s %s\n", i+1, s.Slug, summary)
 	}
 
-	sb.WriteString("\nSelect a profile (1-3), or [s]kip this suggestion, or [a]bort: ")
+	sb.WriteString("\nSelect a persona (1-3), or [s]kip this suggestion, or [a]bort: ")
 
 	return sb.String()
 }

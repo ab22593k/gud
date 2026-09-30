@@ -18,7 +18,7 @@ import (
 const (
 	testUnknownProfile = "unknown"
 	testHelpFlag       = "--help"
-	testProfileCmdName = "profile"
+	testProfileCmdName = "persona"
 	testVersionCmdName = "version"
 	testListCmdName    = "list"
 	testHookCmdName    = "hook"
@@ -527,8 +527,8 @@ func TestRootCommandHelp(t *testing.T) {
 		t.Errorf("help output should list 'hook' subcommand, got %q", output)
 	}
 
-	if !strings.Contains(output, "profile") {
-		t.Errorf("help output should list 'profile' subcommand, got %q", output)
+	if !strings.Contains(output, "persona") {
+		t.Errorf("help output should list 'persona' subcommand, got %q", output)
 	}
 
 	if !strings.Contains(output, "version") {
@@ -604,8 +604,8 @@ func TestProfileListCommand(t *testing.T) {
 	}
 
 	output := buf.String()
-	if !strings.Contains(output, "Cached profiles") && !strings.Contains(output, "No cached profiles") {
-		t.Errorf("profile list output unexpected, got %q", output)
+	if !strings.Contains(output, "Cached personas") && !strings.Contains(output, "No cached personas") {
+		t.Errorf("persona list output unexpected, got %q", output)
 	}
 }
 
@@ -682,5 +682,48 @@ func TestRootCommandHelpIncludesRemovedContent(t *testing.T) {
 	output := buf.String()
 	if !strings.Contains(output, "--full-diff") {
 		t.Errorf("help output should include --full-diff flag, got %q", output)
+	}
+}
+
+// TestConfigFromCmdPersona verifies the renamed selection flag: absent
+// leaves Profile unset (nil-equivalent zero value); explicit sets it.
+func TestConfigFromCmdPersona(t *testing.T) {
+	t.Parallel()
+
+	if cfg := configFromCmd(flagCommand(t)); cfg.Profile != "" {
+		t.Errorf("configFromCmd(no flags).Profile = %q, want empty (unset)", cfg.Profile)
+	}
+
+	cfg := configFromCmd(flagCommand(t, "--persona", "astrophysicist"))
+	if cfg.Profile != config.ProfileName("astrophysicist") {
+		t.Errorf("configFromCmd(--persona).Profile = %q, want astrophysicist", cfg.Profile)
+	}
+}
+
+// TestRootCommandHelpListsPersona verifies help advertises --persona and no
+// longer advertises the removed --profile flag.
+func TestRootCommandHelpListsPersona(t *testing.T) {
+	origOut := rootCmd.OutOrStdout()
+
+	t.Cleanup(func() {
+		rootCmd.SetOut(origOut)
+		rootCmd.SetArgs(nil)
+	})
+
+	var buf bytes.Buffer
+	rootCmd.SetOut(&buf)
+	rootCmd.SetArgs([]string{testHelpFlag})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("help command failed: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "--persona") {
+		t.Errorf("help output should include --persona flag, got %q", output)
+	}
+
+	if strings.Contains(output, "--profile") {
+		t.Errorf("help output must not mention removed --profile flag, got %q", output)
 	}
 }

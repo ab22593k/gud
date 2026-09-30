@@ -105,7 +105,7 @@ func TestCategorizeByWorkMode(t *testing.T) {
 
 // profileSummaryHint is the trailing instruction line printed by
 // printProfileSummary after the category summary.
-const profileSummaryHint = "Use 'git message --profile <slug>' or 'git message profile save <slug>' " +
+const profileSummaryHint = "Use 'git message --persona <slug>' or 'git message persona save <slug>' " +
 	"with one of the slugs below.\n"
 
 // TestPrintProfileSummary verifies the category summary header, per-category
@@ -123,7 +123,7 @@ func TestPrintProfileSummary(t *testing.T) {
 			name:  "no profiles and no categories",
 			total: 0,
 			cats:  nil,
-			want: "\nFound 0 profiles in 0 categories:\n" +
+			want: "\nFound 0 personas in 0 categories:\n" +
 				"\n" +
 				"\n" +
 				profileSummaryHint +
@@ -133,9 +133,9 @@ func TestPrintProfileSummary(t *testing.T) {
 			name:  "single category",
 			total: 3,
 			cats:  []category{{name: testPhysics, count: 3}},
-			want: "\nFound 3 profiles in 1 categories:\n" +
+			want: "\nFound 3 personas in 1 categories:\n" +
 				"\n" +
-				"  physics (3 profiles)\n" +
+				"  physics (3 personas)\n" +
 				"\n" +
 				profileSummaryHint +
 				"\n",
@@ -148,11 +148,11 @@ func TestPrintProfileSummary(t *testing.T) {
 				{name: "chemistry", count: 1},
 				{name: testPhysics, count: 1},
 			},
-			want: "\nFound 4 profiles in 3 categories:\n" +
+			want: "\nFound 4 personas in 3 categories:\n" +
 				"\n" +
-				"  biology (2 profiles)\n" +
-				"  chemistry (1 profiles)\n" +
-				"  physics (1 profiles)\n" +
+				"  biology (2 personas)\n" +
+				"  chemistry (1 personas)\n" +
+				"  physics (1 personas)\n" +
 				"\n" +
 				profileSummaryHint +
 				"\n",

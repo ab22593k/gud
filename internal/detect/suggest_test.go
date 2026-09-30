@@ -202,7 +202,7 @@ func TestFormatSuggestionMessage_HappyPath(t *testing.T) {
 		t.Errorf("FormatSuggestionMessage missing 'ts-developer', got:\n%s", got)
 	}
 
-	if !strings.Contains(got, "Select a profile") {
+	if !strings.Contains(got, "Select a persona") {
 		t.Errorf("FormatSuggestionMessage missing prompt, got:\n%s", got)
 	}
 }

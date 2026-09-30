@@ -105,11 +105,11 @@ func TestNormalizeAmendArgs(t *testing.T) {
 		in   []string
 		want []string
 	}{
-		{"no amend", []string{"--profile", "x"}, []string{"--profile", "x"}},
+		{"no amend", []string{"--persona", "x"}, []string{"--persona", "x"}},
 		{"bare last", []string{amendFlag}, []string{amendFlag}},
 		{"space form joined", []string{amendFlag, "HEAD~2"}, []string{amendFlag + "=HEAD~2"}},
 		{"equals untouched", []string{amendFlag + "=HEAD~2"}, []string{amendFlag + "=HEAD~2"}},
-		{"flag next stays bare", []string{amendFlag, "--profile", "x"}, []string{amendFlag, "--profile", "x"}},
+		{"flag next stays bare", []string{amendFlag, "--persona", "x"}, []string{amendFlag, "--persona", "x"}},
 		{"empty", nil, []string{}},
 	}
 

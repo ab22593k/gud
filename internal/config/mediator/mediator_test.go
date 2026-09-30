@@ -17,7 +17,8 @@ func TestConfigFromEnv(t *testing.T) {
 	)
 
 	t.Setenv("GUD_DETAIL_LEVEL", "minimal")
-	t.Setenv("GUD_PROFILE", "env-profile")
+	t.Setenv("GUD_PERSONA", "env-profile")
+	t.Setenv("GUD_PROFILE", "stale-profile")
 	t.Setenv("GUD_MODEL", testModel)
 	t.Setenv("GUD_HINT", "env-hint")
 	t.Setenv("GUD_HISTORY", "7")
@@ -349,4 +350,33 @@ func containsStr(s, substr string) bool {
 	}
 
 	return false
+}
+
+// TestEnvPersonaPrecedence verifies the renamed selection layer: GUD_PERSONA
+// alone resolves the selection, the stale GUD_PROFILE is ignored, and an
+// explicit CLI selection still wins over the env value (precedence is flag
+// over environment over files, unchanged).
+func TestEnvPersonaPrecedence(t *testing.T) {
+	t.Setenv("GUD_PERSONA", "env-persona")
+	t.Setenv("GUD_PROFILE", "stale-profile")
+	t.Setenv("GOOGLE_API_KEY", "")
+
+	if got := configFromEnv().Profile; got != "env-persona" {
+		t.Errorf("env selection = %q, want env-persona (stale GUD_PROFILE ignored)", got)
+	}
+
+	td := t.TempDir()
+	m := &Mediator{
+		XDGProvider: provider.NewFileProvider(filepath.Join(td, "missing.json")),
+		CWDProvider: provider.NewFileProvider(filepath.Join(td, "also-missing.json")),
+	}
+
+	cfg, err := m.Load(config.Config{Profile: "cli-persona"})
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if cfg.Profile != "cli-persona" {
+		t.Errorf("Profile = %q, want cli-persona (explicit CLI wins over env)", cfg.Profile)
+	}
 }

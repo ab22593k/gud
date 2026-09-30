@@ -136,7 +136,7 @@ func TestOracle_Familiarity_NoGitRepo(t *testing.T) {
 func TestOracle_Explainability_ProfileNotFound(t *testing.T) {
 	var buf bytes.Buffer
 	rootCmd.SetOut(&buf)
-	rootCmd.SetArgs([]string{"--profile", "nonexistent-slug-12345", testVersionCmdName})
+	rootCmd.SetArgs([]string{"--persona", "nonexistent-slug-12345", testVersionCmdName})
 	t.Cleanup(func() {
 		rootCmd.SetOut(os.Stdout)
 		rootCmd.SetArgs(nil)
@@ -151,7 +151,7 @@ func TestOracle_Explainability_ProfileNotFound(t *testing.T) {
 		t.Skip("[E] requireProfile passed (unexpected) — skipping")
 	}
 
-	if !strings.Contains(got.Error(), "git message profile save") {
+	if !strings.Contains(got.Error(), "git message persona save") {
 		t.Errorf("[E] error should suggest how to fix it, got: %v", got)
 	}
 }
@@ -280,7 +280,7 @@ func TestOracle_History_HelpTextSmoke(t *testing.T) {
 		"Available Commands:",
 		"Flags:",
 		"--history",
-		"--profile",
+		"--persona",
 		"--detail-level",
 		"--wrapline",
 		"--model",
@@ -584,7 +584,7 @@ func TestOracle_Purpose_ProfileListStructure(t *testing.T) {
 	var buf bytes.Buffer
 	rootCmd.SetOut(&buf)
 	rootCmd.SetIn(&bytes.Buffer{}) // non-terminal stdin to prevent TUI launch
-	rootCmd.SetArgs([]string{"profile", "list"})
+	rootCmd.SetArgs([]string{"persona", "list"})
 	t.Cleanup(func() {
 		rootCmd.SetOut(os.Stdout)
 		rootCmd.SetIn(os.Stdin)
@@ -596,10 +596,10 @@ func TestOracle_Purpose_ProfileListStructure(t *testing.T) {
 	}
 
 	got := buf.String()
-	// Should either say "No cached profiles" or show a profile listing.
-	if !strings.Contains(got, "Cached profiles") &&
-		!strings.Contains(got, "No cached profiles") {
-		t.Errorf("[P] profile list output unexpected, got %q", got)
+	// Should either say "No cached personas" or show a persona listing.
+	if !strings.Contains(got, "Cached personas") &&
+		!strings.Contains(got, "No cached personas") {
+		t.Errorf("[P] persona list output unexpected, got %q", got)
 	}
 }
 

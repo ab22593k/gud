@@ -59,7 +59,7 @@ func TestResolveProfileContent_UncachedWarns(t *testing.T) {
 	}
 
 	if !strings.Contains(out, "not cached") ||
-		!strings.Contains(out, "git message profile save") ||
+		!strings.Contains(out, "git message persona save") ||
 		!strings.Contains(out, "nonexistent") {
 		t.Errorf("expected warning with profile name and actionable hint, got:\n%s", out)
 	}

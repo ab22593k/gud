@@ -8,7 +8,7 @@ import "gud/internal/config"
 // round-trips; nil means the key is absent and is omitted from output.
 type ConfigDTO struct {
 	DetailLevel string `json:"detail_level,omitempty"`
-	Profile     string `json:"profile,omitempty"`
+	Profile     string `json:"persona,omitempty"`
 	Model       string `json:"model,omitempty"`
 	Hint        string `json:"hint,omitempty"`
 	History     *int   `json:"history,omitempty"`

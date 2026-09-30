@@ -31,7 +31,7 @@ func TestHookModeToleratesUncachedProfile(t *testing.T) {
 	addPersistentFlags(cmd)
 	// Parse flags so cobra merges the persistent flags into cmd.Flags(),
 	// mirroring how configFromCmd observes them during a real execution.
-	if err := cmd.ParseFlags([]string{"--profile", "nonexistent-slug-12345"}); err != nil {
+	if err := cmd.ParseFlags([]string{"--persona", "nonexistent-slug-12345"}); err != nil {
 		t.Fatalf("parse flags: %v", err)
 	}
 

@@ -22,7 +22,7 @@ var rootCmd = &cobra.Command{
 	Long: `Tool that generates meaningful git commit messages
 using AI, based on your staged changes.
 
-It supports multiple profiles and detail levels to match your project's style.
+It supports multiple personas and detail levels to match your project's style.
 
 Invoked as 'git message'; 'gud message' is the same command.`,
 	SilenceUsage:  true,
@@ -107,7 +107,7 @@ func mustGet[T any](_ *cobra.Command, name string, fn func(string) (T, error)) T
 // Subcommands are attached to rootCmd separately in init().
 func addPersistentFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().String("detail-level", "standard", "Set the detail level (minimal, standard, detailed)")
-	cmd.PersistentFlags().String("profile", "", "AI agent profile slug (download with 'git message profile save <slug>')")
+	cmd.PersistentFlags().String("persona", "", "AI agent persona slug (download with 'git message persona save <slug>')")
 	cmd.PersistentFlags().String("hint", "", "Focus boundaries for the AI")
 	cmd.PersistentFlags().Int("history", 5, "Number of topic commits since diverging from upstream (0 to disable)")
 	cmd.PersistentFlags().String("model", "", "Gemini model to use (or use GEMINI_MODEL env)")
@@ -144,8 +144,8 @@ func configFromCmd(cmd *cobra.Command) config.Config {
 		cfg.DetailLevel = config.DetailLevel(mustGet(cmd, "detail-level", flags.GetString))
 	}
 
-	if flags.Changed("profile") {
-		cfg.Profile = config.ProfileName(mustGet(cmd, "profile", flags.GetString))
+	if flags.Changed("persona") {
+		cfg.Profile = config.ProfileName(mustGet(cmd, "persona", flags.GetString))
 	}
 
 	if flags.Changed("hint") {

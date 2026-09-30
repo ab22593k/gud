@@ -241,3 +241,28 @@ func TestEmptyDTO(t *testing.T) {
 		t.Errorf("empty DTO: WrapLine = %d", entity.WrapLine)
 	}
 }
+
+// TestJSONPersonaKey verifies the persona selection serializes under the
+// "persona" key; the old "profile" key must not appear.
+func TestJSONPersonaKey(t *testing.T) {
+	dto := ConfigDTO{Profile: "astrophysicist"}
+
+	//nolint:gosec // Test data, not real credentials.
+	data, err := json.Marshal(dto)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("json.Unmarshal to map failed: %v", err)
+	}
+
+	if v, exists := raw["persona"]; !exists || v != "astrophysicist" {
+		t.Errorf("persona key = %v (exists=%v), want astrophysicist in %v", v, exists, raw)
+	}
+
+	if _, exists := raw["profile"]; exists {
+		t.Errorf("old profile key must not appear, got %v", raw)
+	}
+}

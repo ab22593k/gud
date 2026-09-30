@@ -15,7 +15,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const profileCmdName = "profile"
+const profileCmdName = "persona"
 
 // fetchCatalogTimeout bounds the remote catalog fetch, which otherwise
 // blocks unbounded on http.DefaultClient.
@@ -38,19 +38,19 @@ func initProfileManager() {
 
 var profileCmd = &cobra.Command{
 	Use:   profileCmdName,
-	Short: "Manage AI agent profiles",
-	Long: `Manage AI agent profiles from the K-Dense-AI/scientific-agents catalog (500+ profiles).
+	Short: "Manage AI agent personas",
+	Long: `Manage AI agent personas from the K-Dense-AI/scientific-agents catalog (500+ personas).
 
-Use 'git message profile list --remote' to browse all available profiles.
-Use 'git message profile save <slug>' to download and cache a profile.
-Use 'git message --profile <slug>' to generate a message with that profile.`,
+Use 'git message persona list --remote' to browse all available personas.
+Use 'git message persona save <slug>' to download and cache a persona.
+Use 'git message --persona <slug>' to generate a message with that persona.`,
 }
 
 const profileListCmdName = "list"
 
 var profileListCmd = &cobra.Command{
 	Use:   profileListCmdName,
-	Short: "List available profiles",
+	Short: "List available personas",
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		initProfileManager()
 
@@ -62,13 +62,13 @@ var profileListCmd = &cobra.Command{
 
 		profiles, err := profileManager.List()
 		if err != nil {
-			return fmt.Errorf("list profiles: %w", err)
+			return fmt.Errorf("list personas: %w", err)
 		}
 
 		if len(profiles) == 0 {
-			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "No cached profiles found. "+
-				"Use 'git message profile list --remote' to browse available profiles, "+
-				"then 'git message profile save <slug>' to install one.")
+			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "No cached personas found. "+
+				"Use 'git message persona list --remote' to browse available personas, "+
+				"then 'git message persona save <slug>' to install one.")
 
 			return nil
 		}
@@ -78,7 +78,7 @@ var profileListCmd = &cobra.Command{
 			return runLocalTUIPicker(cmd, profiles)
 		}
 
-		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Cached profiles:")
+		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Cached personas:")
 		_, _ = fmt.Fprintln(cmd.OutOrStdout())
 
 		for _, p := range profiles {
@@ -86,7 +86,7 @@ var profileListCmd = &cobra.Command{
 		}
 
 		_, _ = fmt.Fprintln(cmd.OutOrStdout())
-		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Use 'git message profile list --remote' to browse all available profiles.")
+		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Use 'git message persona list --remote' to browse all available personas.")
 
 		return nil
 	},
@@ -113,14 +113,14 @@ func runLocalTUIPicker(cmd *cobra.Command, profiles []profile.Profile) error {
 		}
 	}
 
-	selected, err := tui.RunPicker(entries, nil, cached, "GUD Cached Profiles")
+	selected, err := tui.RunPicker(entries, nil, cached, "GUD Cached Personas")
 	if err != nil {
 		return fmt.Errorf("picker: %w", err)
 	}
 
 	if selected != nil {
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(),
-			"\nProfile %q selected. Use: git message --profile %s\n",
+			"\nPersona %q selected. Use: git message --persona %s\n",
 			selected.Slug, selected.Slug)
 	}
 
@@ -130,7 +130,7 @@ func runLocalTUIPicker(cmd *cobra.Command, profiles []profile.Profile) error {
 func listRemoteProfiles(cmd *cobra.Command) error {
 	initProfileManager()
 
-	_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Fetching profile catalog from K-Dense-AI/scientific-agents...")
+	_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Fetching persona catalog from K-Dense-AI/scientific-agents...")
 
 	// Bound the fetch: FetchCatalog uses http.DefaultClient (no client
 	// timeout), so without this a stalled connection hangs the command.
@@ -187,7 +187,7 @@ func runTUIPicker(cmd *cobra.Command, entries []profile.CatalogEntry) error {
 
 	if selected != nil {
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(),
-			"\nProfile %q saved. Use: git message --profile %s\n",
+			"\nPersona %q saved. Use: git message --persona %s\n",
 			selected.Slug, selected.Slug)
 	}
 
@@ -203,14 +203,14 @@ func downloadAndSaveProfile(ctx context.Context, slug, profession string) error 
 
 	content, err := profileManager.FetchProfile(ctx, slug)
 	if err != nil {
-		return fmt.Errorf("fetch profile %q: %w", slug, err)
+		return fmt.Errorf("fetch persona %q: %w", slug, err)
 	}
 
 	if err := profileManager.Save(slug, profile.Profile{
 		Profession: profession,
 		Content:    content,
 	}); err != nil {
-		return fmt.Errorf("save profile %q: %w", slug, err)
+		return fmt.Errorf("save persona %q: %w", slug, err)
 	}
 
 	return nil
@@ -255,15 +255,15 @@ func categorizeByWorkMode(entries []profile.CatalogEntry) []category {
 // printProfileSummary prints the category summary header with profile counts
 // and an instruction line for using profiles.
 func printProfileSummary(w io.Writer, total int, cats []category) {
-	_, _ = fmt.Fprintf(w, "\nFound %d profiles in %d categories:\n", total, len(cats))
+	_, _ = fmt.Fprintf(w, "\nFound %d personas in %d categories:\n", total, len(cats))
 	_, _ = fmt.Fprintln(w)
 
 	for _, cat := range cats {
-		_, _ = fmt.Fprintf(w, "  %s (%d profiles)\n", cat.name, cat.count)
+		_, _ = fmt.Fprintf(w, "  %s (%d personas)\n", cat.name, cat.count)
 	}
 
 	_, _ = fmt.Fprintln(w)
-	_, _ = fmt.Fprintln(w, "Use 'git message --profile <slug>' or 'git message profile save <slug>' "+
+	_, _ = fmt.Fprintln(w, "Use 'git message --persona <slug>' or 'git message persona save <slug>' "+
 		"with one of the slugs below.")
 	_, _ = fmt.Fprintln(w)
 }
@@ -290,34 +290,34 @@ func writeCatalogEntry(w io.Writer, e profile.CatalogEntry) {
 
 var profileSaveCmd = &cobra.Command{
 	Use:   "save <slug>",
-	Short: "Download and cache a remote profile",
+	Short: "Download and cache a remote persona",
 	Args:  cobra.ExactArgs(1),
-	Long: `Download a scientific agent profile from K-Dense-AI/scientific-agents and cache it locally.
+	Long: `Download a scientific agent persona from K-Dense-AI/scientific-agents and cache it locally.
 
-After saving, use it with: git message --profile <slug>
+After saving, use it with: git message --persona <slug>
 
-Run 'git message profile list --remote' to see all available slugs.`,
-	Example: `  git message profile save astrophysicist
-  git message profile save computer-scientist
-  git message profile save molecular-biologist`,
+Run 'git message persona list --remote' to see all available slugs.`,
+	Example: `  git message persona save astrophysicist
+  git message persona save computer-scientist
+  git message persona save molecular-biologist`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		initProfileManager()
 
 		slug := args[0]
 
 		if profileManager.IsCached(slug) {
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Profile %q is already cached.\n", slug)
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Persona %q is already cached.\n", slug)
 
 			return nil
 		}
 
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Downloading profile %q...\n", slug)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Downloading persona %q...\n", slug)
 		if err := downloadAndSaveProfile(context.Background(), slug, slug); err != nil {
 			return err
 		}
 
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Profile %q saved successfully.\n", slug)
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Use: git message --profile %s\n", slug)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Persona %q saved successfully.\n", slug)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Use: git message --persona %s\n", slug)
 
 		return nil
 	},
@@ -325,9 +325,9 @@ Run 'git message profile list --remote' to see all available slugs.`,
 
 var profileRemoveCmd = &cobra.Command{
 	Use:     "remove <slug>",
-	Short:   "Remove a cached profile",
+	Short:   "Remove a cached persona",
 	Args:    cobra.ExactArgs(1),
-	Example: `  git message profile remove astrophysicist`,
+	Example: `  git message persona remove astrophysicist`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		initProfileManager()
 
@@ -337,7 +337,7 @@ var profileRemoveCmd = &cobra.Command{
 			return err
 		}
 
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Profile %q removed.\n", slug)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Persona %q removed.\n", slug)
 
 		return nil
 	},
@@ -345,11 +345,11 @@ var profileRemoveCmd = &cobra.Command{
 
 var profileShowCmd = &cobra.Command{
 	Use:   "show <slug>",
-	Short: "Show details of a profile",
+	Short: "Show details of a persona",
 	Args:  cobra.ExactArgs(1),
-	Example: `  git message profile show astrophysicist
-  git message profile show computer-scientist
-  git message profile show astrophysicist --remote`,
+	Example: `  git message persona show astrophysicist
+  git message persona show computer-scientist
+  git message persona show astrophysicist --remote`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		initProfileManager()
 
@@ -358,18 +358,18 @@ var profileShowCmd = &cobra.Command{
 		showRemote, _ := cmd.Flags().GetBool("remote")
 
 		if showRemote {
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Fetching profile %q from remote...\n", slug)
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Fetching persona %q from remote...\n", slug)
 
 			content, err := profileManager.FetchProfile(context.Background(), slug)
 			if err != nil {
 				return fmt.Errorf("fetch remote: %w", err)
 			}
 
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Profile: %s (remote)\n", slug)
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Persona: %s (remote)\n", slug)
 			_, _ = fmt.Fprintln(cmd.OutOrStdout())
 			_, _ = fmt.Fprintln(cmd.OutOrStdout(), content)
 			_, _ = fmt.Fprintln(cmd.OutOrStdout())
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Use 'git message profile save %s' to cache it locally.\n", slug)
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Use 'git message persona save %s' to cache it locally.\n", slug)
 
 			return nil
 		}
@@ -379,7 +379,7 @@ var profileShowCmd = &cobra.Command{
 			return err
 		}
 
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Profile: %s (cached)\n", p.Slug)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Persona: %s (cached)\n", p.Slug)
 
 		_, _ = fmt.Fprintln(cmd.OutOrStdout())
 		if p.Content != "" {
@@ -399,8 +399,8 @@ func truncate(s string, maxLen int) string {
 }
 
 func init() {
-	profileListCmd.Flags().BoolP("remote", "r", false, "List all remote profiles from K-Dense-AI/scientific-agents")
-	profileShowCmd.Flags().BoolP("remote", "r", false, "Show a remote profile without saving it")
+	profileListCmd.Flags().BoolP("remote", "r", false, "List all remote personas from K-Dense-AI/scientific-agents")
+	profileShowCmd.Flags().BoolP("remote", "r", false, "Show a remote persona without saving it")
 
 	profileCmd.AddCommand(profileListCmd)
 	profileCmd.AddCommand(profileSaveCmd)

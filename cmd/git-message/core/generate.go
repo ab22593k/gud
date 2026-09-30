@@ -188,9 +188,9 @@ func resolveProfileContent(profileName string) string {
 
 	p, err := profileManager.Get(profileName)
 	if err != nil {
-		slog.Warn("configured profile not cached; proceeding without profile content",
-			"profile", profileName,
-			"hint", "git message profile save "+profileName)
+		slog.Warn("configured persona not cached; proceeding without persona content",
+			"persona", profileName,
+			"hint", "git message persona save "+profileName)
 
 		return ""
 	}
@@ -209,9 +209,9 @@ func requireProfile(profileName string) error {
 
 	_, err := profileManager.Get(profileName)
 	if err != nil {
-		return fmt.Errorf("profile %q not found.\n\n"+
-			"First download it:  git message profile save %s\n"+
-			"See all:            git message profile list --remote", profileName, profileName)
+		return fmt.Errorf("persona %q not found.\n\n"+
+			"First download it:  git message persona save %s\n"+
+			"See all:            git message persona list --remote", profileName, profileName)
 	}
 
 	return nil

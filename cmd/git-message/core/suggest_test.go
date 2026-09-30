@@ -218,7 +218,7 @@ func TestHandleProfileSelection_AppliesSelectedProfile(t *testing.T) {
 		t.Errorf("gud.json missing profile slug:\n  got: %q", string(data))
 	}
 
-	if want := `Profile "astrophysicist" selected.`; !strings.Contains(buf.String(), want) {
+	if want := `Persona "astrophysicist" selected.`; !strings.Contains(buf.String(), want) {
 		t.Errorf("output missing %q:\n  got: %q", want, buf.String())
 	}
 }
@@ -319,7 +319,7 @@ func TestWriteSkipMarker(t *testing.T) {
 		t.Fatalf("read marker: %v", err)
 	}
 
-	if want := "# gud profile suggestion skipped\n"; string(data) != want {
+	if want := "# gud persona suggestion skipped\n"; string(data) != want {
 		t.Errorf("marker content = %q, want %q", string(data), want)
 	}
 

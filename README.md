@@ -12,14 +12,14 @@ concisely describe code changes in natural language
 
 ```bash
 git message                          Generate a commit message from staged changes
-git message --profile <slug>         Use a scientific agent profile
+git message --persona <slug>         Use a scientific agent persona
 git message --detail detailed        More verbose commit messages
 git message --issue 123,456          Reference fixed issues (adds "Fixes: #123" trailer per issue)
 git message --amend                  Regenerate the HEAD message
 git message --amend HEAD~2           Regenerate only the HEAD~2 message
 git message hook install             Install git prepare-commit-msg hook
-git message profile list --remote    Browse available AI profiles
-git message profile save <slug>      Download a profile
+git message persona list --remote    Browse available AI personas
+git message persona save <slug>      Download a persona
 ```
 
 ## Amend a previous commit
@@ -54,18 +54,18 @@ network.
 
 Priority (highest to lowest): CLI flags → env vars → `./gud.json` → `~/.config/gud/config.json`
 
-Key env vars: `GOOGLE_API_KEY`, `GUD_MODEL`, `GUD_DETAIL_LEVEL`, `GUD_PROFILE`
+Key env vars: `GOOGLE_API_KEY`, `GUD_MODEL`, `GUD_DETAIL_LEVEL`, `GUD_PERSONA`
 
 Set `GUD_LOG_LEVEL=debug` (also `info`, `warn`, `error`) to see diagnostics on stderr, including HelixDB memory retrieval:
 
-## Profiles
+## Personas
 
-Browse 500+ scientific agent profiles from the [scientific-agents](https://github.com/K-Dense-AI/scientific-agents) catalog:
+Browse 500+ scientific agent personas from the [scientific-agents](https://github.com/K-Dense-AI/scientific-agents) catalog:
 
 ```bash
-git message profile list --remote
-git message profile save astrophysicist
-git message --profile astrophysicist
+git message persona list --remote
+git message persona save astrophysicist
+git message --persona astrophysicist
 ```
 
 ## Memory

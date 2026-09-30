@@ -109,7 +109,7 @@ func NewPicker(
 		items[i] = catalogItem{entry: e, cached: cached[e.Slug]}
 	}
 
-	t := "GUD Profile Catalog"
+	t := "GUD Persona Catalog"
 	if len(title) > 0 && title[0] != "" {
 		t = title[0]
 	}
@@ -242,7 +242,7 @@ func (m PickerModel) View() string {
 		return listView
 
 	case StateDownloading:
-		name := "profile"
+		name := "persona"
 		if m.selected != nil {
 			name = m.selected.Slug
 		}
@@ -254,7 +254,7 @@ func (m PickerModel) View() string {
 		return listView + "\n\n" + m.spinner.View() + " Downloading " + name + "..."
 
 	case StateDone:
-		name := "profile"
+		name := "persona"
 		if m.selected != nil {
 			name = m.selected.Slug
 		}

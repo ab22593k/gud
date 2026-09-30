@@ -171,13 +171,13 @@ func isKnownPlaceholder(s string) bool {
 //
 // Recognised variables:
 //
-//	GUD_DETAIL_LEVEL  GUD_PROFILE  GUD_MODEL
+//	GUD_DETAIL_LEVEL  GUD_PERSONA  GUD_MODEL
 //	GUD_HINT          GUD_HISTORY  GOOGLE_API_KEY GUD_WRAPLINE
 func configFromEnv() config.Config {
 	cfg := config.Config{
 		APIKey:  firstSet("GOOGLE_API_KEY"),
 		Model:   firstSet("GUD_MODEL", "GEMINI_MODEL"),
-		Profile: config.ProfileName(firstSet("GUD_PROFILE")),
+		Profile: config.ProfileName(firstSet("GUD_PERSONA")),
 		Hint:    os.Getenv("GUD_HINT"),
 	}
 

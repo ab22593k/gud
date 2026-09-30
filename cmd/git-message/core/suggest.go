@@ -125,7 +125,7 @@ func handleProfileSelection(ctx context.Context, app *AppContext, out io.Writer,
 	case input == "" || strings.EqualFold(input, "s") || strings.EqualFold(input, "skip"):
 		writeSkipMarker(cwd)
 
-		_, _ = fmt.Fprintln(out, "Skipped. To see all profiles: git message profile list --remote")
+		_, _ = fmt.Fprintln(out, "Skipped. To see all personas: git message persona list --remote")
 
 		return nil
 
@@ -159,12 +159,12 @@ func applySelectedProfile(ctx context.Context, app *AppContext, out io.Writer, c
 ) error {
 	// Download and cache if not already cached
 	if !profileManager.IsCached(entry.Slug) {
-		_, _ = fmt.Fprintf(out, "Downloading profile %q...\n", entry.Slug)
+		_, _ = fmt.Fprintf(out, "Downloading persona %q...\n", entry.Slug)
 		if err := downloadAndSaveProfile(ctx, entry.Slug, entry.Profession); err != nil {
 			return err
 		}
 
-		_, _ = fmt.Fprintf(out, "Profile %q saved.\n", entry.Slug)
+		_, _ = fmt.Fprintf(out, "Persona %q saved.\n", entry.Slug)
 	}
 
 	projCfg := config.Config{
@@ -177,7 +177,7 @@ func applySelectedProfile(ctx context.Context, app *AppContext, out io.Writer, c
 	// Apply immediately for this invocation
 	app.setProfile(config.ProfileName(entry.Slug))
 
-	_, _ = fmt.Fprintf(out, "Profile %q selected. Run 'git message' to generate a commit.\n", entry.Slug)
+	_, _ = fmt.Fprintf(out, "Persona %q selected. Run 'git message' to generate a commit.\n", entry.Slug)
 
 	return nil
 }
@@ -218,7 +218,7 @@ func hasSkipMarker(dir string) bool {
 
 // writeSkipMarker creates the .gud-skip marker to suppress future prompts.
 func writeSkipMarker(dir string) {
-	_ = os.WriteFile(filepath.Join(dir, skipMarker), []byte("# gud profile suggestion skipped\n"), 0600)
+	_ = os.WriteFile(filepath.Join(dir, skipMarker), []byte("# gud persona suggestion skipped\n"), 0600)
 }
 
 // isTerminal reports whether f is a character device (terminal).
