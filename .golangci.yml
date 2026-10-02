@@ -27,6 +27,7 @@ linters:
     - unparam
     - predeclared
     - errname
+    - nolintlint
     - prealloc
     - contextcheck
     - nilerr
@@ -75,6 +76,12 @@ linters:
         # Error strings must be lowercase (including acronyms) and unpunctuated.
         - name: error-strings
           disabled: false
+    nolintlint:
+      # Every //nolint must name its linter and justify itself. This is what
+      # keeps a suppression from silently outliving the condition that caused it.
+      require-explanation: true
+      require-specific: true
+      allow-unused: false
     staticcheck:
       # golangci-lint's default staticcheck set excludes ST1003 (naming:
       # MixedCaps and initialism casing) and keeps ST1005 (error strings). This

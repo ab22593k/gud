@@ -94,7 +94,6 @@ type PickerModel struct {
 	entries  []profile.CatalogEntry
 	selected *profile.CatalogEntry
 	download DownloadFunc
-	ctx      context.Context
 	err      error
 }
 
@@ -136,7 +135,6 @@ func NewPicker(
 		state:    StateBrowsing,
 		entries:  entries,
 		download: download,
-		ctx:      context.Background(),
 	}
 }
 
@@ -221,10 +219,13 @@ func (m PickerModel) handleSelect() (tea.Model, tea.Cmd) {
 }
 
 // startDownload returns a tea.Cmd that performs the download if download func is non-nil.
+// The command runs on Bubble Tea's own goroutine with no caller context in
+// scope, so it roots its own context here rather than inheriting one that the
+// program may already have cancelled.
 func (m PickerModel) startDownload(slug string) tea.Cmd {
 	return func() tea.Msg {
 		if m.download != nil {
-			ctx, cancel := context.WithTimeout(m.ctx, downloadTimeout)
+			ctx, cancel := context.WithTimeout(context.Background(), downloadTimeout)
 			defer cancel()
 
 			if err := m.download(ctx, slug); err != nil {

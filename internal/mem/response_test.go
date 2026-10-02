@@ -1,6 +1,7 @@
 package mem
 
 import (
+	"math"
 	"testing"
 )
 
@@ -73,6 +74,28 @@ func TestResponseCount(t *testing.T) {
 		{name: "key missing", raw: map[string]any{}, key: "total", want: 0},
 		{name: "value not a map", raw: map[string]any{"total": "string"}, key: "total", want: 0},
 		{name: "count field missing", raw: map[string]any{"total": map[string]any{"other": 1}}, key: "total", want: 0},
+		// Overflowing float-to-int conversions are implementation-defined;
+		// on amd64 these produce garbage rather than 0.
+		{
+			name: "negative count returns zero",
+			raw:  map[string]any{"total": map[string]any{"count": -5.0}},
+			key:  "total", want: 0,
+		},
+		{
+			name: "NaN count returns zero",
+			raw:  map[string]any{"total": map[string]any{"count": math.NaN()}},
+			key:  "total", want: 0,
+		},
+		{
+			name: "infinite count returns zero",
+			raw:  map[string]any{"total": map[string]any{"count": math.Inf(1)}},
+			key:  "total", want: 0,
+		},
+		{
+			name: "above int range returns zero",
+			raw:  map[string]any{"total": map[string]any{"count": 1e20}},
+			key:  "total", want: 0,
+		},
 	}
 
 	for _, tt := range tests {
@@ -224,6 +247,27 @@ func TestNodeUint64(t *testing.T) {
 		{name: "float truncation", data: map[string]any{"id": 3.9}, key: "id", want: 3},
 		{name: "wrong type returns zero", data: map[string]any{"s": "text"}, key: "s", want: 0},
 		{name: "missing key returns zero", data: map[string]any{}, key: "x", want: 0},
+		// Go leaves overflowing float-to-integer conversions
+		// implementation-defined; on amd64 these convert to large garbage
+		// values rather than 0, so each must be rejected explicitly.
+		{name: "negative returns zero", data: map[string]any{"id": -1.0}, key: "id", want: 0},
+		{name: "negative fraction returns zero", data: map[string]any{"id": -0.5}, key: "id", want: 0},
+		{name: "NaN returns zero", data: map[string]any{"id": math.NaN()}, key: "id", want: 0},
+		{name: "positive infinity returns zero", data: map[string]any{"id": math.Inf(1)}, key: "id", want: 0},
+		{name: "negative infinity returns zero", data: map[string]any{"id": math.Inf(-1)}, key: "id", want: 0},
+		{name: "above uint64 range returns zero", data: map[string]any{"id": 1e20}, key: "id", want: 0},
+		// float64 cannot represent 2^64-1, so math.MaxUint64 rounds up to 2^64
+		// and must be rejected. The largest float64 that still fits is 2^64-2048.
+		{
+			name: "largest representable value converts",
+			data: map[string]any{"id": math.Ldexp(1, 64) - 2048},
+			key:  "id", want: math.MaxUint64 - 2047,
+		},
+		{
+			name: "2 to the 64 rounds up and is rejected",
+			data: map[string]any{"id": math.Ldexp(1, 64)},
+			key:  "id", want: 0,
+		},
 	}
 
 	for _, tt := range tests {

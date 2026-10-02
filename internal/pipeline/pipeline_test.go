@@ -16,9 +16,9 @@ func TestRun_Success(t *testing.T) {
 	var order []int
 
 	jobs := []Job{
-		{ID: 1, Handle: func(_ context.Context) error { order = append(order, 1); return nil }}, //nolint:nlreturn
-		{ID: 2, Handle: func(_ context.Context) error { order = append(order, 2); return nil }}, //nolint:nlreturn
-		{ID: 3, Handle: func(_ context.Context) error { order = append(order, 3); return nil }}, //nolint:nlreturn
+		{ID: 1, Handle: func(_ context.Context) error { order = append(order, 1); return nil }}, //nolint:nlreturn // single-line stub keeps the job table readable
+		{ID: 2, Handle: func(_ context.Context) error { order = append(order, 2); return nil }}, //nolint:nlreturn // single-line stub keeps the job table readable
+		{ID: 3, Handle: func(_ context.Context) error { order = append(order, 3); return nil }}, //nolint:nlreturn // single-line stub keeps the job table readable
 	}
 	if err := Run(ctx, jobs); err != nil {
 		t.Errorf("Run() error = %v, want nil", err)

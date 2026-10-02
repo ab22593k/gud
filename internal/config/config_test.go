@@ -1,6 +1,6 @@
 // Test fixtures use repeated strings for readability.
 
-//nolint:goconst
+//nolint:goconst // fixtures deliberately repeat config keys to stay readable
 package config
 
 import (

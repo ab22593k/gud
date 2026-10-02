@@ -242,7 +242,7 @@ func editMessage(msg string) (string, error) {
 	}
 
 	//nolint:noctx // interactive editor session must not be killed by cancellation
-	editCmd := exec.Command(editor /* user's $EDITOR */, path) //nolint:gosec
+	editCmd := exec.Command(editor /* user's $EDITOR */, path) //nolint:gosec // binary is the user's own $EDITOR; args are a CLI-owned temp path
 	editCmd.Stdin = os.Stdin
 	editCmd.Stdout = os.Stdout
 	editCmd.Stderr = os.Stderr

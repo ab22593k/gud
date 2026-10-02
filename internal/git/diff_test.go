@@ -228,7 +228,7 @@ func TestStagedDeletedFiles_WithDeletion(t *testing.T) {
 		"git init",
 		"git config user.email test@example.com",
 		"git config user.name Test",
-	} { //nolint:goconst
+	} { //nolint:goconst // repeated git setup commands read better inline
 		c := exec.CommandContext(context.Background(), "sh", "-c", cmd)
 
 		c.Dir = dir
@@ -325,7 +325,7 @@ func TestStagedDiff_ExcludesRenames(t *testing.T) {
 		"git init",
 		"git config user.email test@example.com",
 		"git config user.name Test",
-	} { //nolint:goconst
+	} { //nolint:goconst // repeated git setup commands read better inline
 		c := exec.CommandContext(context.Background(), "sh", "-c", cmd)
 
 		c.Dir = dir

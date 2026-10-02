@@ -2,6 +2,8 @@
 // eliminating map[string]any access patterns throughout the codebase.
 package mem
 
+import "math"
+
 // Response wraps a raw HelixDB query response with typed accessors.
 // It handles both flat arrays and {"properties": [...]} wrapped results.
 type Response struct {
@@ -40,13 +42,20 @@ func (r *Response) Nodes(key string) []Node {
 
 // Count returns the integer count for the given key.
 // HelixDB returns Count results as {"key": {"count": N}}.
+//
+// Values that cannot be represented are reported as 0 for the same reason as
+// Node.Uint64: an overflowing float-to-int conversion is implementation-defined
+// and yields garbage instead of failing.
 func (r *Response) Count(key string) int {
 	obj, ok := r.raw[key].(map[string]any)
 	if !ok {
 		return 0
 	}
 
-	count, _ := obj["count"].(float64)
+	count, ok := obj["count"].(float64)
+	if !ok || math.IsNaN(count) || count < 0 || count >= math.Ldexp(1, 63) {
+		return 0
+	}
 
 	return int(count)
 }
@@ -79,13 +88,23 @@ func (n Node) Float64(key string) float64 {
 }
 
 // Uint64 returns the uint64 value for the given property.
-// HelixDB encodes integers as float64 in JSON, so this converts safely.
+// HelixDB encodes integers as float64 in JSON, so this converts.
+//
+// Values that cannot be represented are reported as 0. Go leaves float-to-
+// integer conversions that overflow implementation-defined, and in practice
+// they silently produce garbage rather than failing: uint64(-1) is
+// 18446744073709551615 on amd64, and NaN converts to 9223372036854775808.
+// NaN must be tested explicitly because every comparison against it is false.
 func (n Node) Uint64(key string) uint64 {
-	if f, ok := n.data[key].(float64); ok {
-		return uint64(f)
+	f, ok := n.data[key].(float64)
+	// 2^64 is the first float64 value that no longer fits a uint64. float64
+	// cannot represent 2^64-1 exactly, so this is the only correct cutoff.
+	// It also rejects +Inf; f < 0 rejects -Inf and every negative value.
+	if !ok || math.IsNaN(f) || f < 0 || f >= math.Ldexp(1, 64) {
+		return 0
 	}
 
-	return 0
+	return uint64(f)
 }
 
 // Bool returns the bool value for the given property.
