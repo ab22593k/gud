@@ -33,7 +33,7 @@ type CodeUnitRef struct {
 }
 
 // CommitData holds all data about a commit for persistence into HelixDB.
-// RepoPath is the absolute repo root (see git.GetRepoRoot) and doubles as
+// RepoPath is the absolute repo root (see git.RepoRoot) and doubles as
 // tenantId to isolate commits by repository. Key stability: the tenant key is
 // the exact RepoPath string used at persist time, so the same string must be
 // used at query time; renaming, moving, or symlink-aliasing the checkout
@@ -148,6 +148,8 @@ func BuildCommitNodeQuery(repoPath, branch string) *helix.Traversal {
 type MemoryKind string
 
 const (
+	// MemoryUnknown is the zero value, meaning "not set".
+	MemoryUnknown    MemoryKind = ""
 	MemoryFact       MemoryKind = "fact"
 	MemoryPreference MemoryKind = "preference"
 	MemoryEpisode    MemoryKind = "episode"

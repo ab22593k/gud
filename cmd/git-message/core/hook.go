@@ -60,7 +60,7 @@ This is used internally by the git hook and should not be called directly.`,
 }
 
 func runHookInstall(ctx context.Context, global bool) error {
-	hookDir, err := git.GetHookDir(global)
+	hookDir, err := git.HookDir(global)
 	if err != nil {
 		return fmt.Errorf("failed to get hook directory: %w", err)
 	}
@@ -101,7 +101,7 @@ func runHookInstall(ctx context.Context, global bool) error {
 // left untouched, so gud never silently overrides the user's own hook
 // configuration.
 func ensureGlobalHooksPath(ctx context.Context, hookDir string) error {
-	current, err := git.GetGlobalHooksPath(ctx)
+	current, err := git.GlobalHooksPath(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to read global core.hooksPath: %w", err)
 	}
@@ -120,7 +120,7 @@ func ensureGlobalHooksPath(ctx context.Context, hookDir string) error {
 }
 
 func runHookUninstall(ctx context.Context, global bool) error {
-	hookDir, err := git.GetHookDir(global)
+	hookDir, err := git.HookDir(global)
 	if err != nil {
 		return fmt.Errorf("failed to get hook directory: %w", err)
 	}
@@ -182,7 +182,7 @@ func runHookModeInternal(ctx context.Context, msgFile string, app *AppContext) e
 // The second return reports whether any prompt content exists; a names-only
 // stage counts as content so the hook proceeds instead of silently skipping.
 func buildHookPromptDiff(ctx context.Context, includeRemoved bool) (string, bool, error) {
-	diff, deleted, renamed, err := getStagedDiffAndDeleted(ctx, includeRemoved)
+	diff, deleted, renamed, err := stagedDiffAndDeleted(ctx, includeRemoved)
 	if err != nil {
 		return "", false, err
 	}

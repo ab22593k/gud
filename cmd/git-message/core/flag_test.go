@@ -182,7 +182,7 @@ func TestMediatorPriorityChain(t *testing.T) {
 		t.Fatalf("mkdir XDG: %v", err)
 	}
 
-	xdgP := provider.NewFileProvider(xdgCfgPath)
+	xdgP := provider.New(xdgCfgPath)
 	if err := xdgP.Save(config.Config{
 		DetailLevel: config.DetailDetailed,
 		Model:       "xdg-model",
@@ -193,7 +193,7 @@ func TestMediatorPriorityChain(t *testing.T) {
 
 	cwdDir := t.TempDir()
 
-	cwdP := provider.NewFileProvider(filepath.Join(cwdDir, "gud.json"))
+	cwdP := provider.New(filepath.Join(cwdDir, "gud.json"))
 	if err := cwdP.Save(config.Config{
 		Model:   "cwd-model",
 		History: config.Ptr(10),
@@ -242,8 +242,8 @@ func TestMediatorOnlyDefaults(t *testing.T) {
 	t.Setenv("GOOGLE_API_KEY", "")
 	td := t.TempDir()
 	m := &mediator.Mediator{
-		XDGProvider: provider.NewFileProvider(filepath.Join(td, "missing.json")),
-		CWDProvider: provider.NewFileProvider(filepath.Join(td, "also-missing.json")),
+		XDGProvider: provider.New(filepath.Join(td, "missing.json")),
+		CWDProvider: provider.New(filepath.Join(td, "also-missing.json")),
 	}
 
 	cfg, err := m.Load(config.Config{})
@@ -262,8 +262,8 @@ func TestMediatorOnlyDefaults(t *testing.T) {
 func TestMediatorOnlyCLI(t *testing.T) {
 	td := t.TempDir()
 	m := &mediator.Mediator{
-		XDGProvider: provider.NewFileProvider(filepath.Join(td, "missing.json")),
-		CWDProvider: provider.NewFileProvider(filepath.Join(td, "also-missing.json")),
+		XDGProvider: provider.New(filepath.Join(td, "missing.json")),
+		CWDProvider: provider.New(filepath.Join(td, "also-missing.json")),
 	}
 	cliCfg := config.Config{
 		DetailLevel: config.DetailMinimal,
@@ -369,9 +369,9 @@ func TestConfigFromCmdHistoryZero(t *testing.T) {
 // the bug report: gud.json sets history: 10, but an explicit --history 0 must
 // still disable history, not be silently ignored.
 func TestMediatorCliHistoryZeroOverridesGudJSON(t *testing.T) {
-	xdgP := provider.NewFileProvider(filepath.Join(t.TempDir(), "missing.json"))
+	xdgP := provider.New(filepath.Join(t.TempDir(), "missing.json"))
 
-	cwdP := provider.NewFileProvider(filepath.Join(t.TempDir(), "gud.json"))
+	cwdP := provider.New(filepath.Join(t.TempDir(), "gud.json"))
 	if err := cwdP.Save(config.Config{
 		History: config.Ptr(10),
 	}); err != nil {
@@ -403,9 +403,9 @@ func TestMediatorCliHistoryZeroOverridesGudJSON(t *testing.T) {
 // gud.json {detail_level: detailed, wrapline: 100, history: 20} survives the
 // full file → env → CLI pipeline when the user passes no flags.
 func TestMediatorPreservesGudJSONWhenFlagsUnchanged(t *testing.T) {
-	xdgP := provider.NewFileProvider(filepath.Join(t.TempDir(), "missing.json"))
+	xdgP := provider.New(filepath.Join(t.TempDir(), "missing.json"))
 
-	cwdP := provider.NewFileProvider(filepath.Join(t.TempDir(), "gud.json"))
+	cwdP := provider.New(filepath.Join(t.TempDir(), "gud.json"))
 	if err := cwdP.Save(config.Config{
 		DetailLevel: config.DetailDetailed,
 		WrapLine:    100,
@@ -441,9 +441,9 @@ func TestMediatorPreservesGudJSONWhenFlagsUnchanged(t *testing.T) {
 // TestMediatorCliOverridesGudJSON shows the inverse: an explicit flag still
 // wins over gud.json, per documented priority "CLI flags → env → gud.json".
 func TestMediatorCliOverridesGudJSON(t *testing.T) {
-	xdgP := provider.NewFileProvider(filepath.Join(t.TempDir(), "missing.json"))
+	xdgP := provider.New(filepath.Join(t.TempDir(), "missing.json"))
 
-	cwdP := provider.NewFileProvider(filepath.Join(t.TempDir(), "gud.json"))
+	cwdP := provider.New(filepath.Join(t.TempDir(), "gud.json"))
 	if err := cwdP.Save(config.Config{
 		DetailLevel: config.DetailDetailed,
 		WrapLine:    100,

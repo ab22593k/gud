@@ -138,7 +138,7 @@ func newHistoryTestRepo(t *testing.T) {
 	t.Chdir(dir)
 }
 
-func TestGetUpstreamBranch(t *testing.T) {
+func TestUpstreamBranch(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")
 	}
@@ -147,12 +147,12 @@ func TestGetUpstreamBranch(t *testing.T) {
 
 	newHistoryTestRepo(t)
 
-	if got := GetUpstreamBranch(ctx); got != "origin/main" {
-		t.Errorf("GetUpstreamBranch() = %q, want %q", got, "origin/main")
+	if got := UpstreamBranch(ctx); got != "origin/main" {
+		t.Errorf("UpstreamBranch() = %q, want %q", got, "origin/main")
 	}
 }
 
-func TestGetUpstreamBranch_None(t *testing.T) {
+func TestUpstreamBranch_None(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")
 	}
@@ -181,12 +181,12 @@ func TestGetUpstreamBranch_None(t *testing.T) {
 
 	t.Chdir(dir)
 
-	if got := GetUpstreamBranch(context.Background()); got != "" {
-		t.Errorf("GetUpstreamBranch() without upstream = %q, want empty", got)
+	if got := UpstreamBranch(context.Background()); got != "" {
+		t.Errorf("UpstreamBranch() without upstream = %q, want empty", got)
 	}
 }
 
-func TestGetTopicHistory(t *testing.T) {
+func TestTopicHistory(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")
 	}
@@ -196,18 +196,18 @@ func TestGetTopicHistory(t *testing.T) {
 	newHistoryTestRepo(t)
 
 	t.Run("commits since divergence", func(t *testing.T) {
-		got, err := GetTopicHistory(ctx, "origin/main", 10, nil)
+		got, err := TopicHistory(ctx, "origin/main", 10, nil)
 		if err != nil {
-			t.Fatalf("GetTopicHistory() error = %v", err)
+			t.Fatalf("TopicHistory() error = %v", err)
 		}
 
 		if !strings.Contains(got, "feat: change file2") || !strings.Contains(got, "feat: change file1") {
-			t.Errorf("GetTopicHistory() should contain both topic commits, got:\n%s", got)
+			t.Errorf("TopicHistory() should contain both topic commits, got:\n%s", got)
 		}
 		// Newest commit first, and the merge-base/main commit is excluded.
 		lines := strings.Split(strings.TrimSpace(got), "\n")
 		if len(lines) != 2 {
-			t.Errorf("GetTopicHistory() = %d commits, want 2 (since divergence), got:\n%s", len(lines), got)
+			t.Errorf("TopicHistory() = %d commits, want 2 (since divergence), got:\n%s", len(lines), got)
 		}
 
 		if !strings.HasSuffix(lines[0], "feat: change file2") {
@@ -216,21 +216,21 @@ func TestGetTopicHistory(t *testing.T) {
 	})
 
 	t.Run("cap limits the result", func(t *testing.T) {
-		got, err := GetTopicHistory(ctx, "origin/main", 1, nil)
+		got, err := TopicHistory(ctx, "origin/main", 1, nil)
 		if err != nil {
-			t.Fatalf("GetTopicHistory() error = %v", err)
+			t.Fatalf("TopicHistory() error = %v", err)
 		}
 
 		lines := strings.Split(strings.TrimSpace(got), "\n")
 		if len(lines) != 1 || !strings.Contains(lines[0], "feat: change file2") {
-			t.Errorf("GetTopicHistory(1) = %q, want only the newest topic commit", got)
+			t.Errorf("TopicHistory(1) = %q, want only the newest topic commit", got)
 		}
 	})
 
 	t.Run("path limiting", func(t *testing.T) {
-		got, err := GetTopicHistory(ctx, "origin/main", 10, []string{"file1.txt"})
+		got, err := TopicHistory(ctx, "origin/main", 10, []string{"file1.txt"})
 		if err != nil {
-			t.Fatalf("GetTopicHistory() error = %v", err)
+			t.Fatalf("TopicHistory() error = %v", err)
 		}
 
 		if strings.Contains(got, "feat: change file2") {
@@ -243,15 +243,15 @@ func TestGetTopicHistory(t *testing.T) {
 	})
 
 	t.Run("empty upstream is a no-op", func(t *testing.T) {
-		got, err := GetTopicHistory(ctx, "", 10, nil)
+		got, err := TopicHistory(ctx, "", 10, nil)
 		if err != nil || got != "" {
-			t.Errorf("GetTopicHistory() with empty upstream = %q, err %v; want empty, nil", got, err)
+			t.Errorf("TopicHistory() with empty upstream = %q, err %v; want empty, nil", got, err)
 		}
 	})
 
 	t.Run("unresolvable upstream errors", func(t *testing.T) {
-		if _, err := GetTopicHistory(ctx, "no-such-branch", 10, nil); err == nil {
-			t.Error("GetTopicHistory() with unresolvable upstream should error")
+		if _, err := TopicHistory(ctx, "no-such-branch", 10, nil); err == nil {
+			t.Error("TopicHistory() with unresolvable upstream should error")
 		}
 	})
 }

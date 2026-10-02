@@ -26,7 +26,7 @@ const schemaQueryName = "schema_migration"
 // filesystem version marker beside the embedded database. Steady-state
 // invocations hit the marker and pay zero HelixDB transactions.
 func (db *DB) EnsureSchema(ctx context.Context) error {
-	if !db.enabled || db.client == nil {
+	if !db.isEnabled || db.client == nil {
 		return ErrHelixUnavailable
 	}
 

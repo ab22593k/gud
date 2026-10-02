@@ -8,18 +8,18 @@ import (
 	"testing"
 )
 
-func TestGetStagedDiff(t *testing.T) {
+func TestStagedDiff(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 
-	_, err := GetStagedDiff(ctx)
+	_, err := StagedDiff(ctx)
 	if err != nil {
-		t.Errorf("GetStagedDiff() error = %v, want nil", err)
+		t.Errorf("StagedDiff() error = %v, want nil", err)
 	}
 }
 
-func TestGetStagedDiff_Integration(t *testing.T) {
+func TestStagedDiff_Integration(t *testing.T) {
 	t.Parallel()
 
 	if testing.Short() {
@@ -28,26 +28,26 @@ func TestGetStagedDiff_Integration(t *testing.T) {
 
 	ctx := context.Background()
 
-	diff, err := GetStagedDiff(ctx)
+	diff, err := StagedDiff(ctx)
 	if err != nil {
-		t.Fatalf("GetStagedDiff() unexpected error: %v", err)
+		t.Fatalf("StagedDiff() unexpected error: %v", err)
 	}
 
 	t.Logf("Staged diff output:\n%s", diff)
 }
 
-func TestGetUnstagedDiff(t *testing.T) {
+func TestUnstagedDiff(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 
-	_, err := GetUnstagedDiff(ctx)
+	_, err := UnstagedDiff(ctx)
 	if err != nil {
-		t.Errorf("GetUnstagedDiff() error = %v, want nil", err)
+		t.Errorf("UnstagedDiff() error = %v, want nil", err)
 	}
 }
 
-func TestGetUnstagedDiff_Integration(t *testing.T) {
+func TestUnstagedDiff_Integration(t *testing.T) {
 	t.Parallel()
 
 	if testing.Short() {
@@ -56,15 +56,15 @@ func TestGetUnstagedDiff_Integration(t *testing.T) {
 
 	ctx := context.Background()
 
-	diff, err := GetUnstagedDiff(ctx)
+	diff, err := UnstagedDiff(ctx)
 	if err != nil {
-		t.Fatalf("GetUnstagedDiff() unexpected error: %v", err)
+		t.Fatalf("UnstagedDiff() unexpected error: %v", err)
 	}
 
 	t.Logf("Unstaged diff output:\n%s", diff)
 }
 
-func TestGetRecentCommits(t *testing.T) {
+func TestRecentCommits(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -80,32 +80,32 @@ func TestGetRecentCommits(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got, err := GetRecentCommits(ctx, tt.n)
+			got, err := RecentCommits(ctx, tt.n)
 			if got != "" {
-				t.Errorf("GetRecentCommits(%d) = %q, want empty string", tt.n, got)
+				t.Errorf("RecentCommits(%d) = %q, want empty string", tt.n, got)
 			}
 
 			if err != nil {
-				t.Errorf("GetRecentCommits(%d) unexpected error: %v", tt.n, err)
+				t.Errorf("RecentCommits(%d) unexpected error: %v", tt.n, err)
 			}
 		})
 	}
 }
 
-func TestGetRecentCommits_NonEmpty(t *testing.T) {
+func TestRecentCommits_NonEmpty(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")
 	}
 
 	ctx := context.Background()
 
-	got, err := GetRecentCommits(ctx, 5)
+	got, err := RecentCommits(ctx, 5)
 	if err != nil {
-		t.Fatalf("GetRecentCommits(5) unexpected error: %v", err)
+		t.Fatalf("RecentCommits(5) unexpected error: %v", err)
 	}
 
 	if got == "" {
-		t.Fatal("GetRecentCommits(5) returned empty, expected at least one commit")
+		t.Fatal("RecentCommits(5) returned empty, expected at least one commit")
 	}
 
 	t.Logf("Recent commits:\n%s", got)
@@ -151,9 +151,9 @@ func TestCommit(t *testing.T) {
 	}
 
 	// Verify the commit was created
-	got, err := GetRecentCommits(ctx, 1)
+	got, err := RecentCommits(ctx, 1)
 	if err != nil {
-		t.Fatalf("GetRecentCommits(1) unexpected error: %v", err)
+		t.Fatalf("RecentCommits(1) unexpected error: %v", err)
 	}
 
 	if !strings.Contains(got, "feat: initial commit") {
@@ -202,22 +202,22 @@ func TestCommit_EmptyMessage(t *testing.T) {
 	}
 }
 
-func TestGetStagedDeletedFiles(t *testing.T) {
+func TestStagedDeletedFiles(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 
-	got, err := GetStagedDeletedFiles(ctx)
+	got, err := StagedDeletedFiles(ctx)
 	if err != nil {
-		t.Errorf("GetStagedDeletedFiles() error = %v, want nil", err)
+		t.Errorf("StagedDeletedFiles() error = %v, want nil", err)
 	}
 
 	if got != "" {
-		t.Logf("GetStagedDeletedFiles() returned (expected if no staged deletions): %q", got)
+		t.Logf("StagedDeletedFiles() returned (expected if no staged deletions): %q", got)
 	}
 }
 
-func TestGetStagedDeletedFiles_WithDeletion(t *testing.T) {
+func TestStagedDeletedFiles_WithDeletion(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")
 	}
@@ -285,36 +285,36 @@ func TestGetStagedDeletedFiles_WithDeletion(t *testing.T) {
 		t.Fatalf("git add keep.go failed: %v", err)
 	}
 
-	// Verify GetStagedDeletedFiles returns the deleted file name
-	deleted, err := GetStagedDeletedFiles(ctx)
+	// Verify StagedDeletedFiles returns the deleted file name
+	deleted, err := StagedDeletedFiles(ctx)
 	if err != nil {
-		t.Fatalf("GetStagedDeletedFiles() unexpected error: %v", err)
+		t.Fatalf("StagedDeletedFiles() unexpected error: %v", err)
 	}
 
 	if !strings.Contains(deleted, "file.go") {
-		t.Errorf("GetStagedDeletedFiles() = %q, want to contain %q", deleted, "file.go")
+		t.Errorf("StagedDeletedFiles() = %q, want to contain %q", deleted, "file.go")
 	}
 
 	if strings.Contains(deleted, "keep.go") {
-		t.Errorf("GetStagedDeletedFiles() = %q, should NOT contain %q", deleted, "keep.go")
+		t.Errorf("StagedDeletedFiles() = %q, should NOT contain %q", deleted, "keep.go")
 	}
 
-	// Verify GetStagedDiff does NOT contain the deleted file's content
-	diff, err := GetStagedDiff(ctx)
+	// Verify StagedDiff does NOT contain the deleted file's content
+	diff, err := StagedDiff(ctx)
 	if err != nil {
-		t.Fatalf("GetStagedDiff() unexpected error: %v", err)
+		t.Fatalf("StagedDiff() unexpected error: %v", err)
 	}
 
 	if strings.Contains(diff, "package main") && strings.Contains(diff, "file.go") {
-		t.Errorf("GetStagedDiff() should NOT contain deleted file content, got:\n%s", diff)
+		t.Errorf("StagedDiff() should NOT contain deleted file content, got:\n%s", diff)
 	}
 
 	if !strings.Contains(diff, "keep.go") {
-		t.Errorf("GetStagedDiff() should contain changes to keep.go, got:\n%s", diff)
+		t.Errorf("StagedDiff() should contain changes to keep.go, got:\n%s", diff)
 	}
 }
 
-func TestGetStagedDiff_ExcludesRenames(t *testing.T) {
+func TestStagedDiff_ExcludesRenames(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")
 	}
@@ -361,36 +361,36 @@ func TestGetStagedDiff_ExcludesRenames(t *testing.T) {
 		t.Fatalf("git mv old.go new.go failed: %v", err)
 	}
 
-	// Verify GetStagedDiff excludes rename content
-	diff, err := GetStagedDiff(ctx)
+	// Verify StagedDiff excludes rename content
+	diff, err := StagedDiff(ctx)
 	if err != nil {
-		t.Fatalf("GetStagedDiff() unexpected error: %v", err)
+		t.Fatalf("StagedDiff() unexpected error: %v", err)
 	}
 
 	if strings.Contains(diff, "old.go") {
-		t.Errorf("GetStagedDiff() should NOT contain renamed file name, got:\n%s", diff)
+		t.Errorf("StagedDiff() should NOT contain renamed file name, got:\n%s", diff)
 	}
 
 	if strings.Contains(diff, "new.go") {
-		t.Errorf("GetStagedDiff() should NOT contain new file name of rename, got:\n%s", diff)
+		t.Errorf("StagedDiff() should NOT contain new file name of rename, got:\n%s", diff)
 	}
 
 	if diff != "" {
-		t.Errorf("GetStagedDiff() should be empty (only rename staged), got:\n%s", diff)
+		t.Errorf("StagedDiff() should be empty (only rename staged), got:\n%s", diff)
 	}
 
-	// Verify GetStagedDeletedFiles does not list the renamed file
-	deleted, err := GetStagedDeletedFiles(ctx)
+	// Verify StagedDeletedFiles does not list the renamed file
+	deleted, err := StagedDeletedFiles(ctx)
 	if err != nil {
-		t.Fatalf("GetStagedDeletedFiles() unexpected error: %v", err)
+		t.Fatalf("StagedDeletedFiles() unexpected error: %v", err)
 	}
 
 	if strings.Contains(deleted, "old.go") {
-		t.Errorf("GetStagedDeletedFiles() should NOT list renamed file, got: %q", deleted)
+		t.Errorf("StagedDeletedFiles() should NOT list renamed file, got: %q", deleted)
 	}
 }
 
-func TestGetRecentCommits_EmptyRepo(t *testing.T) {
+func TestRecentCommits_EmptyRepo(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")
 	}
@@ -407,32 +407,32 @@ func TestGetRecentCommits_EmptyRepo(t *testing.T) {
 
 	ctx := context.Background()
 
-	got, err := GetRecentCommits(ctx, 5)
+	got, err := RecentCommits(ctx, 5)
 	if got != "" {
-		t.Errorf("GetRecentCommits(5) on empty repo = %q, want empty string", got)
+		t.Errorf("RecentCommits(5) on empty repo = %q, want empty string", got)
 	}
 
 	if err == nil {
-		t.Errorf("GetRecentCommits(5) on empty repo should return an error")
+		t.Errorf("RecentCommits(5) on empty repo should return an error")
 	}
 }
 
-func TestGetBranch(t *testing.T) {
+func TestBranch(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 
-	branch := GetBranch(ctx)
+	branch := Branch(ctx)
 	if branch == "" {
-		t.Log("GetBranch returned empty (detached HEAD or no git repo) — acceptable")
+		t.Log("Branch returned empty (detached HEAD or no git repo) — acceptable")
 	}
 
 	if strings.ContainsAny(branch, " \n\t") {
-		t.Errorf("GetBranch() = %q, want a bare branch name", branch)
+		t.Errorf("Branch() = %q, want a bare branch name", branch)
 	}
 }
 
-func TestGetBranchIntegration(t *testing.T) {
+func TestBranchIntegration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")
 	}
@@ -466,7 +466,7 @@ func TestGetBranchIntegration(t *testing.T) {
 
 	t.Chdir(dir)
 
-	if got := GetBranch(context.Background()); got != "main" {
-		t.Errorf("GetBranch() = %q, want %q", got, "main")
+	if got := Branch(context.Background()); got != "main" {
+		t.Errorf("Branch() = %q, want %q", got, "main")
 	}
 }

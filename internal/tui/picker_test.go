@@ -66,8 +66,8 @@ func TestCatalogItemDescription(t *testing.T) {
 		t.Errorf("Description() = %q, want %q", got, want)
 	}
 
-	cached := catalogItem{entry: item.entry, cached: true}
-	if got := cached.Description(); got[:len("✓ Cached")] != "✓ Cached" {
+	ci := catalogItem{entry: item.entry, isCached: true}
+	if got := ci.Description(); got[:len("✓ Cached")] != "✓ Cached" {
 		t.Errorf("cached Description() = %q, want cache indicator prefix", got)
 	}
 }

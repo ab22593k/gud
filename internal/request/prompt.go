@@ -12,6 +12,7 @@ import (
 type DetailLevel = config.DetailLevel
 
 const (
+	DetailUnknown  = config.DetailUnknown
 	DetailMinimal  = config.DetailMinimal
 	DetailStandard = config.DetailStandard
 	DetailDetailed = config.DetailDetailed

@@ -15,8 +15,12 @@ import (
 type HookType string
 
 const (
+	// HookUnknown is the zero value, meaning "not set".
+	HookUnknown HookType = ""
+	// PrepareCommitMsg runs before the commit message editor opens.
 	PrepareCommitMsg HookType = "prepare-commit-msg"
-	CommitMsg        HookType = "commit-msg"
+	// CommitMsg runs after the message is authored and can veto the commit.
+	CommitMsg HookType = "commit-msg"
 )
 
 // InstallHook installs a git hook that calls git-message.
@@ -65,10 +69,10 @@ func UninstallHook(hookDir string, hookType HookType) error {
 	return nil
 }
 
-// GetHookDir returns the appropriate hooks directory.
+// HookDir returns the appropriate hooks directory.
 // If global is true, returns ~/.config/gud/hooks/ (gud's XDG config home,
 // matching the global config location), otherwise .git/hooks/.
-func GetHookDir(global bool) (string, error) {
+func HookDir(global bool) (string, error) {
 	if global {
 		home, err := os.UserHomeDir()
 		if err != nil {
@@ -81,11 +85,11 @@ func GetHookDir(global bool) (string, error) {
 	return filepath.Join(".git", "hooks"), nil
 }
 
-// GetGlobalHooksPath returns the global core.hooksPath configuration value,
+// GlobalHooksPath returns the global core.hooksPath configuration value,
 // or an empty string when it is unset. Git does not automatically scan a
 // custom global hooks directory, so hooks installed outside .git/hooks only
 // run when core.hooksPath points at them.
-func GetGlobalHooksPath(ctx context.Context) (string, error) {
+func GlobalHooksPath(ctx context.Context) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", "config", "--global", "--get", "core.hooksPath")
 
 	out, err := cmd.Output()

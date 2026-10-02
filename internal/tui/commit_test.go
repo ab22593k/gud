@@ -31,7 +31,7 @@ func TestCommitReviewUpdateWindowSize(t *testing.T) {
 		t.Fatalf("updated model type = %T, want CommitReviewModel", updated)
 	}
 
-	if !m.ready {
+	if !m.isReady {
 		t.Errorf("expected model to be ready after WindowSizeMsg")
 	}
 
@@ -77,7 +77,7 @@ func TestCommitReviewKeyActions(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			model := NewCommitReview("test message")
-			model.ready = true
+			model.isReady = true
 			updated, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(tt.key)})
 
 			m, ok := updated.(CommitReviewModel)
@@ -89,8 +89,8 @@ func TestCommitReviewKeyActions(t *testing.T) {
 				t.Errorf("expected action %q, got %q", tt.expectedAction, m.action)
 			}
 
-			if m.editing != tt.expectedEdit {
-				t.Errorf("expected editing %v, got %v", tt.expectedEdit, m.editing)
+			if m.isEditing != tt.expectedEdit {
+				t.Errorf("expected editing %v, got %v", tt.expectedEdit, m.isEditing)
 			}
 		})
 	}
@@ -98,7 +98,7 @@ func TestCommitReviewKeyActions(t *testing.T) {
 
 func TestCommitReviewEnterSelection(t *testing.T) {
 	model := NewCommitReview("test message")
-	model.ready = true
+	model.isReady = true
 	// By default item 0 is Commit ("✓ Commit")
 	updated, cmd := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
 
@@ -185,7 +185,7 @@ func TestCommitReviewEditConfirmPreservesEdits(t *testing.T) {
 	}{{msg: tea.KeyMsg{Type: tea.KeyCtrlS}}, {msg: tea.KeyMsg{Type: tea.KeyEnter, Alt: true}}} {
 		t.Run(confirmKey.msg.String(), func(t *testing.T) {
 			m := NewCommitReview("fix: hello world", 0)
-			m.ready = true
+			m.isReady = true
 
 			// Try to reproduce the user-visible sequence from the report:
 			// e (edit) → ctrl+n (cursor to end) → type → confirm → y (commit).

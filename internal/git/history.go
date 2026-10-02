@@ -8,20 +8,20 @@ import (
 	"strings"
 )
 
-// GetUpstreamBranch returns the configured upstream of the current branch
+// UpstreamBranch returns the configured upstream of the current branch
 // (e.g. "origin/main"), or "" when the branch has no upstream or HEAD is
 // detached. Callers fall back to recent-commit history when it is empty.
-func GetUpstreamBranch(ctx context.Context) string {
+func UpstreamBranch(ctx context.Context) string {
 	return runGitOutput(ctx, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
 }
 
-// GetTopicHistory returns one-line summaries of commits on the current branch
+// TopicHistory returns one-line summaries of commits on the current branch
 // since it diverged from upstream — the range merge-base(HEAD, upstream)..HEAD
 // — capped at n entries. When paths is non-empty the log is limited to commits
 // touching those files, so the history mirrors the staged scope instead of the
 // whole repository. It returns an error when the upstream cannot be resolved
 // or has no merge base with HEAD.
-func GetTopicHistory(ctx context.Context, upstream string, n int, paths []string) (string, error) {
+func TopicHistory(ctx context.Context, upstream string, n int, paths []string) (string, error) {
 	if n <= 0 || upstream == "" {
 		return "", nil
 	}
@@ -30,7 +30,7 @@ func GetTopicHistory(ctx context.Context, upstream string, n int, paths []string
 		n = MaxRecentCommits
 	}
 
-	root, err := GetRepoRoot(ctx)
+	root, err := RepoRoot(ctx)
 	if err != nil {
 		return "", fmt.Errorf("get repo root: %w", err)
 	}

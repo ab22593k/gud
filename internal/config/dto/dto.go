@@ -2,11 +2,11 @@ package dto
 
 import "gud/internal/config"
 
-// ConfigDTO is the JSON-serializable representation of application configuration.
+// Config is the JSON-serializable representation of application configuration.
 // An empty string for a field means "not set" — the DTO does not encode defaults.
 // History is a *int so an explicit "history": 0 (disable) survives JSON
 // round-trips; nil means the key is absent and is omitted from output.
-type ConfigDTO struct {
+type Config struct {
 	DetailLevel string `json:"detail_level,omitempty"`
 	Profile     string `json:"persona,omitempty"`
 	Model       string `json:"model,omitempty"`
@@ -17,7 +17,7 @@ type ConfigDTO struct {
 }
 
 // ToEntity converts the DTO to a domain Config entity.
-func (d ConfigDTO) ToEntity() config.Config {
+func (d Config) ToEntity() config.Config {
 	return config.Config{
 		DetailLevel: config.DetailLevel(d.DetailLevel),
 		Profile:     config.ProfileName(d.Profile),
@@ -31,8 +31,8 @@ func (d ConfigDTO) ToEntity() config.Config {
 }
 
 // FromEntity converts a domain Config entity into a DTO for serialization.
-func FromEntity(c config.Config) ConfigDTO {
-	return ConfigDTO{
+func FromEntity(c config.Config) Config {
+	return Config{
 		DetailLevel: string(c.DetailLevel),
 		Profile:     string(c.Profile),
 		Model:       c.Model,

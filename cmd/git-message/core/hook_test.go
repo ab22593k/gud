@@ -111,9 +111,9 @@ func TestHookInstallUninstallGlobalHooksPath(t *testing.T) {
 		t.Fatalf("runHookInstall(global): %v", err)
 	}
 
-	hookDir, err := git.GetHookDir(true)
+	hookDir, err := git.HookDir(true)
 	if err != nil {
-		t.Fatalf("GetHookDir: %v", err)
+		t.Fatalf("HookDir: %v", err)
 	}
 
 	hookPath := filepath.Join(hookDir, string(git.PrepareCommitMsg))
@@ -121,9 +121,9 @@ func TestHookInstallUninstallGlobalHooksPath(t *testing.T) {
 		t.Errorf("hook file should exist at %s: %v", hookPath, err)
 	}
 
-	got, err := git.GetGlobalHooksPath(ctx)
+	got, err := git.GlobalHooksPath(ctx)
 	if err != nil {
-		t.Fatalf("GetGlobalHooksPath: %v", err)
+		t.Fatalf("GlobalHooksPath: %v", err)
 	}
 
 	if got != hookDir {
@@ -139,9 +139,9 @@ func TestHookInstallUninstallGlobalHooksPath(t *testing.T) {
 		t.Fatalf("runHookUninstall(global): %v", err)
 	}
 
-	got, err = git.GetGlobalHooksPath(ctx)
+	got, err = git.GlobalHooksPath(ctx)
 	if err != nil {
-		t.Fatalf("GetGlobalHooksPath after uninstall: %v", err)
+		t.Fatalf("GlobalHooksPath after uninstall: %v", err)
 	}
 
 	if got != "" {
@@ -168,9 +168,9 @@ func TestHookInstallKeepsForeignHooksPath(t *testing.T) {
 		t.Fatalf("runHookInstall(global): %v", err)
 	}
 
-	got, err := git.GetGlobalHooksPath(ctx)
+	got, err := git.GlobalHooksPath(ctx)
 	if err != nil {
-		t.Fatalf("GetGlobalHooksPath: %v", err)
+		t.Fatalf("GlobalHooksPath: %v", err)
 	}
 
 	if got != foreign {

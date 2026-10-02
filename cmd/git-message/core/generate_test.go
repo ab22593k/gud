@@ -308,10 +308,10 @@ func newPromptDiffTestRepo(t *testing.T) {
 	t.Chdir(dir)
 }
 
-// TestGetStagedDiffOrError_ExcludesRemovedContent stages a modification, a
+// TestStagedDiffOrError_ExcludesRemovedContent stages a modification, a
 // deletion, and a pure rename, then verifies the prompt diff excludes removed
 // lines while naming the removed paths.
-func TestGetStagedDiffOrError_ExcludesRemovedContent(t *testing.T) {
+func TestStagedDiffOrError_ExcludesRemovedContent(t *testing.T) {
 	newPromptDiffTestRepo(t)
 
 	run := func(args ...string) {
@@ -331,9 +331,9 @@ func TestGetStagedDiffOrError_ExcludesRemovedContent(t *testing.T) {
 	run("rm", "-q", "doomed.go")
 	run("mv", "moved.txt", "renamed.txt")
 
-	got, err := getStagedDiffOrError(context.Background(), false)
+	got, err := stagedDiffOrError(context.Background(), false)
 	if err != nil {
-		t.Fatalf("getStagedDiffOrError() error = %v", err)
+		t.Fatalf("stagedDiffOrError() error = %v", err)
 	}
 
 	if !strings.Contains(got, "// changed") {
@@ -353,10 +353,10 @@ func TestGetStagedDiffOrError_ExcludesRemovedContent(t *testing.T) {
 	}
 }
 
-// TestGetStagedDiffOrError_NamesOnlyProceeds verifies a deletion-only stage
+// TestStagedDiffOrError_NamesOnlyProceeds verifies a deletion-only stage
 // does not take the "no staged changes" error path: names are valid prompt
 // content.
-func TestGetStagedDiffOrError_NamesOnlyProceeds(t *testing.T) {
+func TestStagedDiffOrError_NamesOnlyProceeds(t *testing.T) {
 	newPromptDiffTestRepo(t)
 
 	run := func(args ...string) {
@@ -370,7 +370,7 @@ func TestGetStagedDiffOrError_NamesOnlyProceeds(t *testing.T) {
 
 	run("rm", "-q", "doomed.go")
 
-	got, err := getStagedDiffOrError(context.Background(), false)
+	got, err := stagedDiffOrError(context.Background(), false)
 	if err != nil {
 		t.Fatalf("names-only stage must not error, got: %v", err)
 	}

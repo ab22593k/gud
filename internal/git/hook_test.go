@@ -135,13 +135,13 @@ func TestGlobalHooksPathRoundtrip(t *testing.T) {
 
 	ctx := context.Background()
 
-	got, err := GetGlobalHooksPath(ctx)
+	got, err := GlobalHooksPath(ctx)
 	if err != nil {
-		t.Fatalf("GetGlobalHooksPath on unset key: %v", err)
+		t.Fatalf("GlobalHooksPath on unset key: %v", err)
 	}
 
 	if got != "" {
-		t.Errorf("GetGlobalHooksPath() = %q on unset key, want empty", got)
+		t.Errorf("GlobalHooksPath() = %q on unset key, want empty", got)
 	}
 
 	if err := UnsetGlobalHooksPath(ctx); err != nil {
@@ -153,33 +153,33 @@ func TestGlobalHooksPathRoundtrip(t *testing.T) {
 		t.Fatalf("SetGlobalHooksPath: %v", err)
 	}
 
-	got, err = GetGlobalHooksPath(ctx)
+	got, err = GlobalHooksPath(ctx)
 	if err != nil {
-		t.Fatalf("GetGlobalHooksPath after set: %v", err)
+		t.Fatalf("GlobalHooksPath after set: %v", err)
 	}
 
 	if got != want {
-		t.Errorf("GetGlobalHooksPath() = %q, want %q", got, want)
+		t.Errorf("GlobalHooksPath() = %q, want %q", got, want)
 	}
 
 	if err := UnsetGlobalHooksPath(ctx); err != nil {
 		t.Fatalf("UnsetGlobalHooksPath: %v", err)
 	}
 
-	got, err = GetGlobalHooksPath(ctx)
+	got, err = GlobalHooksPath(ctx)
 	if err != nil {
-		t.Fatalf("GetGlobalHooksPath after unset: %v", err)
+		t.Fatalf("GlobalHooksPath after unset: %v", err)
 	}
 
 	if got != "" {
-		t.Errorf("GetGlobalHooksPath() = %q after unset, want empty", got)
+		t.Errorf("GlobalHooksPath() = %q after unset, want empty", got)
 	}
 }
 
-// TestGetHookDir verifies the hook directory selection: the repo-local
+// TestHookDir verifies the hook directory selection: the repo-local
 // .git/hooks, and the global directory under gud's XDG config home
 // (~/.config/gud/hooks), which matches the global config location.
-func TestGetHookDir(t *testing.T) {
+func TestHookDir(t *testing.T) {
 	t.Parallel()
 
 	home, err := os.UserHomeDir()
@@ -209,13 +209,13 @@ func TestGetHookDir(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got, err := GetHookDir(tt.global)
+			got, err := HookDir(tt.global)
 			if (err != nil) != tt.wantErr {
-				t.Fatalf("GetHookDir(global=%v) error = %v, wantErr %v", tt.global, err, tt.wantErr)
+				t.Fatalf("HookDir(global=%v) error = %v, wantErr %v", tt.global, err, tt.wantErr)
 			}
 
 			if got != tt.want {
-				t.Errorf("GetHookDir(global=%v) = %q, want %q", tt.global, got, tt.want)
+				t.Errorf("HookDir(global=%v) = %q, want %q", tt.global, got, tt.want)
 			}
 		})
 	}

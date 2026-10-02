@@ -74,7 +74,7 @@ type amendJob struct {
 	sha    string
 	diff   string
 	oldMsg string
-	head   bool
+	isHead bool
 }
 
 // resolveAmendCommit validates rev and loads everything the review loop needs.
@@ -113,7 +113,7 @@ func resolveAmendCommit(ctx context.Context, app *AppContext, rev string) (amend
 		}
 	}
 
-	diff, err := git.GetCommitDiff(ctx, sha)
+	diff, err := git.CommitDiff(ctx, sha)
 	if err != nil {
 		return job, err
 	}
@@ -127,12 +127,12 @@ func resolveAmendCommit(ctx context.Context, app *AppContext, rev string) (amend
 		return job, fmt.Errorf("cannot amend %s: commit has no changes", rev)
 	}
 
-	oldMsg, err := git.GetCommitMessage(ctx, sha)
+	oldMsg, err := git.CommitMessage(ctx, sha)
 	if err != nil {
 		return job, err
 	}
 
-	job = amendJob{sha: sha, diff: diff, oldMsg: oldMsg, head: head}
+	job = amendJob{sha: sha, diff: diff, oldMsg: oldMsg, isHead: head}
 
 	return job, nil
 }
@@ -186,7 +186,7 @@ func amendReviewLoop(ctx context.Context, cmd *cobra.Command, app *AppContext,
 
 		switch action {
 		case actionCommit:
-			return applyAmendedMessage(ctx, out, msg, job.head, job.sha)
+			return applyAmendedMessage(ctx, out, msg, job.isHead, job.sha)
 		case actionEdit:
 			edited, err := editMessage(msg)
 			if err != nil {
@@ -204,7 +204,7 @@ func amendReviewLoop(ctx context.Context, cmd *cobra.Command, app *AppContext,
 				return err
 			}
 
-			return applyAmendedMessage(ctx, out, edited, job.head, job.sha)
+			return applyAmendedMessage(ctx, out, edited, job.isHead, job.sha)
 		case actionRegenerate:
 			continue
 		case actionAbort:

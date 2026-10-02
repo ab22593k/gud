@@ -39,8 +39,8 @@ const (
 // configuration from all sources (files, environment, CLI),
 // validates it upfront, and returns the final domain Config.
 type Mediator struct {
-	XDGProvider *provider.FileProvider
-	CWDProvider *provider.FileProvider
+	XDGProvider *provider.File
+	CWDProvider *provider.File
 }
 
 // New creates a Mediator with paths resolved according to OS conventions.
@@ -70,8 +70,8 @@ func New() (*Mediator, error) {
 	cwdPath := filepath.Join(cwd, "gud.json")
 
 	return &Mediator{
-		XDGProvider: provider.NewFileProvider(xdgPath),
-		CWDProvider: provider.NewFileProvider(cwdPath),
+		XDGProvider: provider.New(xdgPath),
+		CWDProvider: provider.New(cwdPath),
 	}, nil
 }
 
@@ -106,7 +106,7 @@ func (m *Mediator) Load(cliCfg config.Config) (config.Config, error) {
 // loadOrZero attempts to load config from the provider.
 // Returns zero-value Config silently if the file doesn't exist
 // or cannot be read (logged at debug level).
-func (m *Mediator) loadOrZero(p *provider.FileProvider) config.Config {
+func (m *Mediator) loadOrZero(p *provider.File) config.Config {
 	cfg, err := p.Load()
 	if err != nil {
 		if !os.IsNotExist(err) {

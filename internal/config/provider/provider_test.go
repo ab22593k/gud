@@ -32,7 +32,7 @@ func TestDefaultConfigPath(t *testing.T) {
 func TestSaveAndLoad(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")
-	p := NewFileProvider(path)
+	p := New(path)
 
 	original := config.Config{
 		DetailLevel: config.DetailDetailed,
@@ -61,7 +61,7 @@ func TestSaveAndLoad(t *testing.T) {
 func TestLoadFileNotFound(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "nonexistent.json")
-	p := NewFileProvider(path)
+	p := New(path)
 
 	_, err := p.Load()
 	if err == nil {
@@ -76,7 +76,7 @@ func TestLoadFileNotFound(t *testing.T) {
 func TestLoadInvalidJSON(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "invalid.json")
-	p := NewFileProvider(path)
+	p := New(path)
 
 	if err := os.WriteFile(path, []byte("{invalid json}"), 0600); err != nil {
 		t.Fatalf("WriteFile failed: %v", err)
@@ -91,7 +91,7 @@ func TestLoadInvalidJSON(t *testing.T) {
 func TestSaveAndLoadPartialConfig(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "partial.json")
-	p := NewFileProvider(path)
+	p := New(path)
 
 	// Only set a few fields — simulates a partial config file
 	original := config.Config{
@@ -117,7 +117,7 @@ func TestSaveAndLoadPartialConfig(t *testing.T) {
 func TestMultipleSaveCycles(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "multi.json")
-	p := NewFileProvider(path)
+	p := New(path)
 
 	for i := range 5 {
 		cfg := config.Config{

@@ -7,6 +7,9 @@ package config
 type DetailLevel string
 
 const (
+	// DetailUnknown is the zero value, meaning "not set". It is distinct from
+	// every configured level and is never emitted.
+	DetailUnknown  DetailLevel = ""
 	DetailMinimal  DetailLevel = "minimal"
 	DetailStandard DetailLevel = "standard"
 	DetailDetailed DetailLevel = "detailed"
@@ -86,7 +89,7 @@ const DefaultWrapLine = 72
 func (c Config) Validate() Config {
 	switch c.DetailLevel {
 	case DetailMinimal, DetailStandard, DetailDetailed:
-	case "":
+	case DetailUnknown:
 		c.DetailLevel = DetailStandard
 	default:
 		c.DetailLevel = DetailStandard

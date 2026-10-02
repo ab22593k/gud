@@ -55,7 +55,7 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 	// nothing staged should get the "no staged changes" error immediately,
 	// not a HelixDB probe or a profile suggestion that may write
 	// .gud-skip/gud.json. InitHelixDB/InitClient run after this check.
-	diff, err := getStagedDiffOrError(ctx, app.Config().IncludeRemovedContentValue())
+	diff, err := stagedDiffOrError(ctx, app.Config().IncludeRemovedContentValue())
 	if err != nil {
 		if op == git.OperationNone {
 			return err
@@ -186,7 +186,7 @@ func resolveProfileContent(profileName string) string {
 
 	initProfileManager()
 
-	p, err := profileManager.Get(profileName)
+	p, err := profileManager.Load(profileName)
 	if err != nil {
 		slog.Warn("configured persona not cached; proceeding without persona content",
 			"persona", profileName,
@@ -207,7 +207,7 @@ func requireProfile(profileName string) error {
 
 	initProfileManager()
 
-	_, err := profileManager.Get(profileName)
+	_, err := profileManager.Load(profileName)
 	if err != nil {
 		return fmt.Errorf("persona %q not found.\n\n"+
 			"First download it:  git message persona save %s\n"+
@@ -217,19 +217,19 @@ func requireProfile(profileName string) error {
 	return nil
 }
 
-// getStagedDiffOrError retrieves the staged prompt diff and returns an error
+// stagedDiffOrError retrieves the staged prompt diff and returns an error
 // if nothing is staged. Removed content is excluded unless includeRemoved is
 // set; removed names count as content, so a names-only stage proceeds instead
 // of reporting "no staged changes".
-func getStagedDiffOrError(ctx context.Context, includeRemoved bool) (string, error) {
-	changes, err := git.GetStagedChanges(ctx)
+func stagedDiffOrError(ctx context.Context, includeRemoved bool) (string, error) {
+	changes, err := git.Staged(ctx)
 	if err != nil {
 		return "", err
 	}
 
 	composed := composePromptDiff(changes.Diff, includeRemoved)
 	if strings.TrimSpace(composed) == "" {
-		return "", errors.New("no staged changes found. Use 'git add' to stage changes")
+		return "", errors.New("no staged changes found: use 'git add' to stage changes")
 	}
 
 	return composed, nil
@@ -255,12 +255,12 @@ func composePromptDiff(raw string, includeRemoved bool) string {
 	return out
 }
 
-// getStagedDiffAndDeleted retrieves the staged diff with removed content
+// stagedDiffAndDeleted retrieves the staged diff with removed content
 // excluded unless includeRemoved is set, plus the removed references: the
 // deleted file names and the rename old→new pairs.
-func getStagedDiffAndDeleted(ctx context.Context, includeRemoved bool) (diff, deleted string,
+func stagedDiffAndDeleted(ctx context.Context, includeRemoved bool) (diff, deleted string,
 	renamed []git.RenamedFile, err error) {
-	changes, err := git.GetStagedChanges(ctx)
+	changes, err := git.Staged(ctx)
 	if err != nil {
 		return "", "", nil, fmt.Errorf("failed to get staged changes: %w", err)
 	}
@@ -392,10 +392,10 @@ func buildHistoryContext(ctx context.Context, app *AppContext, diff string) stri
 		return ""
 	}
 
-	if upstream := git.GetUpstreamBranch(ctx); upstream != "" {
+	if upstream := git.UpstreamBranch(ctx); upstream != "" {
 		paths := git.ExtractChangedPaths(diff)
 
-		history, err := git.GetTopicHistory(ctx, upstream, n, paths)
+		history, err := git.TopicHistory(ctx, upstream, n, paths)
 		if err == nil && strings.TrimSpace(history) != "" {
 			label := fmt.Sprintf("Commits on %s since diverging from %s:", app.Branch(ctx), upstream)
 			if len(paths) > 0 {
@@ -408,7 +408,7 @@ func buildHistoryContext(ctx context.Context, app *AppContext, diff string) stri
 		// commits below.
 	}
 
-	history, err := git.GetRecentCommits(ctx, n)
+	history, err := git.RecentCommits(ctx, n)
 	if err != nil {
 		slog.Debug("failed to get recent commits, proceeding without history", "error", err)
 

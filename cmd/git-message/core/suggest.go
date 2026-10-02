@@ -192,7 +192,7 @@ func writeProjectConfig(dir string, cfg config.Config) error {
 	path := filepath.Join(dir, "gud.json")
 
 	// Read existing config if any
-	var existing dto.ConfigDTO
+	var existing dto.Config
 	if data, err := os.ReadFile(path); err == nil {
 		_ = json.Unmarshal(data, &existing)
 	}

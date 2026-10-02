@@ -59,8 +59,8 @@ func parseGitlinkEntry(entry string) (SubmoduleChange, bool) {
 		trimmed := strings.TrimSpace(line)
 		switch {
 		case strings.HasPrefix(trimmed, "index "):
-			if oldIdx, newIdx, mode, ok := parseIndexLine(trimmed); ok {
-				oldHash, newHash = oldIdx, newIdx
+			if lineOldHash, lineNewHash, mode, ok := parseIndexLine(trimmed); ok {
+				oldHash, newHash = lineOldHash, lineNewHash
 
 				if mode == gitlinkMode {
 					gitlink = true

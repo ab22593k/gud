@@ -67,12 +67,27 @@ linters:
           disabled: false
         - name: unused-parameter
           disabled: false
-    varnamelen:
-      min-name-length: 2
-      ignore-decls:
-        - "t: testing.T"
-        - "tt: *testing.T"
-        - "i: int"
+        # Naming: MixedCaps, initialism casing (ID/URL/SHA), no ALL_CAPS, and
+        # package-name stutter. These were previously unchecked because an
+        # explicit rules list suppresses revive's default set.
+        - name: var-naming
+          disabled: false
+        # Error strings must be lowercase (including acronyms) and unpunctuated.
+        - name: error-strings
+          disabled: false
+    staticcheck:
+      # golangci-lint's default staticcheck set excludes ST1003 (naming:
+      # MixedCaps and initialism casing) and keeps ST1005 (error strings). This
+      # is the default list with the ST1003 exclusion dropped, so naming is
+      # enforced. ST1005 stays enabled.
+      checks:
+        - all
+        - -ST1000
+        - -ST1016
+        - -ST1020
+        - -ST1021
+        - -ST1022
+        - -ST1023
   exclusions:
     # Exclude machine-generated Go files (detected via standard "Code generated"
     # markers) from linting. Replaces an invalid v1-style exclusions.generate

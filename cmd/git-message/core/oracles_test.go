@@ -178,7 +178,7 @@ func TestOracle_Explainability_NoStagedDiff(t *testing.T) {
 
 	t.Chdir(td)
 
-	_, err := getStagedDiffOrError(t.Context(), false)
+	_, err := stagedDiffOrError(t.Context(), false)
 	if err == nil {
 		t.Fatal("[E] freshly initialised repo should report no staged changes, got nil error")
 	}
@@ -197,14 +197,14 @@ func TestOracle_Explainability_ConfigPlaceholder(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := provider.NewFileProvider(cfgPath)
+	p := provider.New(cfgPath)
 	//nolint:gosec // test-only placeholder value, not a real credential
 	if err := p.Save(config.Config{APIKey: "${SOME_VAR}"}); err != nil {
 		t.Fatal(err)
 	}
 
 	// Construct mediator directly to control file paths.
-	notFound := provider.NewFileProvider(filepath.Join(td, "notfound.json"))
+	notFound := provider.New(filepath.Join(td, "notfound.json"))
 	m := &mediator.Mediator{XDGProvider: p, CWDProvider: notFound}
 
 	_, err := m.Load(config.Config{})
@@ -226,7 +226,7 @@ func TestOracle_World_ConfigFilePermissions(t *testing.T) {
 	td := t.TempDir()
 	cfgPath := filepath.Join(td, "gud.json")
 
-	p := provider.NewFileProvider(cfgPath)
+	p := provider.New(cfgPath)
 	if err := p.Save(config.DefaultConfig()); err != nil {
 		t.Fatal(err)
 	}
@@ -664,8 +664,8 @@ func TestOracle_Aspirations_ConfigLoadSpeed(t *testing.T) {
 	// The mediator with no files should resolve defaults in < 5ms.
 	td := t.TempDir()
 	m := &mediator.Mediator{
-		XDGProvider: provider.NewFileProvider(filepath.Join(td, "no.json")),
-		CWDProvider: provider.NewFileProvider(filepath.Join(td, "no.json")),
+		XDGProvider: provider.New(filepath.Join(td, "no.json")),
+		CWDProvider: provider.New(filepath.Join(td, "no.json")),
 	}
 
 	start := time.Now()

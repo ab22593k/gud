@@ -317,7 +317,7 @@ func persistToHelixDB(ctx context.Context, app *AppContext, diff, hash, message 
 		return
 	}
 
-	author := git.GetAuthor(ctx)
+	author := git.Author(ctx)
 	branch := app.Branch(ctx)
 
 	fileChanges := toFileChanges(units)

@@ -13,18 +13,18 @@ import (
 	"gud/internal/config/dto"
 )
 
-// FileProvider reads and writes configuration from a JSON file.
-type FileProvider struct {
+// File reads and writes configuration from a JSON file.
+type File struct {
 	path string
 }
 
-// NewFileProvider creates a FileProvider backed by the given file path.
-func NewFileProvider(path string) *FileProvider {
-	return &FileProvider{path: path}
+// New creates a File backed by the given file path.
+func New(path string) *File {
+	return &File{path: path}
 }
 
 // Path returns the file path this provider reads and writes.
-func (p *FileProvider) Path() string {
+func (p *File) Path() string {
 	return p.path
 }
 
@@ -48,13 +48,13 @@ func DefaultConfigPath() (string, error) {
 // Returns config.Config (zero value) and the underlying error if the file
 // cannot be read or parsed. Callers should check os.IsNotExist to distinguish
 // "no config file yet" from other errors.
-func (p *FileProvider) Load() (config.Config, error) {
+func (p *File) Load() (config.Config, error) {
 	data, err := os.ReadFile(p.path)
 	if err != nil {
 		return config.Config{}, err
 	}
 
-	var cfgDTO dto.ConfigDTO
+	var cfgDTO dto.Config
 	if err := json.Unmarshal(data, &cfgDTO); err != nil {
 		return config.Config{}, fmt.Errorf("parse config: %w", err)
 	}
@@ -63,7 +63,7 @@ func (p *FileProvider) Load() (config.Config, error) {
 }
 
 // Save writes the configuration to the JSON file.
-func (p *FileProvider) Save(cfg config.Config) error {
+func (p *File) Save(cfg config.Config) error {
 	cfgDTO := dto.FromEntity(cfg)
 
 	//nolint:gosec // Config files intentionally store API keys for persistence.

@@ -101,7 +101,7 @@ func TestResolveRevision(t *testing.T) {
 	}
 }
 
-func TestGetCommitDiff_OnlyTargetCommit(t *testing.T) {
+func TestCommitDiff_OnlyTargetCommit(t *testing.T) {
 	dir := initAmendRepo(t)
 
 	chdirAmend(t, dir)
@@ -118,9 +118,9 @@ func TestGetCommitDiff_OnlyTargetCommit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	firstDiff, err := GetCommitDiff(ctx, first)
+	firstDiff, err := CommitDiff(ctx, first)
 	if err != nil {
-		t.Fatalf("GetCommitDiff(HEAD~1)=%v", err)
+		t.Fatalf("CommitDiff(HEAD~1)=%v", err)
 	}
 
 	if !strings.Contains(firstDiff, "a.txt") || !strings.Contains(firstDiff, "hello") {
@@ -135,9 +135,9 @@ func TestGetCommitDiff_OnlyTargetCommit(t *testing.T) {
 		t.Errorf("HEAD~1 diff leaks HEAD~2 patch:\n%s", firstDiff)
 	}
 
-	headDiff, err := GetCommitDiff(ctx, head)
+	headDiff, err := CommitDiff(ctx, head)
 	if err != nil {
-		t.Fatalf("GetCommitDiff(HEAD)=%v", err)
+		t.Fatalf("CommitDiff(HEAD)=%v", err)
 	}
 
 	if !strings.Contains(headDiff, "c.txt") || !strings.Contains(headDiff, "third-content") {
@@ -148,8 +148,8 @@ func TestGetCommitDiff_OnlyTargetCommit(t *testing.T) {
 		t.Errorf("HEAD diff leaks HEAD~1 patch:\n%s", headDiff)
 	}
 
-	if msg, err := GetCommitMessage(ctx, head); err != nil || msg != "third" {
-		t.Errorf("GetCommitMessage(HEAD)=(%q,%v), want (third,nil)", msg, err)
+	if msg, err := CommitMessage(ctx, head); err != nil || msg != "third" {
+		t.Errorf("CommitMessage(HEAD)=(%q,%v), want (third,nil)", msg, err)
 	}
 }
 
@@ -164,7 +164,7 @@ func TestAmendHead(t *testing.T) {
 		t.Fatalf("AmendHead=%v", err)
 	}
 
-	msg, err := GetCommitMessage(ctx, "HEAD")
+	msg, err := CommitMessage(ctx, "HEAD")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,7 +190,7 @@ func TestRewordCommit(t *testing.T) {
 		t.Fatalf("RewordCommit=%v", err)
 	}
 
-	msg, err := GetCommitMessage(ctx, "HEAD~1")
+	msg, err := CommitMessage(ctx, "HEAD~1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +199,7 @@ func TestRewordCommit(t *testing.T) {
 		t.Errorf("HEAD~1 message=%q, want %q", msg, "second rewritten")
 	}
 
-	headMsg, err := GetCommitMessage(ctx, "HEAD")
+	headMsg, err := CommitMessage(ctx, "HEAD")
 	if err != nil {
 		t.Fatal(err)
 	}

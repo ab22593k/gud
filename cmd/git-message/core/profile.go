@@ -374,7 +374,7 @@ var profileShowCmd = &cobra.Command{
 			return nil
 		}
 
-		p, err := profileManager.Get(slug)
+		p, err := profileManager.Load(slug)
 		if err != nil {
 			return err
 		}

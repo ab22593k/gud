@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// MaxRecentCommits is the maximum number of recent commits GetRecentCommits can
+// MaxRecentCommits is the maximum number of recent commits RecentCommits can
 // request. This prevents accidentally dumping hundreds of commits into the prompt
 // and wasting tokens.
 const MaxRecentCommits = 50
@@ -19,18 +19,18 @@ const flagOneline = "--oneline"
 // cmdLog is the git log subcommand name.
 const cmdLog = "log"
 
-// GetStagedDiff returns the git diff of staged changes, excluding deleted and renamed file content.
-func GetStagedDiff(ctx context.Context) (string, error) {
+// StagedDiff returns the git diff of staged changes, excluding deleted and renamed file content.
+func StagedDiff(ctx context.Context) (string, error) {
 	return runGitDiff(ctx, "diff", "--cached", "--diff-filter=dr")
 }
 
-// GetUnstagedDiff returns the git diff of unstaged changes, excluding deleted and renamed file content.
-func GetUnstagedDiff(ctx context.Context) (string, error) {
+// UnstagedDiff returns the git diff of unstaged changes, excluding deleted and renamed file content.
+func UnstagedDiff(ctx context.Context) (string, error) {
 	return runGitDiff(ctx, "diff", "--diff-filter=dr")
 }
 
-// GetStagedDeletedFiles returns the names of files deleted in staged changes (no content).
-func GetStagedDeletedFiles(ctx context.Context) (string, error) {
+// StagedDeletedFiles returns the names of files deleted in staged changes (no content).
+func StagedDeletedFiles(ctx context.Context) (string, error) {
 	return runGitDiff(ctx, "diff", "--cached", "--diff-filter=D", "--name-only")
 }
 
@@ -49,12 +49,12 @@ func Commit(ctx context.Context, message string) (string, error) {
 		return "", fmt.Errorf("git commit failed: %w\n%s", err, out.String())
 	}
 
-	return getHEADHash(ctx)
+	return headHash(ctx)
 }
 
-// GetAuthor returns the git user name in "Name <email>" format.
+// Author returns the git user name in "Name <email>" format.
 // On error, it returns an empty string — callers should handle gracefully.
-func GetAuthor(ctx context.Context) string {
+func Author(ctx context.Context) string {
 	name, err := runGitConfig(ctx, "user.name")
 	if err != nil {
 		return ""
@@ -80,13 +80,13 @@ func runGitConfig(ctx context.Context, key string) (string, error) {
 	return string(out), nil
 }
 
-// GetRepoRoot returns the absolute path to the git repository root.
+// RepoRoot returns the absolute path to the git repository root.
 //
 // The returned string is the Helix tenant key (repo_path/tenantId): callers
 // must persist and query with this exact string. A rename, move, or
 // symlink alias of the checkout produces a different key and therefore a
 // separate tenant with no access to prior memory.
-func GetRepoRoot(ctx context.Context) (string, error) {
+func RepoRoot(ctx context.Context) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", "rev-parse", "--show-toplevel")
 
 	out, err := cmd.Output()
@@ -97,9 +97,9 @@ func GetRepoRoot(ctx context.Context) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-// GetBranch returns the current git branch name, or empty string on detached
+// Branch returns the current git branch name, or empty string on detached
 // HEAD or error. Callers should handle the empty result gracefully.
-func GetBranch(ctx context.Context) string {
+func Branch(ctx context.Context) string {
 	out, err := exec.CommandContext(ctx, "git", "rev-parse", "--abbrev-ref", "HEAD").Output()
 	if err != nil {
 		return ""
@@ -113,8 +113,8 @@ func GetBranch(ctx context.Context) string {
 	return branch
 }
 
-// getHEADHash returns the abbreviated hash of HEAD.
-func getHEADHash(ctx context.Context) (string, error) {
+// headHash returns the abbreviated hash of HEAD.
+func headHash(ctx context.Context) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", "rev-parse", "--short", "HEAD")
 
 	out, err := cmd.Output()
@@ -125,11 +125,11 @@ func getHEADHash(ctx context.Context) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-// GetRecentCommits returns the last n commit summaries (one-line format).
+// RecentCommits returns the last n commit summaries (one-line format).
 // If n <= 0, it returns an empty string with no error.
 // It returns an error if git log fails (e.g. the repository has no commits yet).
 // n is capped at MaxRecentCommits to prevent excessive git log queries.
-func GetRecentCommits(ctx context.Context, n int) (string, error) {
+func RecentCommits(ctx context.Context, n int) (string, error) {
 	if n <= 0 {
 		return "", nil
 	}
@@ -158,11 +158,11 @@ type StagedChanges struct {
 	Deleted []string
 }
 
-// GetStagedChanges runs a single `git diff --cached` subprocess (without any
+// Staged runs a single `git diff --cached` subprocess (without any
 // diff-filter) and returns both the full diff content and a list of deleted
 // file names parsed from the output. Using a single subprocess instead of two
-// (GetStagedDiff + GetStagedDeletedFiles) reduces subprocess overhead.
-func GetStagedChanges(ctx context.Context) (*StagedChanges, error) {
+// (StagedDiff + StagedDeletedFiles) reduces subprocess overhead.
+func Staged(ctx context.Context) (*StagedChanges, error) {
 	cmd := exec.CommandContext(ctx, "git", "diff", "--cached")
 
 	var out bytes.Buffer

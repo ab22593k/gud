@@ -56,10 +56,10 @@ type Options struct {
 // the store and degrades to disabled via NewDB; Close flushes pending writes
 // and releases the lock promptly, so owners must Close exactly once per open.
 type DB struct {
-	client   *helix.Client
-	dataDir  string
-	database string
-	enabled  bool
+	client    *helix.Client
+	dataDir   string
+	database  string
+	isEnabled bool
 
 	unavailableCause error
 }
@@ -82,14 +82,14 @@ func NewDB(opts Options) *DB {
 		database = DefaultDatabase
 	}
 
-	db := &DB{dataDir: dataDir, database: database, enabled: opts.Enabled}
+	db := &DB{dataDir: dataDir, database: database, isEnabled: opts.Enabled}
 
 	if !opts.Enabled {
 		return db
 	}
 
 	if err := os.MkdirAll(dataDir, 0o750); err != nil {
-		db.enabled = false
+		db.isEnabled = false
 		db.unavailableCause = err
 
 		return db
@@ -97,7 +97,7 @@ func NewDB(opts Options) *DB {
 
 	client, err := helix.NewEmbeddedClient(helix.DiskSource{Root: dataDir, Database: database})
 	if err != nil {
-		db.enabled = false
+		db.isEnabled = false
 		db.unavailableCause = err
 
 		return db
@@ -126,12 +126,12 @@ func (db *DB) UnavailableCause() error {
 }
 
 // Enabled returns whether HelixDB integration is enabled.
-func (db *DB) Enabled() bool { return db.enabled && db.client != nil }
+func (db *DB) Enabled() bool { return db.isEnabled && db.client != nil }
 
 // IsAvailable reports whether the embedded database is open. There is
 // no network probe: availability is purely process-local.
 func (db *DB) IsAvailable(_ context.Context) bool {
-	return db.enabled && db.client != nil
+	return db.isEnabled && db.client != nil
 }
 
 // Close releases the embedded handle, flushing pending writes and freeing
@@ -148,7 +148,7 @@ func (db *DB) Close() error {
 // options (WriterOnly, WarmOnly, AwaitDurability) are rejected by the
 // SDK in embedded mode, so callers must not pass them.
 func (db *DB) Exec(ctx context.Context, req helix.Request, out any, opts ...helix.ExecOption) error {
-	if !db.enabled || db.client == nil {
+	if !db.isEnabled || db.client == nil {
 		return ErrHelixUnavailable
 	}
 

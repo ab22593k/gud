@@ -12,12 +12,12 @@ import (
 func TestToEntity(t *testing.T) {
 	tests := []struct {
 		name string
-		dto  ConfigDTO
+		dto  Config
 		want config.Config
 	}{
 		{
 			name: "all fields set",
-			dto: ConfigDTO{
+			dto: Config{
 				DetailLevel: "detailed",
 				Profile:     "computer-scientist",
 				Model:       "gemini-flash-latest",
@@ -38,7 +38,7 @@ func TestToEntity(t *testing.T) {
 		},
 		{
 			name: "partial fields set",
-			dto: ConfigDTO{
+			dto: Config{
 				Model:  "gemini-flash-lite-latest",
 				APIKey: "sk-partial",
 			},
@@ -49,7 +49,7 @@ func TestToEntity(t *testing.T) {
 		},
 		{
 			name: "empty dto",
-			dto:  ConfigDTO{},
+			dto:  Config{},
 			want: config.Config{},
 		},
 	}
@@ -68,7 +68,7 @@ func TestFromEntity(t *testing.T) {
 	tests := []struct {
 		name   string
 		entity config.Config
-		want   ConfigDTO
+		want   Config
 	}{
 		{
 			name: "all fields set",
@@ -81,7 +81,7 @@ func TestFromEntity(t *testing.T) {
 				APIKey:      "sk-123",
 				WrapLine:    72,
 			},
-			want: ConfigDTO{
+			want: Config{
 				DetailLevel: "detailed",
 				Profile:     "astrophysicist",
 				Model:       "gemini-flash-lite-latest",
@@ -94,7 +94,7 @@ func TestFromEntity(t *testing.T) {
 		{
 			name:   "empty entity",
 			entity: config.Config{},
-			want:   ConfigDTO{},
+			want:   Config{},
 		},
 	}
 
@@ -128,7 +128,7 @@ func TestRoundTrip(t *testing.T) {
 }
 
 func TestJSONRoundTrip(t *testing.T) {
-	original := ConfigDTO{
+	original := Config{
 		DetailLevel: "standard",
 		Profile:     "biologist",
 		Model:       "gemini-flash-lite-latest",
@@ -142,7 +142,7 @@ func TestJSONRoundTrip(t *testing.T) {
 		t.Fatalf("json.Marshal failed: %v", err)
 	}
 
-	var restored ConfigDTO
+	var restored Config
 	if err := json.Unmarshal(data, &restored); err != nil {
 		t.Fatalf("json.Unmarshal failed: %v", err)
 	}
@@ -170,7 +170,7 @@ func TestJSONRoundTrip(t *testing.T) {
 // "history": 0 must serialize (not be omitted by omitempty) and survive a JSON
 // round-trip as a set pointer, so file config can disable history.
 func TestJSONRoundTripHistoryZero(t *testing.T) {
-	original := ConfigDTO{History: config.Ptr(0)}
+	original := Config{History: config.Ptr(0)}
 
 	//nolint:gosec // Test data, not real credentials.
 	data, err := json.Marshal(original)
@@ -189,7 +189,7 @@ func TestJSONRoundTripHistoryZero(t *testing.T) {
 		t.Errorf("history = %v, want 0", v)
 	}
 
-	var restored ConfigDTO
+	var restored Config
 	if err := json.Unmarshal(data, &restored); err != nil {
 		t.Fatalf("json.Unmarshal failed: %v", err)
 	}
@@ -200,7 +200,7 @@ func TestJSONRoundTripHistoryZero(t *testing.T) {
 }
 
 func TestJSONFieldNames(t *testing.T) {
-	dto := ConfigDTO{
+	dto := Config{
 		DetailLevel: "minimal",
 		APIKey:      "sk-test",
 		WrapLine:    72,
@@ -226,7 +226,7 @@ func TestJSONFieldNames(t *testing.T) {
 }
 
 func TestEmptyDTO(t *testing.T) {
-	dto := ConfigDTO{}
+	dto := Config{}
 	entity := dto.ToEntity()
 
 	if entity.DetailLevel != "" {
@@ -245,7 +245,7 @@ func TestEmptyDTO(t *testing.T) {
 // TestJSONPersonaKey verifies the persona selection serializes under the
 // "persona" key; the old "profile" key must not appear.
 func TestJSONPersonaKey(t *testing.T) {
-	dto := ConfigDTO{Profile: "astrophysicist"}
+	dto := Config{Profile: "astrophysicist"}
 
 	//nolint:gosec // Test data, not real credentials.
 	data, err := json.Marshal(dto)

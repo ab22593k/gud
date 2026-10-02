@@ -91,11 +91,11 @@ func TestIsCached(t *testing.T) {
 	}
 }
 
-func TestGet(t *testing.T) {
+func TestLoad(t *testing.T) {
 	tmpDir := t.TempDir()
 	m := &Manager{cacheDir: tmpDir}
 
-	_, err := m.Get("missing")
+	_, err := m.Load("missing")
 	if err == nil {
 		t.Fatal("Get() expected error for missing profile")
 	}
@@ -105,7 +105,7 @@ func TestGet(t *testing.T) {
 		t.Fatalf("Save() error = %v", err)
 	}
 
-	got, err := m.Get(slugTest)
+	got, err := m.Load(slugTest)
 	if err != nil {
 		t.Fatalf("Get() error = %v", err)
 	}
@@ -264,7 +264,7 @@ func TestFetchCatalog_ServerError(t *testing.T) {
 	}
 }
 
-func TestGetDownloadETA(t *testing.T) {
+func TestDownloadETA(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -277,9 +277,9 @@ func TestGetDownloadETA(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got := GetDownloadETA(tt.count)
+		got := DownloadETA(tt.count)
 		if got != tt.want {
-			t.Errorf("GetDownloadETA(%d) = %v, want %v", tt.count, got, tt.want)
+			t.Errorf("DownloadETA(%d) = %v, want %v", tt.count, got, tt.want)
 		}
 	}
 }

@@ -30,8 +30,8 @@ func ResolveRevision(ctx context.Context, rev string) (string, error) {
 	return strings.TrimSpace(out.String()), nil
 }
 
-// GetCommitDiff returns the patch of exactly one commit, never a range.
-func GetCommitDiff(ctx context.Context, sha string) (string, error) {
+// CommitDiff returns the patch of exactly one commit, never a range.
+func CommitDiff(ctx context.Context, sha string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", "show", "--format=", "--patch",
 		"--no-decorate", "--no-ext-diff", sha, "--")
 
@@ -46,8 +46,8 @@ func GetCommitDiff(ctx context.Context, sha string) (string, error) {
 	return out.String(), nil
 }
 
-// GetCommitMessage returns the full message body of one commit.
-func GetCommitMessage(ctx context.Context, sha string) (string, error) {
+// CommitMessage returns the full message body of one commit.
+func CommitMessage(ctx context.Context, sha string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", "log", "-1", "--format=%B", sha)
 
 	var out bytes.Buffer
@@ -106,7 +106,7 @@ func AmendHead(ctx context.Context, message string) (string, error) {
 		return "", fmt.Errorf("git commit --amend failed: %w\n%s", err, out.String())
 	}
 
-	return getHEADHash(ctx)
+	return headHash(ctx)
 }
 
 // checkHasParent errors when sha is the root commit, which has no parent

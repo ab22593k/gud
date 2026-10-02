@@ -94,7 +94,7 @@ func TestMediatorLoad(t *testing.T) {
 	xdgDir := t.TempDir()
 	xdgPath := filepath.Join(xdgDir, "config.json")
 
-	xdgP := provider.NewFileProvider(xdgPath)
+	xdgP := provider.New(xdgPath)
 	if err := xdgP.Save(config.Config{
 		DetailLevel: config.DetailDetailed,
 		Model:       "xdg-model",
@@ -105,7 +105,7 @@ func TestMediatorLoad(t *testing.T) {
 
 	cwdDir := t.TempDir()
 
-	cwdP := provider.NewFileProvider(filepath.Join(cwdDir, "gud.json"))
+	cwdP := provider.New(filepath.Join(cwdDir, "gud.json"))
 	if err := cwdP.Save(config.Config{
 		Model:   "cwd-model",
 		History: config.Ptr(10),
@@ -157,8 +157,8 @@ func TestMediatorLoad(t *testing.T) {
 func TestMediatorOnlyDefaults(t *testing.T) {
 	t.Setenv("GOOGLE_API_KEY", "")
 	xdgDir := t.TempDir()
-	xdgP := provider.NewFileProvider(filepath.Join(xdgDir, "missing.json"))
-	cwdP := provider.NewFileProvider(filepath.Join(xdgDir, "also-missing.json"))
+	xdgP := provider.New(filepath.Join(xdgDir, "missing.json"))
+	cwdP := provider.New(filepath.Join(xdgDir, "also-missing.json"))
 
 	m := &Mediator{XDGProvider: xdgP, CWDProvider: cwdP}
 
@@ -177,8 +177,8 @@ func TestMediatorOnlyDefaults(t *testing.T) {
 
 func TestMediatorOnlyCLI(t *testing.T) {
 	xdgDir := t.TempDir()
-	xdgP := provider.NewFileProvider(filepath.Join(xdgDir, "missing.json"))
-	cwdP := provider.NewFileProvider(filepath.Join(xdgDir, "also-missing.json"))
+	xdgP := provider.New(filepath.Join(xdgDir, "missing.json"))
+	cwdP := provider.New(filepath.Join(xdgDir, "also-missing.json"))
 
 	cliCfg := config.Config{
 		DetailLevel: config.DetailMinimal,
@@ -217,8 +217,8 @@ func TestMediatorOnlyCLI(t *testing.T) {
 func TestMediatorCLIHistoryZeroDisablesEnv(t *testing.T) {
 	xdgDir := t.TempDir()
 	m := &Mediator{
-		XDGProvider: provider.NewFileProvider(filepath.Join(xdgDir, "missing.json")),
-		CWDProvider: provider.NewFileProvider(filepath.Join(xdgDir, "also-missing.json")),
+		XDGProvider: provider.New(filepath.Join(xdgDir, "missing.json")),
+		CWDProvider: provider.New(filepath.Join(xdgDir, "also-missing.json")),
 	}
 
 	t.Setenv("GUD_HISTORY", "10")
@@ -367,8 +367,8 @@ func TestEnvPersonaPrecedence(t *testing.T) {
 
 	td := t.TempDir()
 	m := &Mediator{
-		XDGProvider: provider.NewFileProvider(filepath.Join(td, "missing.json")),
-		CWDProvider: provider.NewFileProvider(filepath.Join(td, "also-missing.json")),
+		XDGProvider: provider.New(filepath.Join(td, "missing.json")),
+		CWDProvider: provider.New(filepath.Join(td, "also-missing.json")),
 	}
 
 	cfg, err := m.Load(config.Config{Profile: "cli-persona"})

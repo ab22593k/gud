@@ -120,7 +120,7 @@ func (m *Manager) Remove(slug string) error {
 	return nil
 }
 
-func (m *Manager) Get(slug string) (*Profile, error) {
+func (m *Manager) Load(slug string) (*Profile, error) {
 	data, err := os.ReadFile(m.cachePath(slug))
 	if err != nil {
 		if os.IsNotExist(err) {

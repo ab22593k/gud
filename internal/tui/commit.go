@@ -79,14 +79,14 @@ func defaultActionItems() []list.Item {
 // CommitReviewModel is the Bubble Tea model for reviewing and acting on a
 // generated commit message. Supports inline editing via a textarea.
 type CommitReviewModel struct {
-	list     list.Model
-	viewport viewport.Model
-	textarea textarea.Model
-	msg      string // current message (may be edited)
-	action   string
-	ready    bool
-	editing  bool // true when inline editor is active
-	wrapLine int  // max line width for wrapping
+	list      list.Model
+	viewport  viewport.Model
+	textarea  textarea.Model
+	msg       string // current message (may be edited)
+	action    string
+	isReady   bool
+	isEditing bool // true when inline editor is active
+	wrapLine  int  // max line width for wrapping
 }
 
 // NewCommitReview creates a new commit review model.
@@ -150,7 +150,7 @@ func (m CommitReviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			taWidth = m.wrapLine + 4
 		}
 
-		if !m.ready {
+		if !m.isReady {
 			m.viewport = viewport.New(vpWidth, vpHeight)
 			m.viewport.SetContent(m.msg)
 			m.viewport.YPosition = 0
@@ -159,7 +159,7 @@ func (m CommitReviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			m.textarea.SetWidth(taWidth)
 			m.textarea.SetHeight(msg.Height - 6)
-			m.ready = true
+			m.isReady = true
 		} else {
 			m.viewport.Width = vpWidth
 			m.viewport.Height = vpHeight
@@ -172,7 +172,7 @@ func (m CommitReviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch {
-		case m.editing:
+		case m.isEditing:
 			return m.handleEditKey(msg)
 		default:
 			return m.handleReviewKey(msg)
@@ -196,7 +196,7 @@ func (m CommitReviewModel) handleReviewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 		return m, tea.Quit
 
 	case "e", "E":
-		m.editing = true
+		m.isEditing = true
 		m.textarea.SetValue(m.msg)
 		m.textarea.Focus()
 
@@ -215,7 +215,7 @@ func (m CommitReviewModel) handleReviewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 
 				return m, tea.Quit
 			case ActionEdit:
-				m.editing = true
+				m.isEditing = true
 				m.textarea.SetValue(m.msg)
 				m.textarea.Focus()
 
@@ -254,7 +254,7 @@ func (m CommitReviewModel) handleEditKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 		m.msg = edited
 		m.viewport.SetContent(m.msg)
-		m.editing = false
+		m.isEditing = false
 		m.textarea.Blur()
 
 		return m, nil
@@ -262,7 +262,7 @@ func (m CommitReviewModel) handleEditKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "esc":
 		// Cancel edit — restore the last confirmed message (discards the draft).
 		m.textarea.SetValue(m.msg)
-		m.editing = false
+		m.isEditing = false
 		m.textarea.Blur()
 
 		return m, nil
@@ -277,11 +277,11 @@ func (m CommitReviewModel) handleEditKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // View renders the current state.
 func (m CommitReviewModel) View() string {
-	if !m.ready {
+	if !m.isReady {
 		return "\n  Loading..."
 	}
 
-	if m.editing {
+	if m.isEditing {
 		return m.editView()
 	}
 

@@ -120,6 +120,6 @@ func slugify(profession string) string {
 	return s
 }
 
-func GetDownloadETA(estimatedCount int) time.Duration {
+func DownloadETA(estimatedCount int) time.Duration {
 	return time.Duration(estimatedCount) * 500 * time.Millisecond
 }

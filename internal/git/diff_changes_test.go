@@ -33,24 +33,24 @@ func newConfiguredRepo(t *testing.T) {
 	runGit(t, "config", "user.name", "Test User")
 }
 
-func TestGetAuthor(t *testing.T) {
+func TestAuthor(t *testing.T) {
 	newConfiguredRepo(t)
 
-	if got, want := GetAuthor(context.Background()), "Test User <test@example.com>"; got != want {
-		t.Errorf("GetAuthor() = %q, want %q", got, want)
+	if got, want := Author(context.Background()), "Test User <test@example.com>"; got != want {
+		t.Errorf("Author() = %q, want %q", got, want)
 	}
 }
 
-func TestGetStagedChanges_NothingStaged(t *testing.T) {
+func TestStaged_NothingStaged(t *testing.T) {
 	newConfiguredRepo(t)
 
-	sc, err := GetStagedChanges(context.Background())
+	sc, err := Staged(context.Background())
 	if err != nil {
-		t.Fatalf("GetStagedChanges() error = %v", err)
+		t.Fatalf("Staged() error = %v", err)
 	}
 
 	if sc == nil {
-		t.Fatal("GetStagedChanges() = nil, want non-nil")
+		t.Fatal("Staged() = nil, want non-nil")
 	}
 
 	if sc.Diff != "" {
@@ -62,7 +62,7 @@ func TestGetStagedChanges_NothingStaged(t *testing.T) {
 	}
 }
 
-func TestGetStagedChanges_StagedModificationAndDeletion(t *testing.T) {
+func TestStaged_StagedModificationAndDeletion(t *testing.T) {
 	newConfiguredRepo(t)
 
 	ctx := context.Background()
@@ -96,9 +96,9 @@ func TestGetStagedChanges_StagedModificationAndDeletion(t *testing.T) {
 
 	runGit(t, "add", "-A")
 
-	sc, err := GetStagedChanges(ctx)
+	sc, err := Staged(ctx)
 	if err != nil {
-		t.Fatalf("GetStagedChanges() error = %v", err)
+		t.Fatalf("Staged() error = %v", err)
 	}
 
 	if !strings.Contains(sc.Diff, "notes.md") {

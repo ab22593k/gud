@@ -24,9 +24,9 @@ type RepoStats struct {
 // gitignorePattern is a single compiled pattern from a .gitignore file.
 // re is nil when the pattern could not be compiled (it is then ignored).
 type gitignorePattern struct {
-	re       *regexp.Regexp
-	negate   bool
-	rootOnly bool // pattern contains a slash: relative to the .gitignore dir
+	re         *regexp.Regexp
+	isNegated  bool
+	isRootOnly bool // pattern contains a slash: relative to the .gitignore dir
 }
 
 // gitignoreMatcher prunes the stats walk using the repo's root .gitignore,
@@ -94,7 +94,7 @@ func parseGitignore(data string) []gitignorePattern {
 			continue // drop malformed patterns silently
 		}
 
-		patterns = append(patterns, gitignorePattern{re: re, negate: negate, rootOnly: rootOnly})
+		patterns = append(patterns, gitignorePattern{re: re, isNegated: negate, isRootOnly: rootOnly})
 	}
 
 	return patterns
@@ -112,14 +112,14 @@ func (m *gitignoreMatcher) ignored(rel string) bool {
 		}
 
 		var matched bool
-		if p.rootOnly {
+		if p.isRootOnly {
 			matched = p.re.MatchString(rel)
 		} else {
 			matched = p.re.MatchString(base)
 		}
 
 		if matched {
-			ignored = !p.negate
+			ignored = !p.isNegated
 		}
 	}
 

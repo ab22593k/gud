@@ -38,7 +38,7 @@ type AppContext struct {
 	branch   string
 	branchOK bool
 	// branchFn is the branch lookup used by Branch. It is swappable in tests
-	// to avoid subprocess spawns; nil means git.GetBranch.
+	// to avoid subprocess spawns; nil means git.Branch.
 	branchFn func(context.Context) string
 
 	// operation is memoised from the first git operation detection. The
@@ -217,7 +217,7 @@ func (a *AppContext) InitHelixDB(ctx context.Context) error {
 // a distinct tenant with isolated memory.
 func (a *AppContext) RepoRoot(ctx context.Context) (string, error) {
 	if !a.repoRootOK {
-		a.repoRoot, a.repoRootErr = git.GetRepoRoot(ctx)
+		a.repoRoot, a.repoRootErr = git.RepoRoot(ctx)
 		a.repoRootOK = true
 	}
 
@@ -232,7 +232,7 @@ func (a *AppContext) Branch(ctx context.Context) string {
 		if a.branchFn != nil {
 			a.branch = a.branchFn(ctx)
 		} else {
-			a.branch = git.GetBranch(ctx)
+			a.branch = git.Branch(ctx)
 		}
 
 		a.branchOK = true

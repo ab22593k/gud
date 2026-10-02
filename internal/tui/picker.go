@@ -29,14 +29,14 @@ var (
 
 // catalogItem adapts profile.CatalogEntry for the bubbles list component.
 type catalogItem struct {
-	entry  profile.CatalogEntry
-	cached bool
+	entry    profile.CatalogEntry
+	isCached bool
 }
 
 func (i catalogItem) Title() string { return i.entry.Slug }
 func (i catalogItem) Description() string {
 	var b strings.Builder
-	if i.cached {
+	if i.isCached {
 		b.WriteString("✓ Cached  •  ")
 	}
 
@@ -77,7 +77,10 @@ type (
 type PickerState int
 
 const (
-	StateBrowsing PickerState = iota
+	// StateUnknown is the zero value, set before any transition. A zero-value
+	// PickerModel is not browsing; only NewPicker assigns StateBrowsing.
+	StateUnknown PickerState = iota
+	StateBrowsing
 	StateDownloading
 	StateDone
 	StateFailed
@@ -106,7 +109,7 @@ func NewPicker(
 ) PickerModel {
 	items := make([]list.Item, len(entries))
 	for i, e := range entries {
-		items[i] = catalogItem{entry: e, cached: cached[e.Slug]}
+		items[i] = catalogItem{entry: e, isCached: cached[e.Slug]}
 	}
 
 	t := "GUD Persona Catalog"
