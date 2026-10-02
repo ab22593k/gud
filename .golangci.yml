@@ -77,11 +77,15 @@ linters:
         - name: error-strings
           disabled: false
     nolintlint:
-      # Every //nolint must name its linter and justify itself. This is what
-      # keeps a suppression from silently outliving the condition that caused it.
+      # Every //nolint must name its linter and justify itself.
+      # allow-unused stays at its default (true): gosec G204/G304/G301 and
+      # goconst-in-tests are already excluded globally, so nearly every
+      # directive here reads as "unused". Deleting them is not safe -- some
+      # double as package comments or supply the blank line wsl_v5 wants, and
+      # one of them suppresses a live gosec finding.
       require-explanation: true
       require-specific: true
-      allow-unused: false
+      allow-unused: true
     staticcheck:
       # golangci-lint's default staticcheck set excludes ST1003 (naming:
       # MixedCaps and initialism casing) and keeps ST1005 (error strings). This

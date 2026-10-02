@@ -3,10 +3,21 @@ package pipeline
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 )
+
+// recordJob returns a handler that appends n to order when run. It takes a
+// pointer so each job in a table can mutate the caller's slice.
+func recordJob(order *[]int, n int) func(context.Context) error {
+	return func(context.Context) error {
+		*order = append(*order, n)
+
+		return nil
+	}
+}
 
 func TestRun_Success(t *testing.T) {
 	t.Parallel()
@@ -16,12 +27,17 @@ func TestRun_Success(t *testing.T) {
 	var order []int
 
 	jobs := []Job{
-		{ID: 1, Handle: func(_ context.Context) error { order = append(order, 1); return nil }}, //nolint:nlreturn // single-line stub keeps the job table readable
-		{ID: 2, Handle: func(_ context.Context) error { order = append(order, 2); return nil }}, //nolint:nlreturn // single-line stub keeps the job table readable
-		{ID: 3, Handle: func(_ context.Context) error { order = append(order, 3); return nil }}, //nolint:nlreturn // single-line stub keeps the job table readable
+		{ID: 1, Handle: recordJob(&order, 1)},
+		{ID: 2, Handle: recordJob(&order, 2)},
+		{ID: 3, Handle: recordJob(&order, 3)},
 	}
+
 	if err := Run(ctx, jobs); err != nil {
 		t.Errorf("Run() error = %v, want nil", err)
+	}
+
+	if want := []int{1, 2, 3}; !slices.Equal(order, want) {
+		t.Errorf("execution order = %v, want %v", order, want)
 	}
 }
 
