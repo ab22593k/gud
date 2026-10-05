@@ -1,6 +1,9 @@
 .codegraph/
 .helix/
 *.log
+*.exe
+*.test
+*.out
 
 target/
 

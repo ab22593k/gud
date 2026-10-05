@@ -1,20 +1,3 @@
-<!--
-Sync Impact Report (temporary review scratch — remove before committing this file)
-- Version change: none (initial ratification of the unmodified template scaffold) -> 1.0.0
-- Bump rationale: no prior governed content existed, so adoption is a MINOR-equivalent
-  initial release pinned at 1.0.0. Subsequent amendments follow MAJOR/MINOR/PATCH.
-- Principles filled: none -> all five (I-V)
-  - [PRINCIPLE_1_NAME] -> I. Gated Code Quality
-  - [PRINCIPLE_2_NAME] -> II. Test-First (NON-NEGOTIABLE)
-  - [PRINCIPLE_3_NAME] -> III. Scoped, Minimal Change
-  - [PRINCIPLE_4_NAME] -> IV. Degrade, Never Block the Commit
-  - [PRINCIPLE_5_NAME] -> V. Evidence Before Reporting
-- Sections added: Additional Constraints, Quality Gates and Workflow
-- Sections removed: none (template heading hierarchy preserved)
-- Deferred placeholders: none. RATIFICATION_DATE set to 2026-09-27 (today) because the
-  scaffold shipped with the 2026-04-29 workspace bootstrap was never populated.
--->
-
 # gud Constitution
 
 ## Core Principles

@@ -15,7 +15,6 @@ import (
 	"gud/internal/obs"
 
 	"google.golang.org/adk/model"
-	"google.golang.org/adk/model/gemini"
 	"google.golang.org/genai"
 )
 
@@ -61,19 +60,19 @@ func NewClient(ctx context.Context, cfg ClientConfig) (*Client, error) {
 	return newGeminiClient(ctx, cfg)
 }
 
-// newGeminiClient creates a client using the ADK Gemini model.
+// newGeminiClient creates a client backed by the Gemini Interactions API.
 func newGeminiClient(ctx context.Context, cfg ClientConfig) (*Client, error) {
-	adkModel, err := gemini.NewModel(ctx, cfg.Model, &genai.ClientConfig{
+	genaiClient, err := genai.NewClient(ctx, &genai.ClientConfig{
 		APIKey: cfg.APIKey,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create gemini model: %w", err)
+		return nil, fmt.Errorf("failed to create gemini client: %w", err)
 	}
 
-	slog.Debug("created gemini client via ADK", "model", cfg.Model)
+	slog.Debug("created gemini client via interactions API", "model", cfg.Model)
 
 	return &Client{
-		modelImpl: adkModel,
+		modelImpl: newInteractionsModel(cfg.Model, genaiClient.Interactions),
 		model:     cfg.Model,
 	}, nil
 }
