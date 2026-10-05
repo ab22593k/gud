@@ -3,6 +3,7 @@ package profile
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -87,13 +88,36 @@ func (m *Manager) cachePath(slug string) string {
 	return filepath.Join(m.cacheDir, slug+".json")
 }
 
+// errInvalidSlug rejects slugs that are not plain identifiers.
+var errInvalidSlug = errors.New("invalid profile slug")
+
+// validateSlug rejects slugs that are not plain identifiers. Cache paths are
+// derived from the slug, so a separator or ".." would otherwise escape the
+// cache directory (CWE-22). FetchProfile enforces the same rule at the network
+// boundary; this enforces it at the filesystem sink.
+func validateSlug(slug string) error {
+	if !validSlug.MatchString(slug) {
+		return fmt.Errorf("%w %q: must match %s", errInvalidSlug, slug, validSlug.String())
+	}
+
+	return nil
+}
+
 func (m *Manager) IsCached(slug string) bool {
+	if validateSlug(slug) != nil {
+		return false
+	}
+
 	_, err := os.Stat(m.cachePath(slug))
 
 	return err == nil
 }
 
 func (m *Manager) Save(slug string, p Profile) error {
+	if err := validateSlug(slug); err != nil {
+		return err
+	}
+
 	p.Slug = slug
 
 	data, err := json.MarshalIndent(p, "", "  ")
@@ -109,6 +133,10 @@ func (m *Manager) Save(slug string, p Profile) error {
 }
 
 func (m *Manager) Remove(slug string) error {
+	if err := validateSlug(slug); err != nil {
+		return err
+	}
+
 	if err := os.Remove(m.cachePath(slug)); err != nil {
 		if os.IsNotExist(err) {
 			return fmt.Errorf("profile %q not found in cache", slug)
@@ -121,6 +149,10 @@ func (m *Manager) Remove(slug string) error {
 }
 
 func (m *Manager) Get(slug string) (*Profile, error) {
+	if err := validateSlug(slug); err != nil {
+		return nil, err
+	}
+
 	data, err := os.ReadFile(m.cachePath(slug))
 	if err != nil {
 		if os.IsNotExist(err) {

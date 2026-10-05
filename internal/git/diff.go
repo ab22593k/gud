@@ -13,6 +13,13 @@ import (
 // and wasting tokens.
 const MaxRecentCommits = 50
 
+// MaxDiffBytes bounds the staged diff held in memory and sent to the model.
+// The staged diff is repository-controlled: without a cap a single large
+// staged file inflates the heap (~4x the diff) and the API payload with no
+// ceiling. The cap is enforced during the subprocess read (runGitCapped), not
+// after, so the heap never holds the full output.
+const MaxDiffBytes = 256 << 10
+
 // flagOneline is git's one-line-per-commit log format flag.
 const flagOneline = "--oneline"
 
@@ -66,27 +73,81 @@ func GetRecentCommits(ctx context.Context, n int) (string, error) {
 	return runGit(ctx, cmdLog, fmt.Sprintf("-%d", n), flagOneline, "--no-decorate")
 }
 
-// StagedChanges bundles the full staged diff and a list of deleted file names,
-// all retrieved from a single git subprocess call.
+// StagedChanges bundles the staged diff, a list of deleted file names, and
+// whether the diff was cut at MaxDiffBytes. Deleted names come from the diff
+// body on the fast path; when truncated they are re-listed by name so the
+// caller still sees every deletion.
 type StagedChanges struct {
-	Diff    string
-	Deleted []string
+	Diff      string
+	Deleted   []string
+	Truncated bool
 }
 
-// GetStagedChanges runs a single `git diff --cached` subprocess (without any
-// diff-filter) and returns both the full diff content and a list of deleted
-// file names parsed from the output. One subprocess instead of separate
-// content and name-only queries reduces subprocess overhead.
+// GetStagedChanges runs `git diff --cached` capped at MaxDiffBytes and
+// returns the diff content plus the deleted file names. A truncation marker
+// is appended to cut diffs so the model knows its input is partial.
 func GetStagedChanges(ctx context.Context) (*StagedChanges, error) {
-	diff, err := runGit(ctx, "diff", "--cached")
+	diff, truncated, err := fetchStagedDiff(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get staged changes: %w", err)
+		return nil, err
+	}
+
+	deleted := extractDeletedFiles(diff)
+	if truncated {
+		deleted = fetchDeletedNames(ctx, deleted)
 	}
 
 	return &StagedChanges{
-		Diff:    diff,
-		Deleted: extractDeletedFiles(diff),
+		Diff:      diff,
+		Deleted:   deleted,
+		Truncated: truncated,
 	}, nil
+}
+
+// fetchStagedDiff returns the staged diff capped at MaxDiffBytes. The boolean
+// reports whether the diff was cut, in which case a marker is appended.
+func fetchStagedDiff(ctx context.Context) (string, bool, error) {
+	diff, truncated, err := runGitCapped(ctx, MaxDiffBytes, "diff", "--cached")
+	if err != nil {
+		return "", false, fmt.Errorf("failed to get staged changes: %w", err)
+	}
+
+	if truncated {
+		diff += diffTruncatedNotice()
+	}
+
+	return diff, truncated, nil
+}
+
+// diffTruncatedNotice marks a cut diff so the model knows its input is
+// partial instead of mistaking the cutoff for the end of the changes.
+func diffTruncatedNotice() string {
+	return fmt.Sprintf("\n[diff truncated by gud at %d bytes]\n", MaxDiffBytes)
+}
+
+// fetchDeletedNames lists staged deletions by name. It backs GetStagedChanges
+// when the diff body was truncated, since the cutoff may have dropped the
+// deletion entries the name parser reads.
+func fetchDeletedNames(ctx context.Context, fallback []string) []string {
+	out, _, err := runGitCapped(ctx, MaxDiffBytes, "diff", "--cached", "--name-only", "--diff-filter=D")
+	if err != nil {
+		return fallback
+	}
+
+	return splitNonEmptyLines(out)
+}
+
+// splitNonEmptyLines splits s on newlines, dropping blank entries.
+func splitNonEmptyLines(s string) []string {
+	var lines []string
+
+	for line := range strings.SplitSeq(s, "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			lines = append(lines, line)
+		}
+	}
+
+	return lines
 }
 
 // splitDiffEntries splits a multi-file diff into per-file entries.

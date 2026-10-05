@@ -102,6 +102,57 @@ func runGitStdin(ctx context.Context, message string, args ...string) (string, e
 	return out.String(), nil
 }
 
+// cappedWriter is a writer that keeps at most max bytes and records whether
+// input was dropped. It bounds subprocess output held in memory: the cap is
+// enforced during the read, so a huge output cannot inflate the heap before
+// a post-hoc truncation could cut it down.
+type cappedWriter struct {
+	buf       bytes.Buffer
+	max       int
+	truncated bool
+}
+
+func newCappedWriter(max int) *cappedWriter {
+	return &cappedWriter{max: max}
+}
+
+func (w *cappedWriter) Write(p []byte) (int, error) {
+	remaining := w.max - w.buf.Len()
+	if remaining <= 0 {
+		w.truncated = true
+
+		return len(p), nil
+	}
+
+	if len(p) > remaining {
+		_, _ = w.buf.Write(p[:remaining])
+		w.truncated = true
+
+		return len(p), nil
+	}
+
+	_, _ = w.buf.Write(p)
+
+	return len(p), nil
+}
+
+// runGitCapped runs a git command like runGit but keeps at most maxBytes of
+// combined stdout and stderr, reporting whether output was cut. Use it for
+// outputs whose size the repository controls, such as diffs.
+func runGitCapped(ctx context.Context, maxBytes int, args ...string) (string, bool, error) {
+	cmd := newGitCmd(ctx, args...)
+	out := newCappedWriter(maxBytes)
+
+	cmd.Stdout = out
+	cmd.Stderr = out
+
+	if err := cmd.Run(); err != nil {
+		return "", out.truncated, fmt.Errorf("git %v: %w\n%s", args, err, out.buf.String())
+	}
+
+	return out.buf.String(), out.truncated, nil
+}
+
 // gitConfigGlobal runs `git config --global --get <key>` and reports whether
 // the key was set. The two callers differ in what an unset key means — a
 // missing hooks path is fine, a foreign one must not be overwritten — so the

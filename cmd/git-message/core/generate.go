@@ -231,6 +231,10 @@ func getStagedDiffAndDeleted(ctx context.Context) (diff, deleted string, err err
 		return "", "", fmt.Errorf("failed to get staged changes: %w", err)
 	}
 
+	if changes.Truncated {
+		slog.Debug("staged diff truncated", "max_bytes", git.MaxDiffBytes)
+	}
+
 	diff = changes.Diff
 	if len(changes.Deleted) > 0 {
 		deleted = strings.Join(changes.Deleted, "\n") + "\n"

@@ -61,6 +61,10 @@ func (m *Manager) FetchCatalog(ctx context.Context) ([]CatalogEntry, error) {
 
 	for _, a := range rc.Agents {
 		slug := slugify(a.Profession)
+		if !validSlug.MatchString(slug) {
+			continue
+		}
+
 		entries = append(entries, CatalogEntry{
 			Profession: a.Profession,
 			Slug:       slug,
@@ -115,6 +119,15 @@ func slugify(profession string) string {
 	s = strings.ReplaceAll(s, "&", "and")
 	s = strings.ReplaceAll(s, ",", "")
 	s = strings.ReplaceAll(s, "'", "")
+	s = invalidSlugChars.ReplaceAllString(s, "-")
+	s = collapsedDashes.ReplaceAllString(s, "-")
 
-	return s
+	return strings.Trim(s, "-_")
 }
+
+// invalidSlugChars matches anything outside the validSlug alphabet, so
+// slugify output can never carry a separator, dot-run, or ".." parent step.
+var invalidSlugChars = regexp.MustCompile(`[^a-z0-9_-]+`)
+
+// collapsedDashes folds separator runs left by sanitization into one dash.
+var collapsedDashes = regexp.MustCompile(`-{2,}`)
