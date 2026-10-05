@@ -53,8 +53,8 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 
 	// Check for staged changes before any interactive flow. A user with
 	// nothing staged should get the "no staged changes" error immediately,
-	// not a HelixDB probe or a profile suggestion that may write
-	// .gud-skip/gud.json. InitHelixDB/InitClient run after this check.
+	// not a profile suggestion that may write
+	// .gud-skip/gud.json. InitClient runs after this check.
 	diff, err := getStagedDiffOrError(ctx)
 	if err != nil {
 		if op == git.OperationNone {
@@ -67,12 +67,6 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 
 		diff = ""
 	}
-
-	if err := app.InitHelixDB(ctx); err != nil {
-		slog.Debug("helixdb init failed, proceeding without", "error", err)
-	}
-
-	defer app.CloseHelixDB()
 
 	if err := app.InitClient(ctx); err != nil {
 		// During an operation stop the message is git's prepared one, so an
@@ -94,8 +88,6 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	units := git.ExtractCodeUnits(diff)
-
 	promptContext := buildPromptContext(ctx, app, diff, op)
 
 	obs.LogSizes(len(diff), len(promptContext))
@@ -110,7 +102,7 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 		prepared = git.PreparedMessage(ctx, op)
 	}
 
-	return interactiveCommit(ctx, cmd, app, diff, promptContext, units, op, prepared)
+	return interactiveCommit(ctx, cmd, app, diff, promptContext, op, prepared)
 }
 
 // buildPromptContext assembles the auxiliary prompt context: repo overview,

@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log/slog"
 	"os/exec"
 	"strings"
 
@@ -133,19 +132,11 @@ func resolveAmendCommit(ctx context.Context, app *AppContext, rev string) (amend
 }
 
 // runAmendFlow regenerates the message for exactly one commit and amends it.
-// There is no Helix persist on amend: the rewritten SHA supersedes any stored
-// record.
 func runAmendFlow(ctx context.Context, cmd *cobra.Command, app *AppContext, rev string) error {
 	job, err := resolveAmendCommit(ctx, app, rev)
 	if err != nil {
 		return err
 	}
-
-	if err := app.InitHelixDB(ctx); err != nil {
-		slog.Debug("helixdb init failed, proceeding without", "error", err)
-	}
-
-	defer app.CloseHelixDB()
 
 	if err := app.InitClient(ctx); err != nil {
 		return err

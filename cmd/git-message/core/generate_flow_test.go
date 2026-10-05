@@ -78,7 +78,7 @@ func setTestStreams(t *testing.T) {
 
 // TestRunGenerate_NoStagedChanges verifies the primary validation path: with a
 // valid repo but nothing staged, the default command fails fast with the
-// actionable "no staged changes" error before any HelixDB probe or client
+// actionable "no staged changes" error before any client
 // initialisation.
 //
 // The test runs inside a throwaway repo (newCoreHistoryTestRepo chdirs into

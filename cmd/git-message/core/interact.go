@@ -6,15 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"gud/internal/git"
-	"gud/internal/mem"
 	"gud/internal/tui"
 
 	"github.com/spf13/cobra"
@@ -31,7 +28,7 @@ const (
 // non-empty (a git operation is in progress and git already drafted a message)
 // the first pass presents it instead of generating a fresh standalone message.
 func interactiveCommit(ctx context.Context, cmd *cobra.Command, app *AppContext,
-	diff, promptContext string, units []git.CodeUnit, op git.Operation, prepared string) error {
+	diff, promptContext string, op git.Operation, prepared string) error {
 	scanner := bufio.NewScanner(cmd.InOrStdin())
 	out := cmd.OutOrStdout()
 
@@ -57,7 +54,7 @@ func interactiveCommit(ctx context.Context, cmd *cobra.Command, app *AppContext,
 
 		switch action {
 		case actionCommit:
-			return commitFinalized(ctx, app, out, diff, msg, units)
+			return commitFinalized(ctx, out, msg)
 
 		case actionEdit:
 			edited, err := editMessage(msg)
@@ -76,7 +73,7 @@ func interactiveCommit(ctx context.Context, cmd *cobra.Command, app *AppContext,
 				return err
 			}
 
-			return commitFinalized(ctx, app, out, diff, edited, units)
+			return commitFinalized(ctx, out, edited)
 
 		case actionRegenerate:
 			if client == nil {
@@ -157,18 +154,14 @@ func reviewMessage(cmd *cobra.Command, scanner *bufio.Scanner, out io.Writer,
 	return promptAction(scanner, out), ""
 }
 
-// commitFinalized runs the git commit, reports success, and persists the
-// commit to HelixDB. Shared by the direct and edited commit paths.
-func commitFinalized(ctx context.Context, app *AppContext, out io.Writer,
-	diff, msg string, units []git.CodeUnit) error {
-	hash, err := git.Commit(ctx, msg)
-	if err != nil {
+// commitFinalized runs the git commit and reports success.
+// Shared by the direct and edited commit paths.
+func commitFinalized(ctx context.Context, out io.Writer, msg string) error {
+	if _, err := git.Commit(ctx, msg); err != nil {
 		return err
 	}
 
 	_, _ = fmt.Fprintln(out, "Committed successfully.")
-
-	persistToHelixDB(ctx, app, diff, hash, msg, units)
 
 	return nil
 }
@@ -257,89 +250,4 @@ func editMessage(msg string) (string, error) {
 	}
 
 	return strings.TrimSpace(string(edited)), nil
-}
-
-// toFileChanges deduplicates git.CodeUnit entries by FilePath and converts
-// them to mem.FileChange for HelixDB persistence.
-func toFileChanges(units []git.CodeUnit) []mem.FileChange {
-	var fileChanges []mem.FileChange
-
-	for _, u := range units {
-		existing := false
-
-		for i := range fileChanges {
-			if fileChanges[i].Path == u.FilePath {
-				existing = true
-
-				break
-			}
-		}
-
-		if !existing {
-			fileChanges = append(fileChanges, mem.FileChange{
-				Path:       u.FilePath,
-				ChangeType: u.ChangeType,
-			})
-		}
-	}
-
-	return fileChanges
-}
-
-// toCodeUnitRefs maps parsed git code units to mem.CodeUnitRef for HelixDB
-// persistence. They back the entity-aware recall path (MENTIONS edges).
-func toCodeUnitRefs(units []git.CodeUnit) []mem.CodeUnitRef {
-	refs := make([]mem.CodeUnitRef, 0, len(units))
-	for _, u := range units {
-		refs = append(refs, mem.CodeUnitRef{
-			Name:       u.Name,
-			Kind:       u.Kind,
-			FilePath:   u.FilePath,
-			ChangeType: u.ChangeType,
-		})
-	}
-
-	return refs
-}
-
-// persistToHelixDB persists the commit data to HelixDB after a successful commit.
-// Errors are logged and silently discarded — HelixDB persistence is fire-and-forget.
-func persistToHelixDB(ctx context.Context, app *AppContext, diff, hash, message string, units []git.CodeUnit) {
-	db := app.HelixDB()
-	if db == nil || !db.Enabled() || !db.IsAvailable(ctx) {
-		return
-	}
-
-	repoPath, err := app.RepoRoot(ctx)
-	if err != nil || repoPath == "" {
-		slog.Debug("helixdb: failed to get repo root for persistence", "error", err)
-
-		return
-	}
-
-	author := git.GetAuthor(ctx)
-	branch := app.Branch(ctx)
-
-	fileChanges := toFileChanges(units)
-	codeUnits := toCodeUnitRefs(units)
-
-	commit := mem.CommitData{
-		SHA:            hash,
-		RepoPath:       repoPath,
-		Branch:         branch,
-		Message:        message,
-		DiffText:       diff,
-		Author:         author,
-		Timestamp:      time.Now(),
-		Files:          fileChanges,
-		CodeUnits:      codeUnits,
-		IsGudGenerated: true,
-	}
-
-	query := mem.BuildPersistCommitQuery(commit)
-
-	var rawResp map[string]any
-	if err := db.Exec(ctx, query, &rawResp); err != nil {
-		slog.Warn("helixdb: failed to persist commit", "error", err)
-	}
 }

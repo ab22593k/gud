@@ -10,7 +10,6 @@ The repository is a Go workspace using Go 1.26.8:
 - `internal/config`: configuration types, providers, and precedence handling.
 - `internal/detect`: change detection and suggestions.
 - `internal/git`: Git operations; separate workspace module.
-- `internal/mem`: HelixDB-backed commit memory; separate workspace module.
 - `internal/pipeline`: commit-message generation pipeline.
 - `internal/profile`: profile catalog and cache management.
 - `internal/request`: model requests; separate workspace module.
@@ -36,13 +35,13 @@ The repository is a Go workspace using Go 1.26.8:
 ## Setup And Commands
 
 No Makefile is used. Run commands from the repository root so `go.work` includes
-the root module and `internal/git`, `internal/mem`, and `internal/request`.
+the root module and `internal/git` and `internal/request`.
 
 ```bash
 go mod download                         # Download root-module dependencies
 go run ./cmd/git-message --help         # Run the CLI
 go build ./cmd/git-message              # Build the CLI
-go test ./... ./internal/git/... ./internal/mem/... ./internal/request/... # Test the workspace
+go test ./... ./internal/git/... ./internal/request/... # Test the workspace
 go test ./cmd/git-message/core          # Test one package
 go test ./path/to/package -run TestName # Run one test
 golangci-lint run                       # Lint and formatting checks
@@ -50,9 +49,7 @@ gofmt -w path/to/file.go                # Format changed Go files
 git diff --check                        # Detect whitespace errors
 ```
 
-The full workspace test command skips HelixDB integration and end-to-end tests unless
-`RUN_HELIXDB_INTEGRATION=1` is set. Do not enable those tests unless a HelixDB
-server is intentionally available at the configured endpoint. `internal/git`
+`internal/git`
 also contains tests skipped by `go test -short ./...`.
 
 The CLI needs `GOOGLE_API_KEY` for live model requests. Tests should remain

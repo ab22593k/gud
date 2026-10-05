@@ -84,8 +84,8 @@ func parseLogLevel(v string) slog.Level {
 }
 
 // setupLogLevel configures the global slog level from the GUD_LOG_LEVEL
-// environment variable. All gud diagnostics (including HelixDB memory
-// retrieval) use slog.Debug, so set GUD_LOG_LEVEL=debug to observe them.
+// environment variable. All gud diagnostics use slog.Debug,
+// so set GUD_LOG_LEVEL=debug to observe them.
 func setupLogLevel() {
 	slog.SetLogLoggerLevel(parseLogLevel(os.Getenv("GUD_LOG_LEVEL")))
 }

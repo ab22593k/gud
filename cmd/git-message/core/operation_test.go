@@ -194,7 +194,7 @@ func TestInteractiveCommit_UsesPreparedMessage(t *testing.T) {
 	cmd.SetOut(&outBuf)
 
 	err := interactiveCommit(context.Background(), cmd, app,
-		"diff --git a/file.txt b/file.txt", "repo context", nil,
+		"diff --git a/file.txt b/file.txt", "repo context",
 		git.OperationMerge, "Merge branch 'side'")
 	if err != nil {
 		t.Fatalf("interactiveCommit() error = %v", err)
@@ -237,7 +237,7 @@ func TestInteractiveCommit_PreparedMessageWithIssues(t *testing.T) {
 	cmd.SetOut(&outBuf)
 
 	err := interactiveCommit(context.Background(), cmd, app,
-		"", "", nil, git.OperationMerge, "Merge branch 'side'")
+		"", "", git.OperationMerge, "Merge branch 'side'")
 	if err != nil {
 		t.Fatalf("interactiveCommit() error = %v", err)
 	}

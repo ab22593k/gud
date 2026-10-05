@@ -3,12 +3,10 @@ package core
 import (
 	"context"
 	"fmt"
-	"log/slog"
 
 	"gud/internal/config"
 	"gud/internal/config/mediator"
 	"gud/internal/git"
-	"gud/internal/mem"
 	"gud/internal/request"
 
 	"github.com/spf13/cobra"
@@ -19,13 +17,10 @@ type ConfigGetter interface {
 	Config() config.Config
 }
 
-// AppContext bundles resolved application configuration with the request client
-// and optional HelixDB connection. gud uses an embedded HelixDB database in
-// the OS user cache dir, so one database is reused across projects and repos.
+// AppContext bundles resolved application configuration with the request client.
 type AppContext struct {
-	cfg     config.Config
-	client  *request.Client
-	helixDB *mem.DB
+	cfg    config.Config
+	client *request.Client
 
 	// Cached values computed once per invocation.
 	repoRoot    string
@@ -33,8 +28,8 @@ type AppContext struct {
 	repoRootOK  bool // true once repoRoot has been computed
 
 	// branch is memoised from the first successful git branch lookup. The
-	// branch cannot change within a single invocation, so the MEM persist
-	// path must not pay a subprocess spawn for each write.
+	// branch cannot change within a single invocation, so callers pay
+	// at most one subprocess spawn.
 	branch   string
 	branchOK bool
 	// branchFn is the branch lookup used by Branch. It is swappable in tests
@@ -55,7 +50,7 @@ type AppContext struct {
 // NewAppContext loads and merges configuration from all sources (CLI flags,
 // environment variables, config files) and returns an AppContext with the
 // resolved config. The request client is NOT created here — call InitClient
-// separately. HelixDB is NOT initialized here — call InitHelixDB separately.
+// separately.
 //
 // A configured profile must be cached locally; if it is not, an error is
 // returned telling the user to download it first (see requireProfile).
@@ -117,34 +112,6 @@ func (a *AppContext) Client() *request.Client {
 	return a.client
 }
 
-// HelixDB returns the HelixDB connection, or nil if not initialized.
-func (a *AppContext) HelixDB() *mem.DB {
-	return a.helixDB
-}
-
-// CloseHelixDB releases the embedded HelixDB handle, flushing pending writes
-// and releasing the on-disk lock. It is nil-safe and idempotent: a nil
-// AppContext, an AppContext without a DB, and repeated calls are all no-ops.
-// A close failure is logged at debug level and discarded. Pair every
-// successful InitHelixDB with a deferred CloseHelixDB so every return path
-// below it releases the handle.
-func (a *AppContext) CloseHelixDB() {
-	if a == nil {
-		return
-	}
-
-	db := a.helixDB
-	a.helixDB = nil
-
-	if db == nil {
-		return
-	}
-
-	if err := db.Close(); err != nil {
-		slog.Debug("helixdb: close failed", "error", err)
-	}
-}
-
 // InitClient creates the request client from the resolved configuration.
 // Must be called at most once with a context that supports cancellation.
 func (a *AppContext) InitClient(ctx context.Context) error {
@@ -161,60 +128,9 @@ func (a *AppContext) InitClient(ctx context.Context) error {
 	return nil
 }
 
-// InitHelixDB opens the embedded HelixDB database. Memory is attempted on
-// every invocation but degrades to disabled when the embedded runtime cannot
-// open (standard Go SDK v0.3.1 builds are HTTP-only without separate native
-// bindings). See mem.DB.UnavailableCause for the recorded open failure.
-//
-// Schema migration (EnsureSchema) runs whenever the DB is available. The
-// first invocation migrates in one batched transaction and records a
-// version marker; steady-state invocations hit the marker and pay zero
-// HelixDB transactions.
-//
-// The handle is per-process against a shared on-disk store. A second
-// concurrent process opening the same store may fail to acquire it and
-// degrades to disabled mode via NewDB; CloseHelixDB flushes and releases the
-// lock promptly, so callers must defer AppContext.CloseHelixDB.
-func (a *AppContext) InitHelixDB(ctx context.Context) error {
-	db := mem.NewDB(mem.Options{Enabled: true})
-
-	if !db.Enabled() {
-		slog.Debug("helixdb: embedded open failed, degraded mode",
-			"dir", db.DataDir(), "database", db.Database(), "error", db.UnavailableCause(),
-			"hint", "Go SDK v0.3.1 is HTTP-only; standard builds degrade without separate native bindings")
-
-		return nil
-	}
-
-	if !db.IsAvailable(ctx) {
-		slog.Debug("helixdb: embedded not available, degraded mode", "dir", db.DataDir())
-
-		_ = db.Close()
-
-		return nil
-	}
-
-	// EnsureSchema is versioned and batched: the first invocation migrates
-	// once, steady-state invocations hit the marker with zero transactions,
-	// so a pre-existing database never misses the indexes.
-	if err := db.EnsureSchema(ctx); err != nil {
-		_ = db.Close()
-
-		return fmt.Errorf("helixdb schema: %w", err)
-	}
-
-	a.helixDB = db
-
-	return nil
-}
-
 // RepoRoot returns the absolute path to the git repository root, caching the
 // result so that repeated calls within the same invocation use the cached
 // value and avoid a redundant subprocess spawn.
-//
-// The value doubles as the Helix tenant key: persist and query paths must use
-// this exact string, as a renamed, moved, or symlink-aliased checkout yields
-// a distinct tenant with isolated memory.
 func (a *AppContext) RepoRoot(ctx context.Context) (string, error) {
 	if !a.repoRootOK {
 		a.repoRoot, a.repoRootErr = git.GetRepoRoot(ctx)
@@ -226,7 +142,7 @@ func (a *AppContext) RepoRoot(ctx context.Context) (string, error) {
 
 // Branch returns the current git branch, memoised per invocation. The branch
 // cannot change within a single run, so callers pay at most one subprocess
-// spawn even when persistence needs it.
+// spawn.
 func (a *AppContext) Branch(ctx context.Context) string {
 	if !a.branchOK {
 		if a.branchFn != nil {

@@ -6,8 +6,7 @@ import (
 )
 
 // TestBranchMemoisesPerInvocation guards the branch subprocess dedup:
-// persistence previously spawned `git rev-parse --abbrev-ref HEAD` more than
-// once per invocation; the memo ensures a single spawn.
+// the memo ensures a single spawn per invocation.
 func TestBranchMemoisesPerInvocation(t *testing.T) {
 	app := &AppContext{}
 	calls := 0
