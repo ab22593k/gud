@@ -4,6 +4,7 @@
 *.exe
 *.test
 *.out
+vendor/
 
 target/
 

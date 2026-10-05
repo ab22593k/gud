@@ -7,6 +7,9 @@ concisely describe code changes in natural language
 - **`git message`** — the canonical invocation. The binary is built from `cmd/git-message`
   and named `git-message`, so it lands on your PATH as `git message` (git runs any
   `git-*` executable as `git <name>`).
+- **`git wire`** — standalone single-subfolder fetcher. The binary is built from
+  `cmd/git-wire` and named `git-wire`, so it lands on your PATH as `git wire`.
+  `gud` is the product name covering both commands.
 
 ## Usage
 
@@ -20,6 +23,9 @@ git message --amend HEAD~2           Regenerate only the HEAD~2 message
 git message hook install             Install git prepare-commit-msg hook
 git message profile list --remote    Browse available AI profiles
 git message profile save <slug>      Download a profile
+git wire <url> -t <dir>  Fetch one subfolder (tracked for updates)
+git wire update <dir>    Update a tracked folder from its source
+git wire list            Show tracked folders and sync state
 ```
 
 ## Amend a previous commit
