@@ -18,8 +18,9 @@ const hashBufferSize = 64 * 1024
 
 // HashDir returns the aggregate SHA-256 of dir: each regular file's content
 // hashed under its slash-separated relative path, sorted, then hashed as a
-// whole. The tracking record itself is bookkeeping, never content, so it is
-// excluded. Output is 64 lowercase hex chars.
+// whole. The registry file itself is bookkeeping, never content, so it is
+// excluded (a fetch with `-t .` keeps the registry inside its own target).
+// Output is 64 lowercase hex chars.
 func HashDir(dir string) (string, error) {
 	paths, err := listFiles(dir)
 	if err != nil {
@@ -54,7 +55,7 @@ func listFiles(dir string) ([]string, error) {
 
 		rel = filepath.ToSlash(rel)
 
-		if rel == recordFileName {
+		if rel == registryFileName {
 			return nil
 		}
 

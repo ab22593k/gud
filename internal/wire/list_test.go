@@ -2,20 +2,25 @@ package wire
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
-// listFixture fetches two checkouts of the fake source under root.
+// listFixture fetches two checkouts of the fake source under root, tracked
+// by the run-level registry at root.
 func listFixture(t *testing.T, f *fakeFetcher, root string) (first, second string) {
 	t.Helper()
 
+	registry := RegistryPath(root)
 	first = filepath.Join(root, "one")
 	second = filepath.Join(root, "two")
 
 	for _, target := range []string{first, second} {
-		if _, err := Fetch(context.Background(), FetchOptions{Fetcher: f}, testSource(), target); err != nil {
+		opts := FetchOptions{Fetcher: f, RegistryPath: registry}
+
+		if _, err := Fetch(context.Background(), opts, testSource(), target); err != nil {
 			t.Fatalf("fixture fetch: %v", err)
 		}
 	}
@@ -46,6 +51,20 @@ func TestListEmpty(t *testing.T) {
 	}
 }
 
+func TestListMissingRootEmpty(t *testing.T) {
+	t.Parallel()
+
+	// A missing root holds no registry file, which reads as empty.
+	entries, err := List(context.Background(), successFetcher(), filepath.Join(t.TempDir(), "nope"))
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+
+	if len(entries) != 0 {
+		t.Fatalf("entries = %v, want empty", entries)
+	}
+}
+
 func TestListCurrent(t *testing.T) {
 	t.Parallel()
 
@@ -68,8 +87,8 @@ func TestListCurrent(t *testing.T) {
 			t.Fatalf("%s state = %q, want current", dir, e.State)
 		}
 
-		if e.RemoteSHA != testCommitA || e.Record.ResolvedCommit != testCommitA {
-			t.Fatalf("%s SHAs = %q/%q", dir, e.RemoteSHA, e.Record.ResolvedCommit)
+		if e.RemoteSHA != testCommitA || e.Entry.ResolvedCommit != testCommitA {
+			t.Fatalf("%s SHAs = %q/%q", dir, e.RemoteSHA, e.Entry.ResolvedCommit)
 		}
 	}
 }
@@ -97,6 +116,31 @@ func TestListBehindAndDiverged(t *testing.T) {
 
 	if got := entryByDir(entries, second).State; got != StateDiverged {
 		t.Fatalf("second = %q, want diverged", got)
+	}
+}
+
+func TestListMissingTargetDiverged(t *testing.T) {
+	t.Parallel()
+
+	f := successFetcher()
+	root := t.TempDir()
+	first, _ := listFixture(t, f, root)
+
+	if err := os.RemoveAll(first); err != nil {
+		t.Fatalf("remove target: %v", err)
+	}
+
+	entries, err := List(context.Background(), f, root)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+
+	if len(entries) != 2 {
+		t.Fatalf("entries = %d, want 2 (missing target kept)", len(entries))
+	}
+
+	if got := entryByDir(entries, first).State; got != StateDiverged {
+		t.Fatalf("missing target = %q, want diverged", got)
 	}
 }
 
@@ -151,61 +195,16 @@ func TestListUnreachable(t *testing.T) {
 	}
 }
 
-func TestListSkipsInvalidRecords(t *testing.T) {
+func TestListInvalidRegistryFails(t *testing.T) {
 	t.Parallel()
 
-	f := successFetcher()
 	root := t.TempDir()
-	listFixture(t, f, root)
 
-	bad := filepath.Join(root, "bad")
-	if err := os.MkdirAll(bad, 0o750); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-
-	if err := os.WriteFile(RecordPath(bad), []byte("{oops"), 0o600); err != nil {
+	if err := os.WriteFile(RegistryPath(root), []byte("{oops"), 0o600); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
-	entries, err := List(context.Background(), f, root)
-	if err != nil {
-		t.Fatalf("List: %v", err)
-	}
-
-	if len(entries) != 2 {
-		t.Fatalf("entries = %d, want 2 (bad record skipped)", len(entries))
-	}
-}
-
-func TestListDepthCap(t *testing.T) {
-	t.Parallel()
-
-	f := successFetcher()
-	root := t.TempDir()
-
-	deep := root
-	for range maxListDepth + 2 {
-		deep = filepath.Join(deep, "d")
-	}
-
-	if _, err := Fetch(context.Background(), FetchOptions{Fetcher: f}, testSource(), deep); err != nil {
-		t.Fatalf("fixture fetch: %v", err)
-	}
-
-	entries, err := List(context.Background(), f, root)
-	if err != nil {
-		t.Fatalf("List: %v", err)
-	}
-
-	if len(entries) != 0 {
-		t.Fatalf("deep checkout listed despite cap: %v", entries)
-	}
-}
-
-func TestListMissingRoot(t *testing.T) {
-	t.Parallel()
-
-	if _, err := List(context.Background(), successFetcher(), filepath.Join(t.TempDir(), "nope")); err == nil {
-		t.Fatal("expected error for missing root")
+	if _, err := List(context.Background(), successFetcher(), root); !errors.Is(err, ErrInvalidRecord) {
+		t.Fatalf("err = %v, want fail-closed ErrInvalidRecord", err)
 	}
 }

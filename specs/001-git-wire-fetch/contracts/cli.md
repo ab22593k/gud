@@ -9,7 +9,7 @@ product-vocabulary constraint. All user-facing writes go to
 
 ## Commands
 
-### `git wire <url> [-t|--target-path <dir>] [--force]`
+### `git wire <url> [-t|--target-path <dir> | -n|--target-name <name>] [--force]`
 
 Fetch a subfolder (default action; `fetch` accepted as an explicit alias
 spelling `git wire fetch <url> ...` only if routing needs it —
@@ -18,13 +18,17 @@ not promised here).
 - `<url>`: required positional, one argument. Supported shape:
   `https://{host}/{owner}/{repo}/tree/{ref}/{subpath...}` (also tolerates a
   trailing slash and an optional `.git` on the repo segment).
-- `-t, --target-path <dir>`: destination. Default: `./<subpath-basename>`.
+- `-t, --target-path <dir>`: destination path. Default: `./<subpath-basename>`.
   Created (with parents) when absent.
+- `-n, --target-name <name>`: bare folder name for a folder that does not
+  exist yet; created as `./<name>` under the working directory. An existing
+  name fails with `ErrTargetNotEmpty`. Passing both `-t` and `-n` fails as
+  a usage error naming the conflict, before any network use.
 - `--force`: permit replacing a non-empty target. Without it, a non-empty
   target fails with `ErrTargetNotEmpty`.
 - Success output (stable key phrases, asserted by tests):
   `Fetched <host>/<owner>/<repo>@<ref>:<subpath> at <commit-short> into <dir>.`
-  plus `Tracked for future updates (<dir>/.git-wire.json).`
+  plus `Tracked for future updates (<registry-path>).`
 - Failure: error naming cause + next action per the sentinel table in
   [data-model.md](../data-model.md); no partial result is reported as
   success (target left empty-or-removed on failed initial fetch, never
@@ -32,12 +36,14 @@ not promised here).
 
 ### `git wire update [<path>] [-t|--target-path <dir>] [--force]`
 
-Bring a checkout up to date from its tracking record. No URL accepted —
+Bring a checkout up to date from its registry entry. No URL accepted —
 extra positionals are a usage error.
 
 - Target resolution: `--target-path` if given, else the positional, else the
-  current working directory. Must contain `.git-wire.json` or fail with
-  `not a git-wire checkout` (`ErrNotACheckout`) naming the record filename.
+  single registry entry when the registry holds exactly one (zero entries →
+  `not a git-wire checkout` via `ErrNotACheckout`; multiple → usage error
+  naming the candidates). The resolved target must have a registry entry or
+  fail with `ErrNotACheckout`.
 - `--force`: discard local modifications (re-materialize upstream state).
   Without it, conflicting checkouts fail with `ErrDiverged` naming the
   conflicting paths and stating how to keep vs. discard; cleanly mergeable
@@ -52,9 +58,10 @@ extra positionals are a usage error.
 
 ### `git wire list [<root>]`
 
-Show tracked checkouts under `<root>` (default: cwd; bounded recursive walk,
-symlinks not followed, `Vendor`-scale trees excluded by depth cap — exact
-cap is a tasks-phase constant with a test).
+Show tracked checkouts from the registry at `<root>` (default: cwd — the
+directory holding `.git-wire.json`). Entries read straight from the
+registry; no filesystem walk, no depth cap. A missing registry file reads
+as empty.
 
 - Row per checkout: local path, source display
   `<host>/<owner>/<repo>@<ref>:<subpath>`, last commit short SHA, and state

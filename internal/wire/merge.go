@@ -42,7 +42,7 @@ func (f snapFile) changedFrom(base snapFile) bool {
 }
 
 // snapshotDir maps slash-separated relative paths to file states,
-// excluding the tracking record itself (it changes on every update and
+// excluding the registry file itself (it changes on every update and
 // must never count as a local edit). Regular files hash content;
 // symlinks and other non-regular entries record kind only — never
 // followed, never read.
@@ -65,7 +65,7 @@ func snapshotDir(dir string) (map[string]snapFile, error) {
 
 		rel = filepath.ToSlash(rel)
 
-		if rel == recordFileName {
+		if rel == registryFileName {
 			return nil
 		}
 

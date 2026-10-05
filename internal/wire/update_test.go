@@ -9,17 +9,51 @@ import (
 	"testing"
 )
 
-// fetchFixture fetches the fake's initial commit into a fresh target.
-func fetchFixture(t *testing.T, f *fakeFetcher) string {
+// fetchFixture fetches the fake's initial commit into a fresh run dir,
+// returning the run-level registry path and the checkout target.
+func fetchFixture(t *testing.T, f *fakeFetcher) (registry, target string) {
 	t.Helper()
 
-	target := filepath.Join(t.TempDir(), "checkout")
+	run := t.TempDir()
+	registry = RegistryPath(run)
+	target = filepath.Join(run, "checkout")
 
-	if _, err := Fetch(context.Background(), FetchOptions{Fetcher: f}, testSource(), target); err != nil {
+	opts := FetchOptions{Fetcher: f, RegistryPath: registry}
+
+	if _, err := Fetch(context.Background(), opts, testSource(), target); err != nil {
 		t.Fatalf("fixture fetch: %v", err)
 	}
 
-	return target
+	return registry, target
+}
+
+// updateFixture runs Update against the fixture registry.
+func updateFixture(ctx context.Context, t *testing.T, f *fakeFetcher, registry, target string, force bool) string {
+	t.Helper()
+
+	summary, err := Update(ctx, UpdateOptions{Fetcher: f, Force: force, RegistryPath: registry}, target)
+	if err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+
+	return summary
+}
+
+// lookupFixture reads the fixture entry for assertions.
+func lookupFixture(t *testing.T, registry string) RegistryEntry {
+	t.Helper()
+
+	reg, err := LoadRegistry(registry)
+	if err != nil {
+		t.Fatalf("LoadRegistry: %v", err)
+	}
+
+	entry, err := reg.Lookup("./checkout")
+	if err != nil {
+		t.Fatalf("Lookup: %v", err)
+	}
+
+	return entry
 }
 
 func readTarget(t *testing.T, target, name string) string {
@@ -37,29 +71,26 @@ func TestUpdateNoOp(t *testing.T) {
 	t.Parallel()
 
 	f := successFetcher()
-	target := fetchFixture(t, f)
+	registry, target := fetchFixture(t, f)
 
-	beforeRec, err := os.ReadFile(RecordPath(target))
+	beforeReg, err := os.ReadFile(registry)
 	if err != nil {
-		t.Fatalf("read record: %v", err)
+		t.Fatalf("read registry: %v", err)
 	}
 
-	summary, err := Update(context.Background(), UpdateOptions{Fetcher: f}, target)
-	if err != nil {
-		t.Fatalf("Update: %v", err)
-	}
+	summary := updateFixture(context.Background(), t, f, registry, target, false)
 
 	if !strings.Contains(summary, "Already up to date") {
 		t.Fatalf("summary = %q", summary)
 	}
 
-	afterRec, err := os.ReadFile(RecordPath(target))
+	afterReg, err := os.ReadFile(registry)
 	if err != nil {
-		t.Fatalf("read record: %v", err)
+		t.Fatalf("read registry: %v", err)
 	}
 
-	if string(beforeRec) != string(afterRec) {
-		t.Fatal("no-op update rewrote the tracking record")
+	if string(beforeReg) != string(afterReg) {
+		t.Fatal("no-op update rewrote the registry")
 	}
 
 	if readTarget(t, target, "a.txt") != "alpha" {
@@ -71,12 +102,12 @@ func TestUpdateBehind(t *testing.T) {
 	t.Parallel()
 
 	f := successFetcher()
-	target := fetchFixture(t, f)
+	registry, target := fetchFixture(t, f)
 
 	f.commits["19.0"] = testCommitB
 	f.files[testCommitB] = map[string]string{"a.txt": "alpha2", "c.txt": "gamma"}
 
-	summary, err := Update(context.Background(), UpdateOptions{Fetcher: f}, target)
+	summary, err := Update(context.Background(), UpdateOptions{Fetcher: f, RegistryPath: registry}, target)
 	if err != nil {
 		t.Fatalf("Update: %v", err)
 	}
@@ -93,13 +124,8 @@ func TestUpdateBehind(t *testing.T) {
 		t.Fatal("removed upstream file still present")
 	}
 
-	rec, err := LoadRecord(target)
-	if err != nil {
-		t.Fatalf("LoadRecord: %v", err)
-	}
-
-	if rec.ResolvedCommit != testCommitB {
-		t.Fatalf("commit = %q", rec.ResolvedCommit)
+	if got := lookupFixture(t, registry).ResolvedCommit; got != testCommitB {
+		t.Fatalf("commit = %q", got)
 	}
 }
 
@@ -107,10 +133,10 @@ func TestUpdateDiverged(t *testing.T) {
 	t.Parallel()
 
 	f := successFetcher()
-	target := fetchFixture(t, f)
+	registry, target := fetchFixture(t, f)
 	writeFile(t, target, "a.txt", "local edits")
 
-	_, err := Update(context.Background(), UpdateOptions{Fetcher: f}, target)
+	_, err := Update(context.Background(), UpdateOptions{Fetcher: f, RegistryPath: registry}, target)
 	if !errors.Is(err, ErrDiverged) {
 		t.Fatalf("err = %v, want ErrDiverged", err)
 	}
@@ -122,7 +148,7 @@ func TestUpdateDiverged(t *testing.T) {
 	f.commits["19.0"] = testCommitB
 	f.files[testCommitB] = map[string]string{"a.txt": "alpha2"}
 
-	forced, err := Update(context.Background(), UpdateOptions{Fetcher: f, Force: true}, target)
+	forced, err := Update(context.Background(), UpdateOptions{Fetcher: f, Force: true, RegistryPath: registry}, target)
 	if err != nil {
 		t.Fatalf("forced Update: %v", err)
 	}
@@ -139,9 +165,41 @@ func TestUpdateDiverged(t *testing.T) {
 func TestUpdateNotACheckout(t *testing.T) {
 	t.Parallel()
 
-	_, err := Update(context.Background(), UpdateOptions{Fetcher: successFetcher()}, t.TempDir())
+	run := t.TempDir()
+	registry := RegistryPath(run)
+
+	// Unknown key under a valid tree: no entry was ever fetched here.
+	_, err := Update(context.Background(),
+		UpdateOptions{Fetcher: successFetcher(), RegistryPath: registry}, filepath.Join(run, "ghost"))
 	if !errors.Is(err, ErrNotACheckout) {
 		t.Fatalf("err = %v, want ErrNotACheckout", err)
+	}
+
+	// Target outside the registry tree is not tracked here either.
+	_, err = Update(context.Background(),
+		UpdateOptions{Fetcher: successFetcher(), RegistryPath: registry}, filepath.Join(t.TempDir(), "far"))
+	if !errors.Is(err, ErrNotACheckout) {
+		t.Fatalf("err = %v, want ErrNotACheckout", err)
+	}
+}
+
+func TestUpdateMissingTargetDir(t *testing.T) {
+	t.Parallel()
+
+	f := successFetcher()
+	registry, target := fetchFixture(t, f)
+
+	if err := os.RemoveAll(target); err != nil {
+		t.Fatalf("remove target: %v", err)
+	}
+
+	_, err := Update(context.Background(), UpdateOptions{Fetcher: f, RegistryPath: registry}, target)
+	if !errors.Is(err, ErrDiverged) {
+		t.Fatalf("err = %v, want ErrDiverged", err)
+	}
+
+	if got := lookupFixture(t, registry).ResolvedCommit; got != testCommitA {
+		t.Fatal("missing-target update rewrote the registry entry")
 	}
 }
 
@@ -149,12 +207,12 @@ func TestUpdateMissingUpstreamPath(t *testing.T) {
 	t.Parallel()
 
 	f := successFetcher()
-	target := fetchFixture(t, f)
+	registry, target := fetchFixture(t, f)
 
 	f.files = map[string]map[string]string{}
 	f.commits["19.0"] = testCommitB
 
-	_, err := Update(context.Background(), UpdateOptions{Fetcher: f}, target)
+	_, err := Update(context.Background(), UpdateOptions{Fetcher: f, RegistryPath: registry}, target)
 	if !errors.Is(err, ErrMissingPath) {
 		t.Fatalf("err = %v, want ErrMissingPath", err)
 	}
@@ -163,13 +221,8 @@ func TestUpdateMissingUpstreamPath(t *testing.T) {
 		t.Fatal("failed update touched local files")
 	}
 
-	rec, err := LoadRecord(target)
-	if err != nil {
-		t.Fatalf("LoadRecord: %v", err)
-	}
-
-	if rec.ResolvedCommit != testCommitA {
-		t.Fatal("failed update rewrote the tracking record")
+	if got := lookupFixture(t, registry).ResolvedCommit; got != testCommitA {
+		t.Fatal("failed update rewrote the registry entry")
 	}
 }
 
@@ -177,10 +230,10 @@ func TestUpdateUnreachable(t *testing.T) {
 	t.Parallel()
 
 	f := successFetcher()
-	target := fetchFixture(t, f)
+	registry, target := fetchFixture(t, f)
 	f.resolveErr = context.DeadlineExceeded
 
-	_, err := Update(context.Background(), UpdateOptions{Fetcher: f}, target)
+	_, err := Update(context.Background(), UpdateOptions{Fetcher: f, RegistryPath: registry}, target)
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("err = %v, want the transport cause", err)
 	}
@@ -194,7 +247,7 @@ func TestUpdateMergeClean(t *testing.T) {
 	t.Parallel()
 
 	f := successFetcher()
-	target := fetchFixture(t, f)
+	registry, target := fetchFixture(t, f)
 
 	f.commits["19.0"] = testCommitB
 	f.files[testCommitB] = map[string]string{
@@ -205,7 +258,7 @@ func TestUpdateMergeClean(t *testing.T) {
 
 	writeFile(t, target, "sub/b.txt", "local edits")
 
-	summary, err := Update(context.Background(), UpdateOptions{Fetcher: f}, target)
+	summary, err := Update(context.Background(), UpdateOptions{Fetcher: f, RegistryPath: registry}, target)
 	if err != nil {
 		t.Fatalf("Update: %v", err)
 	}
@@ -226,13 +279,8 @@ func TestUpdateMergeClean(t *testing.T) {
 		t.Fatal("upstream add missing")
 	}
 
-	rec, err := LoadRecord(target)
-	if err != nil {
-		t.Fatalf("LoadRecord: %v", err)
-	}
-
-	if rec.ResolvedCommit != testCommitB {
-		t.Fatalf("commit = %q", rec.ResolvedCommit)
+	if got := lookupFixture(t, registry).ResolvedCommit; got != testCommitB {
+		t.Fatalf("commit = %q", got)
 	}
 
 	live, err := HashDir(target)
@@ -240,8 +288,8 @@ func TestUpdateMergeClean(t *testing.T) {
 		t.Fatalf("HashDir: %v", err)
 	}
 
-	if rec.ExportHash != live {
-		t.Fatal("record hash does not match merged checkout")
+	if entry := lookupFixture(t, registry); entry.ExportHash != live {
+		t.Fatal("entry hash does not match merged checkout")
 	}
 }
 
@@ -249,14 +297,14 @@ func TestUpdateConflict(t *testing.T) {
 	t.Parallel()
 
 	f := successFetcher()
-	target := fetchFixture(t, f)
+	registry, target := fetchFixture(t, f)
 
 	f.commits["19.0"] = testCommitB
 	f.files[testCommitB] = map[string]string{"a.txt": "alpha2", "sub/b.txt": "beta"}
 
 	writeFile(t, target, "a.txt", "local edits")
 
-	_, err := Update(context.Background(), UpdateOptions{Fetcher: f}, target)
+	_, err := Update(context.Background(), UpdateOptions{Fetcher: f, RegistryPath: registry}, target)
 	if !errors.Is(err, ErrDiverged) {
 		t.Fatalf("err = %v, want ErrDiverged", err)
 	}
@@ -269,13 +317,8 @@ func TestUpdateConflict(t *testing.T) {
 		t.Fatal("conflict modified local files")
 	}
 
-	rec, err := LoadRecord(target)
-	if err != nil {
-		t.Fatalf("LoadRecord: %v", err)
-	}
-
-	if rec.ResolvedCommit != testCommitA {
-		t.Fatal("conflict rewrote the tracking record")
+	if got := lookupFixture(t, registry).ResolvedCommit; got != testCommitA {
+		t.Fatal("conflict rewrote the registry entry")
 	}
 }
 
@@ -283,14 +326,14 @@ func TestUpdateDeleteModifyConflict(t *testing.T) {
 	t.Parallel()
 
 	f := successFetcher()
-	target := fetchFixture(t, f)
+	registry, target := fetchFixture(t, f)
 
 	f.commits["19.0"] = testCommitB
 	f.files[testCommitB] = map[string]string{"a.txt": "alpha"}
 
 	writeFile(t, target, "sub/b.txt", "local edits")
 
-	_, err := Update(context.Background(), UpdateOptions{Fetcher: f}, target)
+	_, err := Update(context.Background(), UpdateOptions{Fetcher: f, RegistryPath: registry}, target)
 	if !errors.Is(err, ErrDiverged) {
 		t.Fatalf("err = %v, want ErrDiverged", err)
 	}
@@ -304,12 +347,12 @@ func TestUpdateCleanDelete(t *testing.T) {
 	t.Parallel()
 
 	f := successFetcher()
-	target := fetchFixture(t, f)
+	registry, target := fetchFixture(t, f)
 
 	f.commits["19.0"] = testCommitB
 	f.files[testCommitB] = map[string]string{"a.txt": "alpha2"}
 
-	summary, err := Update(context.Background(), UpdateOptions{Fetcher: f}, target)
+	summary, err := Update(context.Background(), UpdateOptions{Fetcher: f, RegistryPath: registry}, target)
 	if err != nil {
 		t.Fatalf("Update: %v", err)
 	}

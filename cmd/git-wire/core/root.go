@@ -66,6 +66,7 @@ func setupLogLevel() {
 
 func init() {
 	addWireTargetFlags(rootCmd, fetchForceUsage)
+	addWireTargetNameFlag(rootCmd)
 	rootCmd.AddCommand(gitWireUpdateCmd)
 	addWireTargetFlags(gitWireUpdateCmd, updateForceUsage)
 	rootCmd.AddCommand(gitWireListCmd)

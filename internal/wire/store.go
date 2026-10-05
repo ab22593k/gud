@@ -1,6 +1,6 @@
 package wire
 
-// Wire cache locations and checkout record paths.
+// Wire cache locations for shared mirrors.
 
 import (
 	"fmt"
@@ -9,10 +9,7 @@ import (
 	"strings"
 )
 
-// recordFileName is the colocated tracking record stored in every checkout.
-const recordFileName = ".git-wire.json"
-
-// Store resolves filesystem locations for shared mirrors and checkouts.
+// Store resolves filesystem locations for shared mirrors.
 // The zero value is not usable; use NewStore or NewStoreWithDir.
 type Store struct {
 	root string
@@ -46,11 +43,6 @@ func (s *Store) Root() string {
 // Segments are sanitized so URL-derived values can never escape the root.
 func (s *Store) MirrorDir(host, owner, repo string) string {
 	return filepath.Join(s.root, "repos", safeSegment(host), safeSegment(owner), safeSegment(repo))
-}
-
-// RecordPath returns the tracking record path inside checkout dir.
-func RecordPath(dir string) string {
-	return filepath.Join(dir, recordFileName)
 }
 
 // WorktreeDir mints a unique ephemeral worktree directory under the cache

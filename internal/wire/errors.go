@@ -15,9 +15,9 @@ var (
 	ErrMissingPath = errors.New("wire: subfolder not found upstream")
 	// ErrTargetNotEmpty guards a non-empty fetch target without --force.
 	ErrTargetNotEmpty = errors.New("wire: target directory not empty")
-	// ErrNotACheckout marks a directory without a tracking record.
+	// ErrNotACheckout marks a target with no registry entry.
 	ErrNotACheckout = errors.New("wire: not a git-wire checkout")
-	// ErrInvalidRecord marks a corrupt or unsupported tracking record.
+	// ErrInvalidRecord marks a corrupt or unsupported registry file/entry.
 	ErrInvalidRecord = errors.New("wire: invalid tracking record")
 	// ErrDiverged guards locally modified checkouts on update without --force.
 	ErrDiverged = errors.New("wire: local modifications present")
@@ -40,7 +40,7 @@ func NextAction(err error) string {
 	case errors.Is(err, ErrNotACheckout):
 		return "fetch the folder first with its source URL"
 	case errors.Is(err, ErrInvalidRecord):
-		return "re-fetch the folder to regenerate its tracking record"
+		return "re-fetch the folder to regenerate its registry entry"
 	case errors.Is(err, ErrDiverged):
 		return "back up local edits, then use --force to discard them"
 	case errors.Is(err, ErrUpstream):

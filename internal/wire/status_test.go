@@ -12,7 +12,7 @@ func TestDeriveState(t *testing.T) {
 	commit := strings.Repeat("a", 40)
 	exportHash := strings.Repeat("b", 64)
 
-	rec := TrackingRecord{ResolvedCommit: commit, ExportHash: exportHash}
+	entry := RegistryEntry{ResolvedCommit: commit, ExportHash: exportHash}
 
 	cases := []struct {
 		name       string
@@ -39,7 +39,7 @@ func TestDeriveState(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			if got := deriveState(rec, tc.localHash, tc.remoteSHA, tc.resolveErr); got != tc.want {
+			if got := deriveState(entry, tc.localHash, tc.remoteSHA, tc.resolveErr); got != tc.want {
 				t.Fatalf("got %q, want %q", got, tc.want)
 			}
 		})

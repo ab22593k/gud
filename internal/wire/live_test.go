@@ -33,9 +33,13 @@ func TestLiveFetchOCAExample(t *testing.T) {
 		t.Fatalf("ParseSourceURL: %v", err)
 	}
 
-	target := filepath.Join(t.TempDir(), "auto_backup")
+	run := t.TempDir()
+	registry := RegistryPath(run)
+	target := filepath.Join(run, "auto_backup")
 
-	summary, err := Fetch(context.Background(), FetchOptions{Fetcher: fetcher}, source, target)
+	opts := FetchOptions{Fetcher: fetcher, RegistryPath: registry}
+
+	summary, err := Fetch(context.Background(), opts, source, target)
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -49,22 +53,18 @@ func TestLiveFetchOCAExample(t *testing.T) {
 		t.Fatalf("empty target, err = %v", err)
 	}
 
-	rec, err := LoadRecord(target)
+	reg, err := LoadRegistry(registry)
 	if err != nil {
-		t.Fatalf("LoadRecord: %v", err)
+		t.Fatalf("LoadRegistry: %v", err)
 	}
 
-	if rec.Ref != "19.0" || rec.Subpath != "auto_backup" || len(rec.ResolvedCommit) != 40 {
-		t.Fatalf("record = %+v", rec)
-	}
-
-	info, err := os.Stat(RecordPath(target))
+	entry, err := reg.Lookup("./auto_backup")
 	if err != nil {
-		t.Fatalf("stat: %v", err)
+		t.Fatalf("Lookup: %v", err)
 	}
 
-	if info.Size() > maxRecordBytes {
-		t.Fatalf("live record %d bytes exceeds budget", info.Size())
+	if entry.Ref != "19.0" || entry.Subpath != "auto_backup" || len(entry.ResolvedCommit) != 40 {
+		t.Fatalf("entry = %+v", entry)
 	}
 }
 
@@ -79,13 +79,17 @@ func TestLiveUpdateNoOp(t *testing.T) {
 		t.Fatalf("ParseSourceURL: %v", err)
 	}
 
-	target := filepath.Join(t.TempDir(), "auto_backup")
+	run := t.TempDir()
+	registry := RegistryPath(run)
+	target := filepath.Join(run, "auto_backup")
 
-	if _, err := Fetch(context.Background(), FetchOptions{Fetcher: fetcher}, source, target); err != nil {
+	opts := FetchOptions{Fetcher: fetcher, RegistryPath: registry}
+
+	if _, err := Fetch(context.Background(), opts, source, target); err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
 
-	summary, err := Update(context.Background(), UpdateOptions{Fetcher: fetcher}, target)
+	summary, err := Update(context.Background(), UpdateOptions{Fetcher: fetcher, RegistryPath: registry}, target)
 	if err != nil {
 		t.Fatalf("Update: %v", err)
 	}
@@ -107,11 +111,12 @@ func TestLiveListCurrent(t *testing.T) {
 	}
 
 	root := t.TempDir()
+	registry := RegistryPath(root)
 
 	for _, name := range []string{"one", "two"} {
 		_, err := Fetch(
 			context.Background(),
-			FetchOptions{Fetcher: fetcher},
+			FetchOptions{Fetcher: fetcher, RegistryPath: registry},
 			source,
 			filepath.Join(root, name),
 		)
@@ -147,9 +152,13 @@ func TestLiveMergeLocalAdd(t *testing.T) {
 		t.Fatalf("ParseSourceURL: %v", err)
 	}
 
-	target := filepath.Join(t.TempDir(), "auto_backup")
+	run := t.TempDir()
+	registry := RegistryPath(run)
+	target := filepath.Join(run, "auto_backup")
 
-	if _, err := Fetch(context.Background(), FetchOptions{Fetcher: fetcher}, source, target); err != nil {
+	opts := FetchOptions{Fetcher: fetcher, RegistryPath: registry}
+
+	if _, err := Fetch(context.Background(), opts, source, target); err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
 
@@ -159,7 +168,7 @@ func TestLiveMergeLocalAdd(t *testing.T) {
 		t.Fatalf("local add: %v", err)
 	}
 
-	summary, err := Update(context.Background(), UpdateOptions{Fetcher: fetcher}, target)
+	summary, err := Update(context.Background(), UpdateOptions{Fetcher: fetcher, RegistryPath: registry}, target)
 
 	switch {
 	case errors.Is(err, ErrDiverged):
@@ -168,9 +177,14 @@ func TestLiveMergeLocalAdd(t *testing.T) {
 	case err != nil:
 		t.Fatalf("Update: %v", err)
 	case strings.Contains(summary, "Merged"):
-		rec, err := LoadRecord(target)
+		reg, err := LoadRegistry(registry)
 		if err != nil {
-			t.Fatalf("LoadRecord: %v", err)
+			t.Fatalf("LoadRegistry: %v", err)
+		}
+
+		entry, err := reg.Lookup("./auto_backup")
+		if err != nil {
+			t.Fatalf("Lookup: %v", err)
 		}
 
 		live, err := HashDir(target)
@@ -178,8 +192,8 @@ func TestLiveMergeLocalAdd(t *testing.T) {
 			t.Fatalf("HashDir: %v", err)
 		}
 
-		if rec.ExportHash != live {
-			t.Fatal("record hash does not match merged checkout")
+		if entry.ExportHash != live {
+			t.Fatal("entry hash does not match merged checkout")
 		}
 	default:
 		t.Fatalf("unexpected summary: %q", summary)

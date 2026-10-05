@@ -15,6 +15,8 @@
 - Q: Should `git-wire` literally run the `git sparse-checkout` command inside its cache, or is the current subset-only transfer acceptable as satisfying your requirement? → A: Option A - mandate literal `git sparse-checkout` in the cache mirror; targets stay plain exported copies, contracts unchanged, transport reworked and re-validated.
 - Q: Should the merge-when-clean behavior arrive as a new `git-wire sync` command while `update` keeps refusing divergence? → A: Option B - change `update` itself to auto-merge when conflict-free, adding no new verb; `--force` still discards on conflict.
 - Q: After the split, should `git message git-wire` disappear, leaving `git wire` as the only spelling? → A: Option A - move: remove `git-wire` from `git message`; only the standalone `git wire` binary exists.
+- Q: Where should the `.git-wire.json` tracking record live instead of inside the fetched folder? → A: Option A - single registry file at the run level mapping each target folder to its source.
+- Q: How should the new `--target-name` (`-n`) flag relate to the existing `--target-path` (`-t`) flag? → A: Option A - `-n NAME` creates a new `./NAME` folder and refuses if it exists, while `-t` keeps its full-path meaning; passing both flags together is an error.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -39,7 +41,8 @@ acquisition. Everything else (tracking, updating, caching) serves this flow.
 
 **Independent Test**: Can be fully tested by pointing the command at a public
 repository subfolder URL with an empty target directory and confirming only the
-subfolder contents land in the target plus a tracking record is created.
+subfolder contents land in the target plus a tracking entry is recorded in
+the run-level registry.
 
 **Acceptance Scenarios**:
 
@@ -49,7 +52,14 @@ subfolder contents land in the target plus a tracking record is created.
    repository) and the command reports success with the source and destination.
 2. **Given** the same valid subfolder URL, **When** the user runs the command
    with the short flag `-t`, **Then** behavior is identical to `--target-path`.
-3. **Given** a malformed or non-subfolder URL (missing repository, branch, or
+3. **Given** a valid subfolder URL and a name that does not exist in the
+   working directory, **When** the user runs the fetch command with
+   `--target-name <name>` (or `-n`), **Then** a new `./<name>` folder is
+   created holding only that subfolder's files.
+4. **Given** a valid subfolder URL, **When** the user passes both
+   `--target-path` and `--target-name`, **Then** the command fails as a
+   usage error naming the conflict and creates nothing.
+5. **Given** a malformed or non-subfolder URL (missing repository, branch, or
    folder path), **When** the user runs the command, **Then** the command fails
    with a user-friendly error explaining the expected URL shape and no partial
    contents are left as a successful result.
@@ -60,7 +70,7 @@ subfolder contents land in the target plus a tracking record is created.
 
 A developer who previously fetched a folder returns days later and wants the
 latest upstream changes for that same folder without re-entering the URL. The
-tracking record created during fetch identifies the source, so an update
+registry entry recorded during fetch identifies the source, so an update
 operation re-fetches only that folder and applies upstream changes into the
 existing target path.
 
@@ -75,10 +85,10 @@ upstream state.
 
 **Acceptance Scenarios**:
 
-1. **Given** a target directory with a valid tracking record, **When** the user
+1. **Given** a target directory with a valid registry entry, **When** the user
    runs the update operation, **Then** only that folder is re-fetched and the
    target is brought up to date with the tracked source reference.
-2. **Given** a target directory with a valid tracking record and no upstream
+2. **Given** a target directory with a valid registry entry and no upstream
    changes, **When** the user runs the update operation, **Then** the command
    reports "already up to date" without rewriting files unnecessarily.
 3. **Given** a target directory whose tracked upstream folder was renamed or
@@ -87,7 +97,7 @@ upstream state.
    files untouched.
 4. **Given** local edits in some files and upstream changes in different
    files, **When** the user runs the update operation, **Then** both sets of
-   changes are present afterwards and the tracking record advances to the new
+   changes are present afterwards and the registry entry advances to the new
    upstream commit.
 5. **Given** the same file changed both locally and upstream with differing
    content, **When** the user runs the update operation, **Then** the command
@@ -130,10 +140,10 @@ observing a fast no-op with bounded cache size.
   unless an explicit overwrite/update intent is given.
 - How does the system handle a private repository or a URL the user cannot
   access? It reports an access/credentials problem without leaking tokens or
-  credentials in output, logs, or the tracking record.
+  credentials in output, logs, or the registry file.
 - What happens when the hosting service is unreachable or rate-limits the
   request? The command fails with a retryable-error message and leaves any
-  previous target contents and tracking record intact.
+  previous target contents and registry file intact.
 - What happens when the URL names a file instead of a folder, or the branch
   reference does not exist? The command rejects it as "not a fetchable folder"
   with the parsed owner/repository/reference/path echoed back.
@@ -144,8 +154,8 @@ observing a fast no-op with bounded cache size.
   runs? Files changed only locally or only upstream merge cleanly and the
   record advances; files changed on both sides with differing content are
   reported as conflicts and nothing is written unless discard is explicit.
-- What happens when the tracking record is missing, edited by hand, or corrupt?
-  The command reports the tracking record as invalid (naming the file and the
+- What happens when the registry file (or a target entry) is missing, edited by hand, or corrupt?
+  The command reports the registry as invalid (naming the file and the
   problem) instead of guessing a source.
 
 ## Requirements *(mandatory)*
@@ -160,7 +170,11 @@ observing a fast no-op with bounded cache size.
   binaries stay separated.
 - **FR-002**: The system MUST accept a `--target-path` flag with short form
   `-t` specifying where the subfolder contents are placed; both spellings MUST
-  behave identically.
+  behave identically. It MUST also accept a `--target-name` flag with short
+  form `-n` taking a bare folder name for a folder that does not exist yet,
+  created under the working directory; an existing name MUST be refused, and
+  passing both `--target-path` and `--target-name` MUST fail as a usage
+  error naming the conflict.
 - **FR-003**: The system MUST parse a supported URL into owner/repository,
   reference (branch, tag, or commit), and subfolder path components, and MUST
   reject URLs from which those three cannot be determined with an error that
@@ -168,14 +182,16 @@ observing a fast no-op with bounded cache size.
 - **FR-004**: The system MUST download only the requested subfolder's contents
   into the target path; it MUST NOT require or retain a full working copy of
   the repository to satisfy the fetch.
-- **FR-005**: The system MUST create a tracking record at fetch time that
-  captures the source URL, parsed repository identity, reference, subfolder
-  path, resolved commit (when determinable without extra full-history cost),
-  and fetch time, so a later operation can re-resolve the same source without
-  the user re-typing the URL.
+- **FR-005**: The system MUST record, at fetch time, one entry per target in
+  a single `.git-wire.json` registry file at the run level (the directory
+  the command runs in). Each entry captures the target path, source URL,
+  parsed repository identity, reference, subfolder path, resolved commit
+  (when determinable without extra full-history cost), and fetch time, so a
+  later operation can re-resolve the same source without the user re-typing
+  the URL. Fetched folders themselves MUST stay free of bookkeeping files.
 - **FR-006**: The system MUST provide an update operation that re-resolves the
   tracked source and brings the target folder up to date with upstream, working
-  from the tracking record alone (no URL re-entry required).
+  from the registry entry alone (no URL re-entry required).
 - **FR-007**: The system MUST provide a list/status operation showing, for each
   tracked folder, its local path, source URL, reference, subfolder path, and
   sync state (current, behind, diverged/unreachable).
@@ -214,9 +230,11 @@ observing a fast no-op with bounded cache size.
   in the URL), and subfolder path within the repository.
 - **Wire checkout**: The local target directory holding the fetched subfolder
   contents plus its association to exactly one wire source reference.
-- **Tracking record**: The small persistent record stored alongside (or for) a
-  checkout that captures source URL, parsed identity, resolved commit, and
-  fetch/update time; it is the sole input the update operation needs.
+- **Tracking registry**: The single `.git-wire.json` file at the run level,
+  holding one entry per fetched target with source URL, parsed identity,
+  resolved commit, and fetch/update time; it is the sole input the update
+  operation needs. Moving or renaming a target folder orphans its entry
+  (reported as untracked) — the price of keeping fetched folders pristine.
 - **Sync state**: The derived comparison between a checkout and its tracked
   source — current, behind (upstream newer), locally diverged, or unreachable —
   reported by list/status. At update time a diverged checkout is further split
@@ -259,17 +277,19 @@ observing a fast no-op with bounded cache size.
   hosts or SSH-style inputs are out of scope for v1 and produce a clear
   "unsupported source" error.
 - The reference in the URL is treated as given (floating branch follows the
-  branch; pinned tag/commit stays pinned); the tracking record additionally
+  branch; pinned tag/commit stays pinned); the registry entry additionally
   stores the resolved commit when cheaply known so status can detect staleness.
-- Tracking state lives next to the fetched contents as a single small record
-  file inside (or directly beside) the target directory, so moving the folder
-  moves its tracking and no global registry is required for v1.
+- Tracking state lives in a single `.git-wire.json` registry file in the
+  directory the command runs in, with one entry per target folder; fetched
+  folders hold contents only. Renaming or moving a target orphans its
+  entry (reported as untracked) — accepted so vendored folders stay
+  pristine.
 - Update and list/status are sibling operations under `git-wire` (e.g.
   `git-wire update/sync` and `git-wire list/status`); exact verb names are
   decided at plan time but both operations exist.
 - Authentication for private sources reuses whatever credentials the user's
   environment already provides; the feature adds no new credential store and
-  never writes secrets into the tracking record, logs, or error text.
+  never writes secrets into the registry file, logs, or error text.
 - Performance is measured for typical subfolders (up to ~500 files / ~50 MB);
   folders larger than that still work but may exceed the time bound in SC-001.
 - Existing constitution constraints apply: deterministic tests without network

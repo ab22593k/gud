@@ -29,42 +29,57 @@ Canonical display: `{host}/{owner}/{repo}@{ref}:{subpath}` (used in list rows
 and errors; never includes credentials by construction — userinfo is rejected
 at parse).
 
-## 2. TrackingRecord (persisted `.git-wire.json`, versioned)
+## 2. Registry (run-level `.git-wire.json`, versioned envelope + entries)
 
-The sole input the update operation needs (FR-006). Written atomically
-(temp file + rename) at fetch; rewritten on successful update.
+The sole input the update operation needs (FR-006): one file per run
+directory mapping registry-relative target paths to entries. Written
+atomically (temp file + rename) on fetch (upsert) and successful update;
+a missing file reads as an empty registry.
+
+Envelope:
 
 | Field | Type | Rules |
 |---|---|---|
-| `version` | integer | MUST be `1` in v1. Unknown versions → `ErrNoTracking`-class invalid-record error naming file + version (forward-compat: readers ignore unknown *fields*, never unknown *versions*) |
+| `version` | integer | MUST be `1` in v1. Unknown versions → invalid-record error naming file + version (forward-compat: readers ignore unknown *fields*, never unknown *versions*) |
+| `entries` | map string → entry | Keys are registry-relative slash paths (`./auto_backup`); absolute, empty, or `..`-escaping keys rejected |
+
+Entry fields (byte-identical to the retired per-checkout record):
+
+| Field | Type | Rules |
+|---|---|---|
 | `source_url` | string | Verbatim URL as given at fetch |
 | `host` / `owner` / `repo` / `ref` / `subpath` | strings | Denormalized from `SourceRef` so update/list never re-parse |
 | `resolved_commit` | string | Full 40-hex SHA the ref resolved to at last fetch/update. Lowercase hex, length 40 |
 | `export_hash` | string | `content_sha` aggregate (hex SHA-256) of exactly what was written to the target; recomputed on update for divergence check (D4) |
 | `fetched_at` / `updated_at` | strings | RFC 3339 timestamps (informational; never used for freshness — SHAs decide) |
 
-Validation on load: malformed JSON, missing `version`, empty
-`resolved_commit`/`export_hash`, or non-40-hex commit → invalid-record error
-naming the file and the specific problem (never guess a source — spec edge
-case). Size budget: all fields bounded (URL ≤2 KB assumed validated at
-parse); record MUST serialize under 10 KB — enforced by a unit test that
-marshals a maximal record and asserts length.
+Validation on load: malformed JSON, missing `version`, bad keys, or entry
+violations (non-40-hex commit and friends) → invalid-record error naming
+the file and the specific problem (never guess a source — spec edge case).
+Size budget: entry fields bounded as before; each entry MUST serialize
+under 10 KB (SC-006 per folder) — enforced by a unit test that marshals a
+maximal entry and asserts length.
 
-State transitions: `absent → current` (fetch); `current → current` (no-op
-update, timestamps refreshed); `current → current@new-commit` (update with
-upstream change, `resolved_commit` + `export_hash` + `updated_at` rewritten);
-any → `diverged` is *derived, never stored* (see SyncState).
+Orphan rule: entries whose target directory is gone keep their data; list
+reports the entry `diverged`, update on it fails missing-target. Renamed
+targets orphan identically (accepted trade-off for pristine folders).
 
-## 3. Checkout (local target directory — association, not stored)
+State transitions per entry: `absent → current` (fetch upsert);
+`current → current` (no-op update, timestamps refreshed);
+`current → current@new-commit` (update with upstream change,
+`resolved_commit` + `export_hash` + `updated_at` rewritten); any →
+`diverged` is *derived, never stored* (see SyncState).
+
+## 3. Checkout (local target directory — contents only, association in registry)
 
 | Field | Type | Rules |
 |---|---|---|
-| `Dir` | absolute local path | Target directory; holds exported files at top level (subpath contents, not nested under subpath name) |
-| `Record` | `*TrackingRecord` | Loaded from `<Dir>/.git-wire.json`; nil + `ErrNotACheckout` when absent (fetch path) vs. hard invalid-record error when present-but-broken (update/list paths) |
+| `Dir` | absolute local path | Target directory; holds exported files at top level (subpath contents, not nested under subpath name); never holds bookkeeping files |
+| `Entry` | registry entry (see §2) | Looked up by registry-relative key; missing key + `ErrNotACheckout` when untracked (fetch path creates it) vs. hard invalid-record error when the registry is present-but-broken (update/list paths) |
 | `MirrorKey` | derived | `(host, owner, repo)` → shared mirror directory; segment-sanitized (D8) |
 
-Invariants: exactly one record per checkout; record file itself is excluded
-from the content hash (it is bookkeeping, not upstream content).
+Invariants: exactly one entry per checkout; a missing target directory
+reports `diverged` (local state differs maximally from export).
 
 ## 4. SyncState (derived per checkout — never persisted)
 

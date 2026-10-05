@@ -1,6 +1,6 @@
 package wire
 
-// Update orchestration: refresh a checkout from its tracking record.
+// Update orchestration: refresh a checkout from its registry entry.
 
 import (
 	"context"
@@ -9,23 +9,29 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 )
 
 // UpdateOptions tunes Update. Fetcher must be non-nil; Force discards local
-// modifications instead of refusing with ErrDiverged.
+// modifications instead of refusing with ErrDiverged. RegistryPath is the
+// explicit run-level registry file holding the target's entry.
 type UpdateOptions struct {
-	Fetcher Fetcher
-	Force   bool
+	Fetcher      Fetcher
+	Force        bool
+	RegistryPath string
 }
 
 // Update brings target up to date with its tracked source, working from the
-// colocated record alone. Unchanged checkouts report "Already up to date"
-// without rewriting files. The new state is staged aside and swapped in,
-// so a failed update leaves local files and the record untouched.
+// registry entry alone. Unchanged checkouts report "Already up to date"
+// without rewriting files. A missing target directory reports diverged.
+// The new state is staged aside and swapped in, so a failed update leaves
+// local files and the registry untouched.
 func Update(ctx context.Context, opts UpdateOptions, target string) (string, error) {
 	if opts.Fetcher == nil {
 		return "", fmt.Errorf("update %s: nil fetcher", target)
+	}
+
+	if opts.RegistryPath == "" {
+		return "", fmt.Errorf("update %s: no registry path", target)
 	}
 
 	abs, err := filepath.Abs(target)
@@ -35,8 +41,26 @@ func Update(ctx context.Context, opts UpdateOptions, target string) (string, err
 
 	target = abs
 
-	rec, err := LoadRecord(target)
+	reg, err := LoadRegistry(opts.RegistryPath)
 	if err != nil {
+		return "", fmt.Errorf("update %s: %w", target, err)
+	}
+
+	key, err := KeyFor(opts.RegistryPath, target)
+	if err != nil {
+		return "", fmt.Errorf("update %s: %w", target, err)
+	}
+
+	entry, err := reg.Lookup(key)
+	if err != nil {
+		return "", fmt.Errorf("update %s: %w", target, err)
+	}
+
+	if _, err := os.Stat(target); err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("update %s: target directory missing: %w", target, ErrDiverged)
+		}
+
 		return "", fmt.Errorf("update %s: %w", target, err)
 	}
 
@@ -45,24 +69,24 @@ func Update(ctx context.Context, opts UpdateOptions, target string) (string, err
 		return "", fmt.Errorf("update %s: %w", target, err)
 	}
 
-	res, err := opts.Fetcher.Resolve(ctx, rec.Source())
+	res, err := opts.Fetcher.Resolve(ctx, entry.Source())
 	if err != nil {
 		return "", fmt.Errorf("update %s: %w", target, err)
 	}
 
-	if res.Commit == rec.ResolvedCommit {
-		return updateSameCommit(ctx, opts, rec, res, live, target)
+	if res.Commit == entry.ResolvedCommit {
+		return updateSameCommit(ctx, opts, entry, res, live, target)
 	}
 
-	if live == rec.ExportHash {
-		return updateClean(ctx, opts, rec, res, target)
+	if live == entry.ExportHash {
+		return updateClean(ctx, opts, entry, res, target)
 	}
 
 	if opts.Force {
-		return updateClean(ctx, opts, rec, res, target)
+		return updateClean(ctx, opts, entry, res, target)
 	}
 
-	return mergeAttempt(ctx, opts.Fetcher, rec, res, target)
+	return mergeAttempt(ctx, opts.Fetcher, opts.RegistryPath, entry, res, target)
 }
 
 // updateSameCommit handles an update when upstream has not moved: a clean
@@ -70,18 +94,18 @@ func Update(ctx context.Context, opts UpdateOptions, target string) (string, err
 func updateSameCommit(
 	ctx context.Context,
 	opts UpdateOptions,
-	rec TrackingRecord,
+	entry RegistryEntry,
 	res Resolution,
 	live, target string,
 ) (string, error) {
-	if live == rec.ExportHash {
+	if live == entry.ExportHash {
 		slog.Debug("wire up to date", "dir", target, "commit", res.Commit)
 
 		return fmt.Sprintf("Already up to date (%s).", ShortSHA(res.Commit)), nil
 	}
 
 	if opts.Force {
-		return updateClean(ctx, opts, rec, res, target)
+		return updateClean(ctx, opts, entry, res, target)
 	}
 
 	return "", fmt.Errorf("update %s: %w", target, ErrDiverged)
@@ -92,11 +116,11 @@ func updateSameCommit(
 func updateClean(
 	ctx context.Context,
 	opts UpdateOptions,
-	rec TrackingRecord,
+	entry RegistryEntry,
 	res Resolution,
 	target string,
 ) (string, error) {
-	files, err := swapCheckout(ctx, opts.Fetcher, rec.Source(), res, target)
+	files, err := swapCheckout(ctx, opts.Fetcher, entry.Source(), res, target, opts.RegistryPath)
 	if err != nil {
 		return "", fmt.Errorf("update %s: %w", target, err)
 	}
@@ -109,67 +133,111 @@ func updateClean(
 // mergeAttempt merges a moved upstream into a diverged checkout. Base (the
 // recorded commit) and new (the resolved commit) materialize to temp dirs;
 // every path classifies before anything writes, so a conflict leaves the
-// target and its record untouched.
+// target and its registry entry untouched.
 func mergeAttempt(
 	ctx context.Context,
 	fetcher Fetcher,
-	rec TrackingRecord,
+	registryPath string,
+	entry RegistryEntry,
 	res Resolution,
 	target string,
 ) (string, error) {
-	source := rec.Source()
+	source := entry.Source()
 
-	baseDir, err := os.MkdirTemp(filepath.Dir(target), ".wire-base-*")
-	if err != nil {
-		return "", fmt.Errorf("update %s: stage base: %w", target, err)
-	}
-
-	defer func() { _ = os.RemoveAll(baseDir) }()
-
-	newDir, err := os.MkdirTemp(filepath.Dir(target), ".wire-new-*")
-	if err != nil {
-		return "", fmt.Errorf("update %s: stage new: %w", target, err)
-	}
-
-	defer func() { _ = os.RemoveAll(newDir) }()
-
-	baseRes := Resolution{Commit: rec.ResolvedCommit, Ref: rec.Ref, Subpath: rec.Subpath}
-
-	if _, err := fetcher.Materialize(ctx, source, baseRes, baseDir); err != nil {
-		return "", fmt.Errorf("update %s: %w", target, err)
-	}
-
-	if _, err := fetcher.Materialize(ctx, source, res, newDir); err != nil {
-		return "", fmt.Errorf("update %s: %w", target, err)
-	}
-
-	baseSnap, err := snapshotDir(baseDir)
+	key, err := KeyFor(registryPath, target)
 	if err != nil {
 		return "", fmt.Errorf("update %s: %w", target, err)
 	}
 
-	localSnap, err := snapshotDir(target)
+	baseRes := Resolution{Commit: entry.ResolvedCommit, Ref: entry.Ref, Subpath: entry.Subpath}
+
+	snaps, cleanup, err := stageMergeSnaps(ctx, fetcher, source, baseRes, res, target)
 	if err != nil {
 		return "", fmt.Errorf("update %s: %w", target, err)
 	}
 
-	newSnap, err := snapshotDir(newDir)
-	if err != nil {
-		return "", fmt.Errorf("update %s: %w", target, err)
-	}
+	defer cleanup()
 
-	take, del, conflicts := classify(baseSnap, localSnap, newSnap)
+	take, del, conflicts := classify(snaps.base, snaps.local, snaps.new)
 
 	if len(conflicts) > 0 {
-		return "", fmt.Errorf("update %s: conflicting files:\n  %s: %w", target, strings.Join(conflicts, "\n  "), ErrDiverged)
+		return "", fmt.Errorf("update %s: conflicting files:\n  %s: %w",
+			target, strings.Join(conflicts, "\n  "), ErrDiverged)
 	}
 
-	summary, err := applyMerged(source, res, target, newDir, take, del, keptLocal(baseSnap, localSnap, conflicts))
+	summary, err := applyMerged(source, res, registryPath, key, target,
+		snaps.newDir, take, del, keptLocal(snaps.base, snaps.local, conflicts))
 	if err != nil {
 		return "", fmt.Errorf("update %s: %w", target, err)
 	}
 
 	return summary, nil
+}
+
+// mergeSnaps bundles the three snapshots a merge classifies plus the staged
+// new-state directory the merge applies from.
+type mergeSnaps struct {
+	base   map[string]snapFile
+	local  map[string]snapFile
+	new    map[string]snapFile
+	newDir string
+}
+
+// stageMergeSnaps materializes base and new commits to temp dirs and
+// snapshots base, local, and new states. The caller owns cleanup.
+func stageMergeSnaps(
+	ctx context.Context,
+	fetcher Fetcher,
+	source SourceRef,
+	baseRes, res Resolution,
+	target string,
+) (mergeSnaps, func(), error) {
+	fail := func(err error) (mergeSnaps, func(), error) {
+		return mergeSnaps{}, func() {}, err
+	}
+
+	baseDir, err := os.MkdirTemp(filepath.Dir(target), ".wire-base-*")
+	if err != nil {
+		return fail(fmt.Errorf("stage base: %w", err))
+	}
+
+	newDir, err := os.MkdirTemp(filepath.Dir(target), ".wire-new-*")
+	if err != nil {
+		_ = os.RemoveAll(baseDir)
+
+		return fail(fmt.Errorf("stage new: %w", err))
+	}
+
+	cleanup := func() {
+		_ = os.RemoveAll(baseDir)
+		_ = os.RemoveAll(newDir)
+	}
+
+	for _, job := range []struct {
+		res Resolution
+		dir string
+	}{{baseRes, baseDir}, {res, newDir}} {
+		if _, err := fetcher.Materialize(ctx, source, job.res, job.dir); err != nil {
+			cleanup()
+
+			return fail(err)
+		}
+	}
+
+	snapped := make([]map[string]snapFile, 0, 3)
+
+	for _, dir := range []string{baseDir, target, newDir} {
+		snap, err := snapshotDir(dir)
+		if err != nil {
+			cleanup()
+
+			return fail(err)
+		}
+
+		snapped = append(snapped, snap)
+	}
+
+	return mergeSnaps{base: snapped[0], local: snapped[1], new: snapped[2], newDir: newDir}, cleanup, nil
 }
 
 // keptLocal counts locally-changed paths the merge preserves (changed
@@ -197,10 +265,11 @@ func keptLocal(base, local map[string]snapFile, conflicts []string) int {
 }
 
 // applyMerged stages the merge onto a clone of the target, then swaps it
-// in and advances the tracking record.
+// in and advances the registry entry.
 func applyMerged(
 	source SourceRef,
 	res Resolution,
+	registryPath, key,
 	target, newDir string,
 	take, del []string,
 	kept int,
@@ -228,7 +297,7 @@ func applyMerged(
 		return "", err
 	}
 
-	if err := recordCheckout(target, resolved, res.Commit); err != nil {
+	if err := recordCheckout(registryPath, key, target, resolved, res.Commit); err != nil {
 		return "", err
 	}
 
@@ -241,8 +310,15 @@ func applyMerged(
 }
 
 // swapCheckout stages the new state aside, then swaps it into target with
-// a backup so interruption cannot lose the previous checkout.
-func swapCheckout(ctx context.Context, fetcher Fetcher, source SourceRef, res Resolution, target string) (int, error) {
+// a backup so interruption cannot lose the previous checkout. The registry
+// entry advances to the new commit once the swap succeeds.
+func swapCheckout(
+	ctx context.Context,
+	fetcher Fetcher,
+	source SourceRef,
+	res Resolution,
+	target, registryPath string,
+) (int, error) {
 	staging, err := os.MkdirTemp(filepath.Dir(target), ".wire-update-*")
 	if err != nil {
 		return 0, fmt.Errorf("stage checkout: %w", err)
@@ -259,16 +335,16 @@ func swapCheckout(ctx context.Context, fetcher Fetcher, source SourceRef, res Re
 	resolved.Ref = res.Ref
 	resolved.Subpath = res.Subpath
 
-	hash, err := HashDir(staging)
+	key, err := KeyFor(registryPath, target)
 	if err != nil {
-		return 0, fmt.Errorf("hash checkout: %w", err)
+		return 0, err
 	}
 
 	if err := replaceDir(target, staging); err != nil {
 		return 0, err
 	}
 
-	if err := SaveRecord(target, RecordFor(resolved, res.Commit, hash, time.Now())); err != nil {
+	if err := recordCheckout(registryPath, key, target, resolved, res.Commit); err != nil {
 		return 0, err
 	}
 

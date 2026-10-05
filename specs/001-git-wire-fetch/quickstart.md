@@ -39,40 +39,47 @@ Expected: each prints usage with the URL shape
 `https://{host}/{owner}/{repo}/tree/{ref}/{path}`, the `-t/--target-path`
 flag, and one full example; wording says `git wire`, never `gud`.
 
-## 3. LIVE: fetch the spec's example
+## 3. LIVE: fetch the spec's example (plus `-n` and dual-flag rule)
 
 ```bash
 export RUN_GITWIRE_INTEGRATION=1   # live-network guard per constitution
-go run ./cmd/git-wire https://github.com/OCA/server-tools/tree/19.0/auto_backup -t /tmp/wire-demo/auto_backup
-ls /tmp/wire-demo/auto_backup
-cat /tmp/wire-demo/auto_backup/.git-wire.json
+go build -o /tmp/git-wire ./cmd/git-wire
+mkdir -p /tmp/wire-demo && cd /tmp/wire-demo
+/tmp/git-wire https://github.com/OCA/server-tools/tree/19.0/auto_backup -t ./auto_backup
+ls ./auto_backup
+cat .git-wire.json
+/tmp/git-wire https://github.com/OCA/server-tools/tree/19.0/auto_backup -n my_backup
+ls ./my_backup
+/tmp/git-wire https://github.com/OCA/server-tools/tree/19.0/auto_backup -t ./auto_backup -n my_backup; echo "exit=$?"
 ```
 
-Expected: target holds only `auto_backup` contents (no full repo);
-success line `Fetched github.com/OCA/server-tools@19.0:auto_backup at
-<sha> into /tmp/wire-demo/auto_backup.`; the record validates against
-[tracking-record v1](contracts/tracking-record.md) and is under 10 KB
-(`wc -c`).
+Expected: each target holds only `auto_backup` contents (no full repo,
+no bookkeeping files inside targets — `ls -a` proves it); success lines
+`Fetched github.com/OCA/server-tools@19.0:auto_backup at <sha> into ...`;
+the registry validates against [tracking-record v1](contracts/tracking-record.md)
+with one entry per target, each under 10 KB; dual-flag run fails as a
+usage error naming the conflict with exit ≠ 0 and creates nothing.
 
 ## 4. LIVE: no-op update and status
 
 ```bash
-go run ./cmd/git-wire update -t /tmp/wire-demo/auto_backup
-go run ./cmd/git-wire list /tmp/wire-demo
+cd /tmp/wire-demo
+/tmp/git-wire update -t ./auto_backup
+/tmp/git-wire list
 ```
 
 Expected: first command prints `Already up to date (<sha>).` in well under
-15 s and rewrites zero files (verify: `find ... -newer` shows nothing fresh
-except the record's refreshed timestamp, or record mtime unchanged per
-implementation choice documented in tasks); `list` shows one row with state
-`current`.
+15 s and rewrites zero files; `list` (default root = cwd registry) shows
+rows with state `current`.
 
 ## 5. Offline degradation (no network needed after step 3)
 
-Disconnect (or point at an unroutable remote via a copied checkout), then:
+Disconnect (or point at an unroutable remote via a hand-written registry
+entry), then from the demo dir:
 
 ```bash
-go run ./cmd/git-wire list /tmp/wire-demo; echo "exit=$?"
+cd /tmp/wire-demo
+/tmp/git-wire list; echo "exit=$?"
 ```
 
 Expected: exit `0`, row state `unreachable` with the failure class shown,
@@ -82,10 +89,11 @@ again.
 ## 6. Guard rails (offline, scripted)
 
 ```bash
-go run ./cmd/git-wire 'not-a-url' -t /tmp/wire-demo/bad
-go run ./cmd/git-wire https://github.com/OCA/server-tools/tree/19.0/auto_backup -t /tmp/wire-demo/auto_backup
-echo 'local edit' >> /tmp/wire-demo/auto_backup/README.md
-go run ./cmd/git-wire update -t /tmp/wire-demo/auto_backup; echo "exit=$?"
+cd /tmp/wire-demo
+/tmp/git-wire 'not-a-url' -t ./bad
+/tmp/git-wire https://github.com/OCA/server-tools/tree/19.0/auto_backup -t ./auto_backup
+echo 'local edit' >> ./auto_backup/README.md
+/tmp/git-wire update -t ./auto_backup; echo "exit=$?"
 ```
 
 Expected: (1) usage-shaped error with the expected URL pattern, exit ≠ 0,
@@ -107,8 +115,9 @@ with named paths, nothing written on conflict.
 Manual diverged refusal (offline, after step 3):
 
 ```bash
-echo 'local edit' >> /tmp/wire-demo/auto_backup/README.rst
-go run ./cmd/git-wire update -t /tmp/wire-demo/auto_backup; echo "exit=$?"
+cd /tmp/wire-demo
+echo 'local edit' >> ./auto_backup/README.rst
+/tmp/git-wire update -t ./auto_backup; echo "exit=$?"
 ```
 
 Expected: with the upstream ref unmoved, `ErrDiverged` refusal, exit 1,

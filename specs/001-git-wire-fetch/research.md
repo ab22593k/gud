@@ -58,7 +58,11 @@ follows the required format.
   (consistent with `HashDir`), and a byte budget. The `TreeExists`
   pre-check is retained for precise `ErrMissingPath`.
 
-## D2 — Cache and state layout: shared mirror + colocated record + memoized lookups
+## D2 — Cache and state layout: shared mirror + memoized lookups (+ registry, see D12)
+
+> Tracking-model part superseded 2026-10-05 by D12 (run-level registry
+> replaces per-checkout colocated records); mirror-sharing and memoization
+> parts stand as written.
 
 - **Decision**: Three tiers. (1) Shared per-repo bare blobless mirror at
   `~/.config/gud/wire/repos/<host>/<owner>/<repo>` (segments sanitized with
@@ -79,9 +83,12 @@ follows the required format.
   - *Per-checkout hidden `.git/` dir*: rejected — duplicates objects across
     checkouts of one repo and turns the target into a repo (surprising `git`
     behavior inside the user's tree).
-  - *Global registry of checkouts instead of colocated records*: rejected —
-    breaks the move-the-folder invariant and adds registry-corruption failure
-    modes; spec assumes colocation.
+  - *Global registry of checkouts instead of colocated records*: originally
+    rejected for move-with-folder and corruption reasons — STRUCK 2026-10-05
+    by D12, which adopts a run-level registry (not global) with the orphan
+    trade-off accepted to keep fetched folders pristine. (Original text
+    retained for history: it breaks the move-the-folder invariant and adds
+    registry-corruption failure modes; spec assumes colocation.)
   - *Persistent on-disk SHA cache*: rejected (v1) — staleness invalidation
     policy is new complexity; in-memory TTL memo per run is sufficient for
     the ≤20-folder list bound. Noted as future work.
@@ -164,16 +171,17 @@ follows the required format.
 
 ## D7 — CLI shape: fetch-by-default root, `update`, `list`
 
-- **Decision**: `git wire <url> [-t|--target-path <dir>] [--force]`
-  performs fetch (matches the spec's example invocations verbatim; default
-  target = `./<subpath-basename>` when the flag is omitted).
-  `git wire update [<path>] [-t ...] [--force]` re-resolves from
-  the colocated record (default path = cwd). `git wire list [<root>]`
-  walks for tracking records (bounded depth, default cwd) and prints the
-  source/reference/path/state table. `--force` is the single explicit
-  overwrite intent: on fetch it replaces a non-empty target; on update it
-  discards local modifications (both restate what will be lost and require
-  the flag — FR-009).
+- **Decision**: `git wire <url> [-t|--target-path <dir> | -n|--target-name
+  <name>] [--force]` performs fetch (matches the spec's example invocations
+  verbatim; default target = `./<subpath-basename>` when neither flag is
+  given; `-n` creates `./NAME`, must-not-exist, mutually exclusive with
+  `-t`). `git wire update [<path>] [-t ...] [--force]` re-resolves from
+  the run-level registry entry (default: positional, else single-entry
+  shortcut per D12). `git wire list [<root>]` reads registry entries
+  (default root = cwd, no walk) and prints the source/reference/path/state
+  table. `--force` is the single explicit overwrite intent: on fetch it
+  replaces a non-empty target; on update it discards local modifications
+  (both restate what will be lost and require the flag — FR-009).
 - **Rationale**: Zero new verbs beyond the three user stories (P1 fetch, P2
   update, P3 list) — minimal surface, each independently testable and
   demonstrable. Fetch-as-root-action preserves the requested UX exactly.
@@ -298,3 +306,59 @@ follows the required format.
   acknowledging `git wire` as a sibling command (not done in this
   workflow); README Naming/Usage section gains the `git wire` rows at
   implementation time.
+
+## D12 — Run-level registry + `--target-name` (2026-10-05 clarifications)
+
+- **Decision**: One `.git-wire.json` registry file per run directory
+  (the process working directory at invocation), holding a versioned
+  envelope plus one entry per fetched target. Entry keys are
+  registry-relative slash paths (`./auto_backup`), normalized at write;
+  absolute or escaping keys are rejected. Fetch upserts the entry
+  (creating the file when absent); update resolves its target to exactly
+  one entry; list reads entries directly — the bounded filesystem walk and
+  its depth cap retire. A bare `update` with no path uses the single entry
+  when the registry holds exactly one, reports `ErrNotACheckout` on zero,
+  and fails as a usage error naming candidates on multiple. A registry
+  entry whose target directory is gone reports `diverged` (local state
+  differs maximally from export) rather than inventing a fifth state.
+  Renamed/moved targets orphan their entries per the spec trade-off.
+- **Atomicity**: registry reads tolerate a missing file (empty registry);
+  writes are atomic temp-file + rename, same discipline as the old
+  per-checkout record. Concurrent CLI runs are out of scope (last writer
+  wins; commands are human-driven and short-lived).
+- **Testability seam**: all domain functions take an explicit registry
+  path — only the Cobra layer resolves it from the working directory.
+  Unit tests point at `t.TempDir()` registries, so no test ever depends on
+  process cwd (constitution Principle II).
+- **`--target-name`**: `-n/--target-name NAME` accepts one path segment
+  (same segment discipline as URL names: non-empty, no separators, no
+  dot elements, no leading dash, validated pure like `ParseSourceURL`);
+  the destination is `./NAME` under the run directory and MUST NOT exist
+  (refuse otherwise, mirroring the non-empty-target guard). Passing both
+  `-t` and `-n` fails fast as a usage error before any network use.
+  Default when neither is given stays `./<subpath-basename>`.
+- **Rationale**: registry keeps fetched folders pristine (the user's stated
+  motive — vendored code must not gain bookkeeping files); relative keys
+  keep the registry portable within its tree; entry-level budgets preserve
+  SC-006 per folder; single-entry default keeps the common one-checkout
+  flow argument-free without inventing batch-update semantics (rejected as
+  scope creep); explicit-path-over-cwd in every function keeps tests
+  hermetic.
+- **Alternatives considered**:
+  - *Per-checkout sidecar beside the target*: rejected — clutters the
+    parent directory per checkout and shares the rename-orphan downside
+    with none of the single-inspection-point benefit.
+  - *Registry in the shared cache dir (`~/.config/gud/wire/`)*: rejected —
+    the spec mandates run-level placement; a global registry also breaks
+    project portability (clone the project, lose the tracking).
+  - *Absolute-path keys*: rejected — brittle across checkouts/moves of the
+    whole tree; relative keys degrade gracefully (orphan, reported).
+  - *`update` with no path syncs ALL entries*: rejected — batch semantics
+    with partial failure (half-synced tree) is a new feature with new
+    failure modes, not a default-target rule. Usage error instead.
+- **Preserved details**: record-exclusion in hashing stays (a fetch with
+  `-t .` puts the registry inside its own target); `TreeExists` pre-check,
+  merge matrix, sync-state derivation, and memoization are untouched;
+  entry fields are byte-identical to the v1 record (same validation:
+  "`version`: integer, MUST equal `1`", 40-hex commit, 64-hex export hash,
+  RFC 3339 timestamps) so existing fixtures migrate by re-keying.

@@ -27,6 +27,14 @@ from a `git message` subcommand to a standalone `cmd/git-wire` binary
 invoked as `git wire` (research D11). Behavior, flags, phrases, record,
 and transport unchanged; `git-message` side is pure deletion;
 `contracts/cli.md` and `quickstart.md` respelled.
+
+**Amendment 2026-10-05 (registry)** (clarifications: run-level registry +
+`--target-name`): tracking moves from per-checkout records to a single
+`.git-wire.json` registry at the run level with relative-path keys (research
+D12); `list` reads entries instead of walking; `-n/--target-name` creates
+`./NAME` (must not exist, mutually exclusive with `-t`). Entry fields and
+validation unchanged; no new dependencies; `contracts/cli.md` and
+`quickstart.md` updated; `tasks.md` needs regen.
 re-materialized base (research D10). No record-schema change, no new
 dependencies, no contract changes except one merged-success phrase.
 
@@ -35,7 +43,7 @@ dependencies, no contract changes except one merged-success phrase.
 Add a `git-wire` subcommand to `git message` that fetches a single subfolder
 from a hosted repository URL (e.g.
 `https://github.com/OCA/server-tools/tree/19.0/auto_backup`) into a target
-directory, records a colocated tracking record for later updates, and stays
+directory, records a run-level registry entry for later updates, and stays
 fast and light via a shared blobless git-object cache plus memoized remote
 lookups. `update` merges upstream changes into locally-modified checkouts
 when conflict-free (FR-009/FR-013; research D10), refusing with a file list
@@ -45,8 +53,8 @@ mirror per repository under `~/.config/gud/wire/`; materialize the subfolder
 by attaching an ephemeral detached linked worktree, populating ONLY the
 requested path with `git sparse-checkout set`, copying the populated files
 out to the target, and removing the worktree. Detect local divergence and
-freshness with a single aggregate content hash stored in a `<10 KB`
-colocated `.git-wire.json`. New code lives in a root-module `internal/wire`
+freshness with a single aggregate content hash stored per registry entry
+(`<10 KB` each). New code lives in a root-module `internal/wire`
 package plus a thin `cmd/git-wire/core` Cobra layer, with a
 narrow exported addition to the `internal/git` module so all `git` spawning
 stays under that module's ownership.
@@ -62,7 +70,9 @@ No new module dependencies. (`archive/tar` from the retired transport drops
 out; the copy-out path needs only `io`/`os`/`path/filepath`.)
 
 **Storage**: (1) Colocated tracking record `.git-wire.json` in each checkout
-(JSON, hard budget <10 KB per SC-006). (2) Shared per-repository bare
+(JSON, hard budget <10 KB per SC-006) replaced 2026-10-05 by a run-level
+registry file with one entry per target (entry fields/validation
+byte-identical; see research D12). (2) Shared per-repository bare
 blobless git-object cache under `~/.config/gud/wire/` (mirrors `profile.Manager`
 precedent of `~/.config/gud/...`), plus ephemeral linked sparse worktrees
 that exist only for the duration of one materialization and are removed
@@ -148,6 +158,12 @@ still PASS.
 no behavior, state, record, dependency, or gate impact; `git-message`
 returns to its pre-feature shape by deletion. All gates still PASS.
 
+**Post-design re-check 2026-10-05 (registry amendment)**: registry re-homes
+state without changing its shape (entry fields/validation byte-identical,
+SC-006 per-entry intact); explicit-registry-path threading keeps tests
+hermetic (Principle II); single-entry default avoids inventing batch sync
+(Principle III). All gates still PASS.
+
 **Skill-vs-constitution adjudication** (`@golang-clean-coder` items):
 
 | Skill item | Verdict | Reason |
@@ -175,7 +191,7 @@ specs/001-git-wire-fetch/
 ├── contracts/           # Phase 1 output (/speckit.plan command)
 │   ├── cli.md               # Command signatures, flags, exit codes, output phrases (UNCHANGED by amendment)
 │   └── tracking-record.md   # .git-wire.json v1 schema and versioning rules (UNCHANGED by amendment)
-└── tasks.md             # Phase 2 output (/speckit.tasks command - STALE after amendments, needs regen for split)
+└── tasks.md             # Phase 2 output (/speckit.tasks command - STALE after amendments, needs regen for registry)
 ```
 
 ### Source Code (repository root)
@@ -185,7 +201,7 @@ cmd/git-wire/             # NEW standalone binary (invoked as `git wire`); mirro
 ├── main.go              # package main: Execute + stderr/exit (same 10-line shape as git-message)
 ├── core/
 │   ├── root.go          # Cobra root (Use "wire", fetch-by-default) + update/list registration
-│   ├── wire.go          # fetch/update/list handlers, flags, backend seam (moved from git-message core)
+│   ├── wire.go          # fetch/update/list handlers, flags (-t/-n), backend seam, registry-path resolution
 │   └── wire_test.go     # Command-level tests, relocated with identical phrases
 
 cmd/git-message/core/     # git-wire REMOVED: gitwire.go + gitwire_test.go deleted, registration dropped
@@ -194,11 +210,11 @@ cmd/git-message/core/     # git-wire REMOVED: gitwire.go + gitwire_test.go delet
 internal/wire/          # NEW package, root module (mirrors internal/profile, internal/detect precedent)
 ├── source.go            # SourceRef domain type + ParseSourceURL (pure, table-tested)
 ├── source_test.go
-├── track.go             # Tracking record load/save/validate (.git-wire.json, <10 KB budget)
-├── track_test.go
-├── fetch.go             # Fetch/update orchestration: policy top, helpers stepdown below (happy path extracted)
+├── registry.go         # Run-level `.git-wire.json` registry: envelope + entries, atomic load/save/validate (D12)
+├── registry_test.go   # Envelope round-trip, key normalization/rejection, atomicity, missing-file tolerance
+├── fetch.go             # Fetch orchestration + `-n` name validation/creation (happy path extracted)
 ├── fetch_test.go        # Orchestration against fake fetcher (divergence, no-op, missing-source cases)
-├── status.go            # Sync-state derivation (pure) + list walk
+├── status.go            # Sync-state derivation (pure) + registry-driven list (walk retired)
 ├── status_test.go
 ├── hash.go              # Aggregate content-SHA walker (stdlib sha256, bounded buffers)
 ├── hash_test.go

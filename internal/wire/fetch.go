@@ -10,20 +10,27 @@ import (
 )
 
 // FetchOptions tunes Fetch. Fetcher must be non-nil; Force permits
-// replacing a non-empty target.
+// replacing a non-empty target. RegistryPath is the explicit run-level
+// registry file fetch upserts; only the Cobra layer resolves it from cwd.
 type FetchOptions struct {
-	Fetcher Fetcher
-	Force   bool
+	Fetcher      Fetcher
+	Force        bool
+	RegistryPath string
 }
 
-// Fetch downloads only source's subfolder into target and writes its
-// tracking record, returning the user-facing summary. The subset is
+// Fetch downloads only source's subfolder into target and upserts its
+// registry entry, returning the user-facing summary. The subset is
 // acquired through a sparse checkout (see Fetcher.Materialize) and staged
 // aside first: a failed fetch never reports success and never leaves a
-// half-populated target behind.
+// half-populated target behind. Targets outside the registry tree are
+// rejected: this registry does not track them.
 func Fetch(ctx context.Context, opts FetchOptions, source SourceRef, target string) (string, error) {
 	if opts.Fetcher == nil {
 		return "", fmt.Errorf("fetch %s: nil fetcher", source.Display())
+	}
+
+	if opts.RegistryPath == "" {
+		return "", fmt.Errorf("fetch %s: no registry path", source.Display())
 	}
 
 	abs, err := filepath.Abs(target)
@@ -33,7 +40,17 @@ func Fetch(ctx context.Context, opts FetchOptions, source SourceRef, target stri
 
 	target = abs
 
+	absReg, err := filepath.Abs(opts.RegistryPath)
+	if err != nil {
+		return "", fmt.Errorf("resolve %s: %w", opts.RegistryPath, err)
+	}
+
 	if err := checkTarget(target, opts.Force); err != nil {
+		return "", fmt.Errorf("fetch %s: %w", source.Display(), err)
+	}
+
+	key, err := KeyFor(absReg, target)
+	if err != nil {
 		return "", fmt.Errorf("fetch %s: %w", source.Display(), err)
 	}
 
@@ -51,14 +68,14 @@ func Fetch(ctx context.Context, opts FetchOptions, source SourceRef, target stri
 		return "", fmt.Errorf("fetch %s: %w", source.Display(), err)
 	}
 
-	if err := recordCheckout(target, resolved, res.Commit); err != nil {
+	if err := recordCheckout(absReg, key, target, resolved, res.Commit); err != nil {
 		return "", fmt.Errorf("fetch %s: %w", source.Display(), err)
 	}
 
 	slog.Debug("wire fetched", "source", resolved.Display(), "commit", res.Commit, "files", files)
 
 	return fmt.Sprintf("Fetched %s at %s into %s (%d files).\nTracked for future updates (%s).",
-		resolved.Display(), ShortSHA(res.Commit), target, files, RecordPath(target)), nil
+		resolved.Display(), ShortSHA(res.Commit), target, files, absReg), nil
 }
 
 // installCheckout materializes the resolved subfolder into a staging
@@ -130,12 +147,22 @@ func checkTarget(target string, force bool) error {
 	return fmt.Errorf("target %s holds %d entries: %w", target, len(entries), ErrTargetNotEmpty)
 }
 
-// recordCheckout hashes the extracted target and saves its tracking record.
-func recordCheckout(target string, resolved SourceRef, commit string) error {
+// recordCheckout hashes the extracted target and upserts its registry
+// entry under the already-validated key, persisting the registry atomically.
+func recordCheckout(registryPath, key, target string, resolved SourceRef, commit string) error {
 	hash, err := HashDir(target)
 	if err != nil {
 		return fmt.Errorf("hash checkout: %w", err)
 	}
 
-	return SaveRecord(target, RecordFor(resolved, commit, hash, time.Now()))
+	reg, err := LoadRegistry(registryPath)
+	if err != nil {
+		return err
+	}
+
+	if err := reg.Upsert(key, EntryFor(resolved, commit, hash, time.Now())); err != nil {
+		return err
+	}
+
+	return SaveRegistry(registryPath, reg)
 }

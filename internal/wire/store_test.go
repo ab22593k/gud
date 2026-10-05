@@ -54,11 +54,11 @@ func TestMirrorDirStaysUnderRoot(t *testing.T) {
 	}
 }
 
-func TestRecordPath(t *testing.T) {
+func TestRegistryPathInStore(t *testing.T) {
 	t.Parallel()
 
-	if got, want := RecordPath("/tmp/auto_backup"), filepath.Join("/tmp/auto_backup", ".git-wire.json"); got != want {
-		t.Fatalf("RecordPath = %q, want %q", got, want)
+	if got, want := RegistryPath("/tmp/run"), filepath.Join("/tmp/run", ".git-wire.json"); got != want {
+		t.Fatalf("RegistryPath = %q, want %q", got, want)
 	}
 }
 

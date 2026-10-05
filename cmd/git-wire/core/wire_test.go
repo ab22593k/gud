@@ -60,6 +60,7 @@ func testFetchCmd(t *testing.T, fetcher wire.Fetcher, args ...string) (*cobra.Co
 	cmd := &cobra.Command{Use: "git-wire"}
 
 	addWireTargetFlags(cmd, fetchForceUsage)
+	addWireTargetNameFlag(cmd)
 
 	var out bytes.Buffer
 
@@ -73,12 +74,15 @@ func testFetchCmd(t *testing.T, fetcher wire.Fetcher, args ...string) (*cobra.Co
 }
 
 func TestFetchWithSuccess(t *testing.T) {
+	run := t.TempDir()
+	t.Chdir(run)
+
 	fake := &coreFakeFetcher{
 		commits: map[string]string{"19.0": strings.Repeat("a", 40)},
 		files:   map[string]map[string]string{strings.Repeat("a", 40): {"a.txt": "alpha"}},
 	}
 
-	cmd, out := testFetchCmd(t, fake, "https://github.com/OCA/server-tools/tree/19.0/auto_backup", "-t", t.TempDir()+"/x")
+	cmd, out := testFetchCmd(t, fake, "https://github.com/OCA/server-tools/tree/19.0/auto_backup", "-t", "x")
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute: %v", err)
@@ -86,6 +90,91 @@ func TestFetchWithSuccess(t *testing.T) {
 
 	if !strings.Contains(out.String(), "Fetched github.com/OCA/server-tools@19.0:auto_backup") {
 		t.Fatalf("output = %q", out.String())
+	}
+
+	if !strings.Contains(out.String(), "Tracked for future updates ("+run) {
+		t.Fatalf("output missing registry path: %q", out.String())
+	}
+}
+
+func TestFetchWithTargetName(t *testing.T) {
+	run := t.TempDir()
+	t.Chdir(run)
+
+	fake := &coreFakeFetcher{
+		commits: map[string]string{"19.0": strings.Repeat("a", 40)},
+		files:   map[string]map[string]string{strings.Repeat("a", 40): {"a.txt": "alpha"}},
+	}
+
+	cmd, out := testFetchCmd(t, fake, "https://github.com/OCA/server-tools/tree/19.0/auto_backup", "-n", "mydir")
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+
+	if !strings.Contains(out.String(), "into") {
+		t.Fatalf("output = %q", out.String())
+	}
+
+	if _, err := os.Stat(filepath.Join(run, "mydir", "a.txt")); err != nil {
+		t.Fatalf("named target missing content: %v", err)
+	}
+
+	reg, err := wire.LoadRegistry(wire.RegistryPath(run))
+	if err != nil {
+		t.Fatalf("LoadRegistry: %v", err)
+	}
+
+	if _, err := reg.Lookup("./mydir"); err != nil {
+		t.Fatalf("Lookup: %v", err)
+	}
+}
+
+func TestFetchWithTargetNameExists(t *testing.T) {
+	run := t.TempDir()
+	t.Chdir(run)
+
+	if err := os.Mkdir(filepath.Join(run, "taken"), 0o750); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	cmd, _ := testFetchCmd(t, coreSuccessFake(),
+		"https://github.com/OCA/server-tools/tree/19.0/auto_backup", "-n", "taken")
+
+	if err := cmd.Execute(); !errors.Is(err, wire.ErrTargetNotEmpty) {
+		t.Fatalf("err = %v, want ErrTargetNotEmpty", err)
+	}
+}
+
+func TestFetchWithBothTargetFlags(t *testing.T) {
+	run := t.TempDir()
+	t.Chdir(run)
+
+	cmd, _ := testFetchCmd(t, coreSuccessFake(),
+		"https://github.com/OCA/server-tools/tree/19.0/auto_backup", "-t", "x", "-n", "y")
+
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "--target-path and --target-name") {
+		t.Fatalf("err = %v, want dual-flag usage error", err)
+	}
+
+	for _, dir := range []string{filepath.Join(run, "x"), filepath.Join(run, "y")} {
+		if _, statErr := os.Stat(dir); !os.IsNotExist(statErr) {
+			t.Fatalf("conflict created %s", dir)
+		}
+	}
+}
+
+func TestFetchWithBadTargetName(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	for _, name := range []string{"a/b", "../out", "-dash", ""} {
+		cmd, _ := testFetchCmd(t, coreSuccessFake(),
+			"https://github.com/OCA/server-tools/tree/19.0/auto_backup", "-n", name)
+
+		if err := cmd.Execute(); err == nil {
+			t.Fatalf("-n %q: expected validation error", name)
+		}
 	}
 }
 
@@ -138,21 +227,27 @@ func testUpdateCmd(t *testing.T, fetcher wire.Fetcher, args ...string) (*cobra.C
 	return cmd, &out
 }
 
-// fetchCoreCheckout fetches the fake's commit into target for update tests.
-func fetchCoreCheckout(t *testing.T, fake *coreFakeFetcher, target string) {
+// fetchCoreCheckout fetches the fake's commit into target for update tests,
+// tracking it in the registry at the target's parent run directory.
+func fetchCoreCheckout(t *testing.T, fake *coreFakeFetcher, target string) string {
 	t.Helper()
 
-	_, err := wire.Fetch(context.Background(), wire.FetchOptions{Fetcher: fake}, wire.SourceRef{
-		Host:      "github.com",
-		Owner:     "OCA",
-		Repo:      "server-tools",
-		Ref:       "19.0",
-		Subpath:   "auto_backup",
-		SourceURL: "https://github.com/OCA/server-tools/tree/19.0/auto_backup",
-	}, target)
+	runDir := filepath.Dir(target)
+
+	_, err := wire.Fetch(context.Background(),
+		wire.FetchOptions{Fetcher: fake, RegistryPath: wire.RegistryPath(runDir)}, wire.SourceRef{
+			Host:      "github.com",
+			Owner:     "OCA",
+			Repo:      "server-tools",
+			Ref:       "19.0",
+			Subpath:   "auto_backup",
+			SourceURL: "https://github.com/OCA/server-tools/tree/19.0/auto_backup",
+		}, target)
 	if err != nil {
 		t.Fatalf("fixture fetch: %v", err)
 	}
+
+	return runDir
 }
 
 func coreSuccessFake() *coreFakeFetcher {
@@ -164,10 +259,10 @@ func coreSuccessFake() *coreFakeFetcher {
 
 func TestUpdateWithNoOp(t *testing.T) {
 	fake := coreSuccessFake()
-	target := t.TempDir() + "/co"
-	fetchCoreCheckout(t, fake, target)
+	run := fetchCoreCheckout(t, fake, filepath.Join(t.TempDir(), "co"))
+	t.Chdir(run)
 
-	cmd, out := testUpdateCmd(t, fake, "-t", target)
+	cmd, out := testUpdateCmd(t, fake, "-t", "co")
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute: %v", err)
@@ -180,13 +275,13 @@ func TestUpdateWithNoOp(t *testing.T) {
 
 func TestUpdateWithUpstreamChange(t *testing.T) {
 	fake := coreSuccessFake()
-	target := t.TempDir() + "/co"
-	fetchCoreCheckout(t, fake, target)
+	run := fetchCoreCheckout(t, fake, filepath.Join(t.TempDir(), "co"))
+	t.Chdir(run)
 
 	fake.commits["19.0"] = strings.Repeat("b", 40)
 	fake.files[strings.Repeat("b", 40)] = map[string]string{"a.txt": "alpha2"}
 
-	cmd, out := testUpdateCmd(t, fake, target)
+	cmd, out := testUpdateCmd(t, fake, "co")
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute: %v", err)
@@ -198,10 +293,50 @@ func TestUpdateWithUpstreamChange(t *testing.T) {
 }
 
 func TestUpdateWithNotACheckout(t *testing.T) {
-	cmd, _ := testUpdateCmd(t, coreSuccessFake(), "-t", t.TempDir())
+	t.Chdir(t.TempDir())
+
+	cmd, _ := testUpdateCmd(t, coreSuccessFake())
 
 	if err := cmd.Execute(); !errors.Is(err, wire.ErrNotACheckout) {
 		t.Fatalf("err = %v, want ErrNotACheckout", err)
+	}
+}
+
+func TestUpdateWithSingleEntryDefault(t *testing.T) {
+	fake := coreSuccessFake()
+	run := fetchCoreCheckout(t, fake, filepath.Join(t.TempDir(), "co"))
+	t.Chdir(run)
+
+	// No path, no flag: the single registry entry resolves the target.
+	cmd, out := testUpdateCmd(t, fake)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+
+	if !strings.Contains(out.String(), "Already up to date") {
+		t.Fatalf("output = %q", out.String())
+	}
+}
+
+func TestUpdateWithMultipleEntries(t *testing.T) {
+	fake := coreSuccessFake()
+	root := t.TempDir()
+	fetchCoreCheckout(t, fake, filepath.Join(root, "one"))
+	fetchCoreCheckout(t, fake, filepath.Join(root, "two"))
+	t.Chdir(root)
+
+	cmd, _ := testUpdateCmd(t, fake)
+
+	err := cmd.Execute()
+	if err == nil || errors.Is(err, wire.ErrNotACheckout) {
+		t.Fatalf("err = %v, want multi-entry usage error", err)
+	}
+
+	for _, name := range []string{"one", "two"} {
+		if !strings.Contains(err.Error(), name) {
+			t.Fatalf("err names no candidates: %v", err)
+		}
 	}
 }
 
@@ -280,8 +415,9 @@ func (f *unreachableFake) Resolve(_ context.Context, _ wire.SourceRef) (wire.Res
 
 func TestUpdateWithMerge(t *testing.T) {
 	fake := coreSuccessFake()
-	target := t.TempDir() + "/co"
-	fetchCoreCheckout(t, fake, target)
+	run := fetchCoreCheckout(t, fake, filepath.Join(t.TempDir(), "co"))
+	target := filepath.Join(run, "co")
+	t.Chdir(run)
 
 	fake.commits["19.0"] = strings.Repeat("b", 40)
 	fake.files[strings.Repeat("b", 40)] = map[string]string{"a.txt": "alpha2"}
@@ -290,7 +426,7 @@ func TestUpdateWithMerge(t *testing.T) {
 		t.Fatalf("local edit: %v", err)
 	}
 
-	cmd, out := testUpdateCmd(t, fake, "-t", target)
+	cmd, out := testUpdateCmd(t, fake, "-t", "co")
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute: %v", err)
@@ -303,8 +439,9 @@ func TestUpdateWithMerge(t *testing.T) {
 
 func TestUpdateWithConflict(t *testing.T) {
 	fake := coreSuccessFake()
-	target := t.TempDir() + "/co"
-	fetchCoreCheckout(t, fake, target)
+	run := fetchCoreCheckout(t, fake, filepath.Join(t.TempDir(), "co"))
+	target := filepath.Join(run, "co")
+	t.Chdir(run)
 
 	fake.commits["19.0"] = strings.Repeat("b", 40)
 	fake.files[strings.Repeat("b", 40)] = map[string]string{"a.txt": "alpha2"}
@@ -313,7 +450,7 @@ func TestUpdateWithConflict(t *testing.T) {
 		t.Fatalf("local edit: %v", err)
 	}
 
-	cmd, _ := testUpdateCmd(t, fake, "-t", target)
+	cmd, _ := testUpdateCmd(t, fake, "-t", "co")
 
 	err := cmd.Execute()
 	if !errors.Is(err, wire.ErrDiverged) {

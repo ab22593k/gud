@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"strings"
 
 	"gud/internal/wire"
 
@@ -36,8 +37,16 @@ func initWireBackend() {
 // meaning of --force.
 func addWireTargetFlags(cmd *cobra.Command, forceUsage string) {
 	cmd.Flags().StringP("target-path", "t", "",
-		"Checkout directory (fetch defaults to ./<folder-name>, update to the working directory)")
+		"Checkout directory (fetch defaults to ./<folder-name>, update defaults to the tracked folder)")
 	cmd.Flags().Bool("force", false, forceUsage)
+}
+
+// addWireTargetNameFlag registers --target-name on fetch: a bare folder
+// name for a folder that does not exist yet, created under the working
+// directory. It is fetch-only and mutually exclusive with --target-path.
+func addWireTargetNameFlag(cmd *cobra.Command) {
+	cmd.Flags().StringP("target-name", "n", "",
+		"New folder name to create under the working directory (cannot combine with --target-path)")
 }
 
 const (
@@ -59,7 +68,13 @@ func fetchWith(cmd *cobra.Command, args []string, fetcher wire.Fetcher) error {
 
 	force, _ := cmd.Flags().GetBool("force")
 
-	summary, err := wire.Fetch(cmd.Context(), wire.FetchOptions{Fetcher: fetcher, Force: force}, source, target)
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("working directory: %w", err)
+	}
+
+	summary, err := wire.Fetch(cmd.Context(),
+		wire.FetchOptions{Fetcher: fetcher, Force: force, RegistryPath: wire.RegistryPath(cwd)}, source, target)
 	if err != nil {
 		return wireError(err)
 	}
@@ -70,9 +85,39 @@ func fetchWith(cmd *cobra.Command, args []string, fetcher wire.Fetcher) error {
 }
 
 // targetFromFlags resolves the destination: explicit --target-path wins,
-// otherwise ./<subfolder-basename> under the working directory.
+// --target-name creates ./NAME for a name that does not exist yet,
+// otherwise ./<subfolder-basename> under the working directory. Passing
+// both flags fails fast as a usage error before any network use.
 func targetFromFlags(cmd *cobra.Command, source wire.SourceRef) (string, error) {
-	if cmd.Flags().Changed("target-path") {
+	pathChanged := cmd.Flags().Changed("target-path")
+	nameChanged := cmd.Flags().Changed("target-name")
+
+	if pathChanged && nameChanged {
+		return "", errors.New("--target-path and --target-name cannot be used together")
+	}
+
+	if nameChanged {
+		name, err := cmd.Flags().GetString("target-name")
+		if err != nil {
+			return "", err
+		}
+
+		if err := validateTargetName(name); err != nil {
+			return "", err
+		}
+
+		dest := "./" + name
+
+		if _, err := os.Stat(dest); err == nil {
+			return "", fmt.Errorf("target %s already exists: %w", dest, wire.ErrTargetNotEmpty)
+		} else if !os.IsNotExist(err) {
+			return "", fmt.Errorf("inspect target %s: %w", dest, err)
+		}
+
+		return dest, nil
+	}
+
+	if pathChanged {
 		target, err := cmd.Flags().GetString("target-path")
 		if err != nil {
 			return "", err
@@ -86,6 +131,29 @@ func targetFromFlags(cmd *cobra.Command, source wire.SourceRef) (string, error) 
 	}
 
 	return "./" + path.Base(source.Subpath), nil
+}
+
+// validateTargetName enforces the single-segment discipline for
+// --target-name: a non-empty bare folder name with no separators, no dot
+// elements, and no leading dash (mirroring ParseSourceURL segment rules).
+func validateTargetName(name string) error {
+	if name == "" {
+		return errors.New("empty --target-name")
+	}
+
+	if name == "." || name == ".." {
+		return fmt.Errorf("invalid --target-name %q: must name a new folder", name)
+	}
+
+	if strings.HasPrefix(name, "-") {
+		return fmt.Errorf("invalid --target-name %q: must not start with '-'", name)
+	}
+
+	if strings.ContainsAny(name, `/\`) {
+		return fmt.Errorf("invalid --target-name %q: must be a single folder name", name)
+	}
+
+	return nil
 }
 
 // wireError appends the failure class guidance to an operational error,
@@ -121,7 +189,13 @@ func updateWith(cmd *cobra.Command, args []string, fetcher wire.Fetcher) error {
 
 	force, _ := cmd.Flags().GetBool("force")
 
-	summary, err := wire.Update(cmd.Context(), wire.UpdateOptions{Fetcher: fetcher, Force: force}, target)
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("working directory: %w", err)
+	}
+
+	summary, err := wire.Update(cmd.Context(),
+		wire.UpdateOptions{Fetcher: fetcher, Force: force, RegistryPath: wire.RegistryPath(cwd)}, target)
 	if err != nil {
 		return wireError(err)
 	}
@@ -132,7 +206,9 @@ func updateWith(cmd *cobra.Command, args []string, fetcher wire.Fetcher) error {
 }
 
 // updateTarget resolves the checkout: explicit --target-path wins, then the
-// positional path, then the working directory.
+// positional path, then the single registry entry when the run-level
+// registry holds exactly one. Zero entries report ErrNotACheckout;
+// multiple entries fail as a usage error naming the candidates.
 func updateTarget(cmd *cobra.Command, args []string) (string, error) {
 	if cmd.Flags().Changed("target-path") {
 		target, err := cmd.Flags().GetString("target-path")
@@ -156,7 +232,22 @@ func updateTarget(cmd *cobra.Command, args []string) (string, error) {
 		return "", fmt.Errorf("working directory: %w", err)
 	}
 
-	return cwd, nil
+	reg, err := wire.LoadRegistry(wire.RegistryPath(cwd))
+	if err != nil {
+		return "", err
+	}
+
+	keys := reg.Keys()
+
+	switch len(keys) {
+	case 0:
+		return "", fmt.Errorf("no tracked folders under %s: %w", cwd, wire.ErrNotACheckout)
+	case 1:
+		return keys[0], nil
+	default:
+		return "", fmt.Errorf("multiple tracked folders (%s): specify one with --target-path or a path argument",
+			strings.Join(keys, ", "))
+	}
 }
 
 var gitWireListCmd = &cobra.Command{
@@ -196,7 +287,7 @@ func listWith(cmd *cobra.Command, args []string, fetcher wire.Fetcher) error {
 
 	for _, e := range entries {
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s  %s  %s  %s\n",
-			e.Dir, e.Record.Source().Display(), listSHA(e), e.State)
+			e.Dir, e.Entry.Source().Display(), listSHA(e), e.State)
 	}
 
 	return nil
@@ -209,5 +300,5 @@ func listSHA(e wire.Entry) string {
 		return wire.ShortSHA(e.RemoteSHA)
 	}
 
-	return wire.ShortSHA(e.Record.ResolvedCommit)
+	return wire.ShortSHA(e.Entry.ResolvedCommit)
 }

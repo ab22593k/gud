@@ -66,7 +66,7 @@ func TestHashDirDetectsChange(t *testing.T) {
 	}
 }
 
-func TestHashDirIgnoresRecord(t *testing.T) {
+func TestHashDirIgnoresRegistry(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
@@ -77,9 +77,7 @@ func TestHashDirIgnoresRecord(t *testing.T) {
 		t.Fatalf("HashDir: %v", err)
 	}
 
-	if err := SaveRecord(dir, testRecord()); err != nil {
-		t.Fatalf("SaveRecord: %v", err)
-	}
+	writeFile(t, dir, registryFileName, `{"version":1}`)
 
 	after, err := HashDir(dir)
 	if err != nil {
@@ -87,7 +85,7 @@ func TestHashDirIgnoresRecord(t *testing.T) {
 	}
 
 	if before != after {
-		t.Fatal("tracking record changed the content hash")
+		t.Fatal("registry file changed the content hash")
 	}
 }
 

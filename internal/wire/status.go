@@ -18,12 +18,12 @@ const (
 	StateCurrent SyncState = "current"
 )
 
-// deriveState computes the sync state for a record, a live content hash of
+// deriveState computes the sync state for an entry, a live content hash of
 // the checkout, and a freshly resolved remote SHA. Local divergence
 // dominates: edits must never be silently clobbered even when upstream
 // also moved. An empty remote SHA counts as unreachable.
-func deriveState(rec TrackingRecord, localHash, remoteSHA string, resolveErr error) SyncState {
-	if localHash != rec.ExportHash {
+func deriveState(entry RegistryEntry, localHash, remoteSHA string, resolveErr error) SyncState {
+	if localHash != entry.ExportHash {
 		return StateDiverged
 	}
 
@@ -31,7 +31,7 @@ func deriveState(rec TrackingRecord, localHash, remoteSHA string, resolveErr err
 		return StateUnreachable
 	}
 
-	if remoteSHA != rec.ResolvedCommit {
+	if remoteSHA != entry.ResolvedCommit {
 		return StateBehind
 	}
 

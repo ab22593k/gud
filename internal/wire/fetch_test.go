@@ -34,18 +34,39 @@ func successFetcher() *fakeFetcher {
 	}
 }
 
-func TestFetchSuccess(t *testing.T) {
-	t.Parallel()
+// fetchRun mints a run directory: registry at its root, targets beneath it.
+func fetchRun(t *testing.T, targetName string) (registry, target string) {
+	t.Helper()
 
-	target := filepath.Join(t.TempDir(), "auto_backup")
+	run := t.TempDir()
 
-	summary, err := Fetch(context.Background(), FetchOptions{Fetcher: successFetcher()}, testSource(), target)
+	return RegistryPath(run), filepath.Join(run, targetName)
+}
+
+func fetchWithRegistry(t *testing.T, f *fakeFetcher, registry, target string) string {
+	t.Helper()
+
+	summary, err := Fetch(context.Background(), FetchOptions{Fetcher: f, RegistryPath: registry}, testSource(), target)
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
 
+	return summary
+}
+
+func TestFetchSuccess(t *testing.T) {
+	t.Parallel()
+
+	registry, target := fetchRun(t, "auto_backup")
+
+	summary := fetchWithRegistry(t, successFetcher(), registry, target)
+
 	if !strings.Contains(summary, "Fetched github.com/OCA/server-tools@19.0:auto_backup") {
 		t.Fatalf("summary missing display: %q", summary)
+	}
+
+	if !strings.Contains(summary, "Tracked for future updates ("+registry) {
+		t.Fatalf("summary missing registry path: %q", summary)
 	}
 
 	for _, name := range []string{"a.txt", "sub/b.txt"} {
@@ -59,13 +80,22 @@ func TestFetchSuccess(t *testing.T) {
 		}
 	}
 
-	rec, err := LoadRecord(target)
-	if err != nil {
-		t.Fatalf("LoadRecord: %v", err)
+	if _, err := os.Stat(filepath.Join(target, registryFileName)); !os.IsNotExist(err) {
+		t.Fatal("target holds bookkeeping files; fetched folders stay pristine")
 	}
 
-	if rec.ResolvedCommit != testCommitA {
-		t.Fatalf("commit = %q", rec.ResolvedCommit)
+	reg, err := LoadRegistry(registry)
+	if err != nil {
+		t.Fatalf("LoadRegistry: %v", err)
+	}
+
+	entry, err := reg.Lookup("./auto_backup")
+	if err != nil {
+		t.Fatalf("Lookup: %v", err)
+	}
+
+	if entry.ResolvedCommit != testCommitA {
+		t.Fatalf("commit = %q", entry.ResolvedCommit)
 	}
 
 	live, err := HashDir(target)
@@ -73,8 +103,8 @@ func TestFetchSuccess(t *testing.T) {
 		t.Fatalf("HashDir: %v", err)
 	}
 
-	if rec.ExportHash != live {
-		t.Fatal("record hash does not match checkout")
+	if entry.ExportHash != live {
+		t.Fatal("entry hash does not match checkout")
 	}
 }
 
@@ -84,7 +114,9 @@ func TestFetchUnknownRef(t *testing.T) {
 	src := testSource()
 	src.Ref = "no-such-branch"
 
-	_, err := Fetch(context.Background(), FetchOptions{Fetcher: successFetcher()}, src, filepath.Join(t.TempDir(), "x"))
+	registry, target := fetchRun(t, "x")
+
+	_, err := Fetch(context.Background(), FetchOptions{Fetcher: successFetcher(), RegistryPath: registry}, src, target)
 	if !errors.Is(err, ErrUnknownRef) {
 		t.Fatalf("err = %v, want ErrUnknownRef", err)
 	}
@@ -95,9 +127,10 @@ func TestFetchMissingUpstreamPath(t *testing.T) {
 
 	f := successFetcher()
 	f.files = map[string]map[string]string{}
-	target := filepath.Join(t.TempDir(), "x")
 
-	_, err := Fetch(context.Background(), FetchOptions{Fetcher: f}, testSource(), target)
+	registry, target := fetchRun(t, "x")
+
+	_, err := Fetch(context.Background(), FetchOptions{Fetcher: f, RegistryPath: registry}, testSource(), target)
 	if !errors.Is(err, ErrMissingPath) {
 		t.Fatalf("err = %v, want ErrMissingPath", err)
 	}
@@ -107,13 +140,32 @@ func TestFetchMissingUpstreamPath(t *testing.T) {
 	}
 }
 
+func TestFetchOutsideRegistryTree(t *testing.T) {
+	t.Parallel()
+
+	run := t.TempDir()
+	registry := RegistryPath(run)
+	outside := filepath.Join(t.TempDir(), "elsewhere")
+
+	_, err := Fetch(context.Background(), FetchOptions{Fetcher: successFetcher(), RegistryPath: registry},
+		testSource(), outside)
+	if !errors.Is(err, ErrNotACheckout) {
+		t.Fatalf("err = %v, want ErrNotACheckout", err)
+	}
+
+	if _, statErr := os.Stat(outside); !os.IsNotExist(statErr) {
+		t.Fatal("rejected fetch left a target behind")
+	}
+}
+
 func TestFetchNonEmptyTarget(t *testing.T) {
 	t.Parallel()
 
-	target := t.TempDir()
+	registry, target := fetchRun(t, "co")
 	writeFile(t, target, "mine.txt", "keep me")
 
-	_, err := Fetch(context.Background(), FetchOptions{Fetcher: successFetcher()}, testSource(), target)
+	_, err := Fetch(context.Background(), FetchOptions{Fetcher: successFetcher(), RegistryPath: registry},
+		testSource(), target)
 	if !errors.Is(err, ErrTargetNotEmpty) {
 		t.Fatalf("err = %v, want ErrTargetNotEmpty", err)
 	}
@@ -122,7 +174,8 @@ func TestFetchNonEmptyTarget(t *testing.T) {
 		t.Fatal("refusal removed local file")
 	}
 
-	forced, err := Fetch(context.Background(), FetchOptions{Fetcher: successFetcher(), Force: true}, testSource(), target)
+	forced, err := Fetch(context.Background(),
+		FetchOptions{Fetcher: successFetcher(), Force: true, RegistryPath: registry}, testSource(), target)
 	if err != nil {
 		t.Fatalf("forced Fetch: %v", err)
 	}
@@ -142,10 +195,10 @@ func TestFetchGuardsTargetBeforeNetwork(t *testing.T) {
 	f := successFetcher()
 	f.resolveErr = context.DeadlineExceeded
 
-	target := t.TempDir()
+	registry, target := fetchRun(t, "co")
 	writeFile(t, target, "mine.txt", "keep me")
 
-	_, err := Fetch(context.Background(), FetchOptions{Fetcher: f}, testSource(), target)
+	_, err := Fetch(context.Background(), FetchOptions{Fetcher: f, RegistryPath: registry}, testSource(), target)
 	if !errors.Is(err, ErrTargetNotEmpty) {
 		t.Fatalf("err = %v, want local guard before network", err)
 	}
