@@ -110,15 +110,6 @@ func writeLabeled(sb *strings.Builder, label, content string) {
 	sb.WriteString("\n")
 }
 
-// BuildCommitMessagePrompt creates a prompt for generating a git commit message.
-func BuildCommitMessagePrompt(
-	diff, commitContext string, detailLevel DetailLevel, hint string, _ ProfileName,
-) string {
-	p := defaultProfile
-
-	return p.BuildPrompt(detailLevel, hint, commitContext, diff)
-}
-
 // BuildCommitMessagePromptWithContent creates a prompt using the provided system
 // content. If content is empty, falls back to the default profile.
 func BuildCommitMessagePromptWithContent(

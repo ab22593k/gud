@@ -1,6 +1,7 @@
 package detect
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -8,7 +9,7 @@ import (
 
 // benchWalk generates a synthetic repo tree with n files spread over dirs
 // and returns the root, mirroring a real project (node_modules-style bloat
-// included) to expose the cost of ComputeStats' full-tree walk.
+// included) to expose the cost of the full-tree walk.
 func benchWalk(b *testing.B, files, dirs int) string {
 	b.Helper()
 
@@ -48,7 +49,7 @@ func BenchmarkComputeStats_500Files(b *testing.B) {
 	b.ResetTimer()
 
 	for b.Loop() {
-		if _, err := ComputeStats(root); err != nil {
+		if _, err := ComputeStatsWithContext(context.Background(), root); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -59,7 +60,7 @@ func BenchmarkComputeStats_10kFiles(b *testing.B) {
 	b.ResetTimer()
 
 	for b.Loop() {
-		if _, err := ComputeStats(root); err != nil {
+		if _, err := ComputeStatsWithContext(context.Background(), root); err != nil {
 			b.Fatal(err)
 		}
 	}

@@ -1,10 +1,10 @@
+// Package git provides a thin wrapper around the git CLI for reading staged
+// diffs, resolving history, rewriting commits, and installing git hooks.
 package git
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"os/exec"
 	"strings"
 )
 
@@ -19,88 +19,25 @@ const flagOneline = "--oneline"
 // cmdLog is the git log subcommand name.
 const cmdLog = "log"
 
-// GetStagedDiff returns the git diff of staged changes, excluding deleted and renamed file content.
-func GetStagedDiff(ctx context.Context) (string, error) {
-	return runGitDiff(ctx, "diff", "--cached", "--diff-filter=dr")
-}
-
-// GetUnstagedDiff returns the git diff of unstaged changes, excluding deleted and renamed file content.
-func GetUnstagedDiff(ctx context.Context) (string, error) {
-	return runGitDiff(ctx, "diff", "--diff-filter=dr")
-}
-
-// GetStagedDeletedFiles returns the names of files deleted in staged changes (no content).
-func GetStagedDeletedFiles(ctx context.Context) (string, error) {
-	return runGitDiff(ctx, "diff", "--cached", "--diff-filter=D", "--name-only")
-}
-
 // Commit runs git commit with the given message piped via stdin.
 // It returns the commit hash (abbreviated) on success.
 func Commit(ctx context.Context, message string) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", "commit", "-F", "-")
-	cmd.Stdin = bytes.NewBufferString(message)
-
-	var out bytes.Buffer
-
-	cmd.Stdout = &out
-	cmd.Stderr = &out
-
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("git commit failed: %w\n%s", err, out.String())
+	if _, err := runGitStdin(ctx, message, "commit", "-F", "-"); err != nil {
+		return "", fmt.Errorf("git commit failed: %w", err)
 	}
 
 	return getHEADHash(ctx)
 }
 
-// GetAuthor returns the git user name in "Name <email>" format.
-// On error, it returns an empty string — callers should handle gracefully.
-func GetAuthor(ctx context.Context) string {
-	name, err := runGitConfig(ctx, "user.name")
-	if err != nil {
-		return ""
-	}
-
-	email, err := runGitConfig(ctx, "user.email")
-	if err != nil {
-		return strings.TrimSpace(name)
-	}
-
-	return strings.TrimSpace(name) + " <" + strings.TrimSpace(email) + ">"
-}
-
-// runGitConfig runs git config --get <key> and returns the value.
-func runGitConfig(ctx context.Context, key string) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", "config", "--get", key)
-
-	out, err := cmd.Output()
-	if err != nil {
-		return "", err
-	}
-
-	return string(out), nil
-}
-
 // GetRepoRoot returns the absolute path to the git repository root.
 func GetRepoRoot(ctx context.Context) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", "rev-parse", "--show-toplevel")
-
-	out, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("get repo root: %w", err)
-	}
-
-	return strings.TrimSpace(string(out)), nil
+	return runGitTrimmed(ctx, "rev-parse", "--show-toplevel")
 }
 
 // GetBranch returns the current git branch name, or empty string on detached
 // HEAD or error. Callers should handle the empty result gracefully.
 func GetBranch(ctx context.Context) string {
-	out, err := exec.CommandContext(ctx, "git", "rev-parse", "--abbrev-ref", "HEAD").Output()
-	if err != nil {
-		return ""
-	}
-
-	branch := strings.TrimSpace(string(out))
+	branch := runGitQuietly(ctx, "rev-parse", "--abbrev-ref", "HEAD")
 	if branch == "HEAD" {
 		return "" // detached HEAD — no named branch
 	}
@@ -110,14 +47,7 @@ func GetBranch(ctx context.Context) string {
 
 // getHEADHash returns the abbreviated hash of HEAD.
 func getHEADHash(ctx context.Context) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", "rev-parse", "--short", "HEAD")
-
-	out, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("get head hash: %w", err)
-	}
-
-	return strings.TrimSpace(string(out)), nil
+	return runGitTrimmed(ctx, "rev-parse", "--short", "HEAD")
 }
 
 // GetRecentCommits returns the last n commit summaries (one-line format).
@@ -133,17 +63,7 @@ func GetRecentCommits(ctx context.Context, n int) (string, error) {
 		n = MaxRecentCommits
 	}
 
-	cmd := exec.CommandContext(ctx, "git", cmdLog, fmt.Sprintf("-%d", n), flagOneline, "--no-decorate")
-
-	var out bytes.Buffer
-
-	cmd.Stdout = &out
-
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("failed to get recent commits: %w", err)
-	}
-
-	return out.String(), nil
+	return runGit(ctx, cmdLog, fmt.Sprintf("-%d", n), flagOneline, "--no-decorate")
 }
 
 // StagedChanges bundles the full staged diff and a list of deleted file names,
@@ -155,25 +75,54 @@ type StagedChanges struct {
 
 // GetStagedChanges runs a single `git diff --cached` subprocess (without any
 // diff-filter) and returns both the full diff content and a list of deleted
-// file names parsed from the output. Using a single subprocess instead of two
-// (GetStagedDiff + GetStagedDeletedFiles) reduces subprocess overhead.
+// file names parsed from the output. One subprocess instead of separate
+// content and name-only queries reduces subprocess overhead.
 func GetStagedChanges(ctx context.Context) (*StagedChanges, error) {
-	cmd := exec.CommandContext(ctx, "git", "diff", "--cached")
-
-	var out bytes.Buffer
-
-	cmd.Stdout = &out
-
-	if err := cmd.Run(); err != nil {
+	diff, err := runGit(ctx, "diff", "--cached")
+	if err != nil {
 		return nil, fmt.Errorf("failed to get staged changes: %w", err)
 	}
-
-	diff := out.String()
 
 	return &StagedChanges{
 		Diff:    diff,
 		Deleted: extractDeletedFiles(diff),
 	}, nil
+}
+
+// splitDiffEntries splits a multi-file diff into per-file entries.
+func splitDiffEntries(diff string) []string {
+	entries := strings.Split(diff, "\ndiff --git ")
+
+	var result []string
+
+	for i, e := range entries {
+		if i == 0 {
+			if strings.TrimSpace(e) != "" {
+				result = append(result, e)
+			}
+		} else {
+			result = append(result, "diff --git "+e)
+		}
+	}
+
+	return result
+}
+
+// extractFilePath extracts the "+++ b/..." path from a diff entry.
+func extractFilePath(entry string) string {
+	for line := range strings.SplitSeq(entry, "\n") {
+		if after, ok := strings.CutPrefix(line, "+++ b/"); ok {
+			return after
+		}
+	}
+
+	for line := range strings.SplitSeq(entry, "\n") {
+		if after, ok := strings.CutPrefix(line, "--- a/"); ok {
+			return after
+		}
+	}
+
+	return ""
 }
 
 // extractDeletedFiles parses the output of `git diff --cached` and returns the
@@ -195,20 +144,4 @@ func extractDeletedFiles(diff string) []string {
 	}
 
 	return deleted
-}
-
-// runGitDiff runs a git diff command with the given arguments and returns the output.
-// It is the single point of implementation for git diff operations in this package.
-func runGitDiff(ctx context.Context, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", args...)
-
-	var out bytes.Buffer
-
-	cmd.Stdout = &out
-
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("failed to get diff: %w", err)
-	}
-
-	return out.String(), nil
 }

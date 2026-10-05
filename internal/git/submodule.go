@@ -231,7 +231,7 @@ func submoduleSubjects(ctx context.Context, root string, ch SubmoduleChange) []s
 		}
 	}
 
-	out := runGitOutput(ctx, args...)
+	out := runGitQuietly(ctx, args...)
 	if out == "" {
 		return nil
 	}
@@ -247,7 +247,7 @@ func readGitmodules(ctx context.Context, root string) (names, urls map[string]st
 	namePaths := make(map[string]string)
 	nameURLs := make(map[string]string)
 
-	out := runGitOutput(ctx, "config", "-f", filepath.Join(root, ".gitmodules"), "--get-regexp", `^submodule\..*\.`)
+	out := runGitQuietly(ctx, "config", "-f", filepath.Join(root, ".gitmodules"), "--get-regexp", `^submodule\..*\.`)
 	for line := range strings.SplitSeq(out, "\n") {
 		key, value, ok := strings.Cut(line, " ")
 		if !ok {

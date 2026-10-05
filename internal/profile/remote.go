@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
-	"time"
 )
 
 var validSlug = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]*$`)
@@ -118,8 +117,4 @@ func slugify(profession string) string {
 	s = strings.ReplaceAll(s, "'", "")
 
 	return s
-}
-
-func GetDownloadETA(estimatedCount int) time.Duration {
-	return time.Duration(estimatedCount) * 500 * time.Millisecond
 }

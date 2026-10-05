@@ -17,93 +17,50 @@ func ResolveRevision(ctx context.Context, rev string) (string, error) {
 		return "", errors.New("resolve revision: empty revision")
 	}
 
-	cmd := exec.CommandContext(ctx, "git", "rev-parse", "--verify", rev+"^{commit}")
-
-	var out bytes.Buffer
-
-	cmd.Stdout = &out
-
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("resolve revision %q: %w", rev, err)
-	}
-
-	return strings.TrimSpace(out.String()), nil
+	return runGitTrimmed(ctx, "rev-parse", "--verify", rev+"^{commit}")
 }
 
 // GetCommitDiff returns the patch of exactly one commit, never a range.
 func GetCommitDiff(ctx context.Context, sha string) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", "show", "--format=", "--patch",
+	return runGit(ctx, "show", "--format=", "--patch",
 		"--no-decorate", "--no-ext-diff", sha, "--")
-
-	var out bytes.Buffer
-
-	cmd.Stdout = &out
-
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("show commit %s: %w", sha, err)
-	}
-
-	return out.String(), nil
 }
 
 // GetCommitMessage returns the full message body of one commit.
 func GetCommitMessage(ctx context.Context, sha string) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", "log", "-1", "--format=%B", sha)
-
-	var out bytes.Buffer
-
-	cmd.Stdout = &out
-
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("read message of %s: %w", sha, err)
+	out, err := runGit(ctx, cmdLog, "-1", "--format=%B", sha)
+	if err != nil {
+		return "", err
 	}
 
-	return strings.TrimRight(out.String(), "\n"), nil
+	return strings.TrimRight(out, "\n"), nil
 }
 
 // IsMergeCommit reports whether sha has more than one parent.
 func IsMergeCommit(ctx context.Context, sha string) (bool, error) {
-	cmd := exec.CommandContext(ctx, "git", "rev-list", "--parents", "-n", "1", sha)
-
-	var out bytes.Buffer
-
-	cmd.Stdout = &out
-
-	if err := cmd.Run(); err != nil {
-		return false, fmt.Errorf("parents of %s: %w", sha, err)
+	out, err := runGit(ctx, "rev-list", "--parents", "-n", "1", sha)
+	if err != nil {
+		return false, err
 	}
 
-	return len(strings.Fields(out.String())) > 2, nil
+	return len(strings.Fields(out)) > 2, nil
 }
 
 // IsCleanTree reports whether there are no staged or unstaged tracked changes.
 // Untracked files are ignored so a scratch file cannot block a reword.
 func IsCleanTree(ctx context.Context) (bool, error) {
-	cmd := exec.CommandContext(ctx, "git", "status", "--porcelain", "--untracked-files=no")
-
-	var out bytes.Buffer
-
-	cmd.Stdout = &out
-
-	if err := cmd.Run(); err != nil {
-		return false, fmt.Errorf("status: %w", err)
+	out, err := runGit(ctx, "status", "--porcelain", "--untracked-files=no")
+	if err != nil {
+		return false, err
 	}
 
-	return strings.TrimSpace(out.String()) == "", nil
+	return strings.TrimSpace(out) == "", nil
 }
 
 // AmendHead replaces the HEAD message, returning the new short hash.
 func AmendHead(ctx context.Context, message string) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", "commit", "--amend", "-F", "-")
-	cmd.Stdin = bytes.NewBufferString(message)
-
-	var out bytes.Buffer
-
-	cmd.Stdout = &out
-	cmd.Stderr = &out
-
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("git commit --amend failed: %w\n%s", err, out.String())
+	if _, err := runGitStdin(ctx, message, "commit", "--amend", "-F", "-"); err != nil {
+		return "", fmt.Errorf("git commit --amend failed: %w", err)
 	}
 
 	return getHEADHash(ctx)
@@ -112,9 +69,7 @@ func AmendHead(ctx context.Context, message string) (string, error) {
 // checkHasParent errors when sha is the root commit, which has no parent
 // to anchor an interactive rebase on.
 func checkHasParent(ctx context.Context, sha string) error {
-	cmd := exec.CommandContext(ctx, "git", "rev-parse", "--verify", sha+"^")
-
-	if err := cmd.Run(); err != nil {
+	if _, err := runGit(ctx, "rev-parse", "--verify", sha+"^"); err != nil {
 		return fmt.Errorf("reword %s: cannot reword the root commit: %w", sha, err)
 	}
 
@@ -166,8 +121,7 @@ func RewordCommit(ctx context.Context, sha, message string) error {
 		return fmt.Errorf("reword editor: %w", err)
 	}
 
-	//nolint:gosec // G204: fixed "git" binary; sha was resolved via rev-parse.
-	cmd := exec.CommandContext(ctx, "git", "rebase", "-i", sha+"^")
+	cmd := newGitCmd(ctx, "rebase", "-i", sha+"^")
 
 	cmd.Env = append(os.Environ(),
 		"GIT_SEQUENCE_EDITOR=sh "+seqPath,
@@ -175,6 +129,18 @@ func RewordCommit(ctx context.Context, sha, message string) error {
 		"GUD_NEWMSG="+msgPath,
 		"GIT_TERMINAL_PROMPT=0")
 
+	if err := runRebase(ctx, cmd, sha); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// runRebase runs the interactive rebase and, on failure, aborts it before
+// returning so the repository is never left mid-rebase. The abort deliberately
+// ignores the caller's context: it must still run when the caller's context is
+// already cancelled, which is the usual reason the rebase failed.
+func runRebase(ctx context.Context, cmd *exec.Cmd, sha string) error {
 	var out bytes.Buffer
 
 	cmd.Stdout = &out
@@ -183,7 +149,7 @@ func RewordCommit(ctx context.Context, sha, message string) error {
 	if err := cmd.Run(); err != nil {
 		//nolint:contextcheck // intentional Background use: the abort must
 		// survive a cancelled caller context to leave the repo clean.
-		abort := exec.CommandContext(context.Background(), "git", "rebase", "--abort")
+		abort := newGitCmd(context.Background(), "rebase", "--abort")
 		_, _ = abort.Output()
 
 		return fmt.Errorf("reword %s: %w\n%s", sha, err, out.String())

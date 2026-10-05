@@ -2,14 +2,15 @@ package git
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 )
+
+// hooksPathKey is git's global core.hooksPath configuration key.
+const hooksPathKey = "core.hooksPath"
 
 // HookType represents the type of git hook.
 type HookType string
@@ -86,26 +87,21 @@ func GetHookDir(global bool) (string, error) {
 // custom global hooks directory, so hooks installed outside .git/hooks only
 // run when core.hooksPath points at them.
 func GetGlobalHooksPath(ctx context.Context) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", "config", "--global", "--get", "core.hooksPath")
-
-	out, err := cmd.Output()
+	value, set, err := gitConfigGlobal(ctx, hooksPathKey)
 	if err != nil {
-		// git exits 1 when the key is unset; treat that as empty.
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) && len(out) == 0 {
-			return "", nil
-		}
-
-		return "", fmt.Errorf("read global core.hooksPath: %w", err)
+		return "", err
 	}
 
-	return strings.TrimSpace(string(out)), nil
+	if !set {
+		return "", nil
+	}
+
+	return value, nil
 }
 
 // SetGlobalHooksPath sets the global core.hooksPath configuration value.
 func SetGlobalHooksPath(ctx context.Context, dir string) error {
-	cmd := exec.CommandContext(ctx, "git", "config", "--global", "core.hooksPath", dir)
-	if err := cmd.Run(); err != nil {
+	if _, err := runGit(ctx, "config", "--global", hooksPathKey, dir); err != nil {
 		return fmt.Errorf("set global core.hooksPath: %w", err)
 	}
 
@@ -115,13 +111,8 @@ func SetGlobalHooksPath(ctx context.Context, dir string) error {
 // UnsetGlobalHooksPath removes the global core.hooksPath configuration value.
 // It is a no-op when the key is not set.
 func UnsetGlobalHooksPath(ctx context.Context) error {
-	cmd := exec.CommandContext(ctx, "git", "config", "--global", "--unset", "core.hooksPath")
-
-	err := cmd.Run()
-	if err != nil {
-		// git exits 5 when the key is unset; uninstalling is idempotent.
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) && exitErr.ExitCode() == 5 {
+	if _, err := runGit(ctx, "config", "--global", "--unset", hooksPathKey); err != nil {
+		if isGitExitCode(err, gitExitCodeMissingValue) {
 			return nil
 		}
 

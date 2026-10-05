@@ -11,9 +11,9 @@ func TestComputeStats_EmptyDir(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 
-	stats, err := ComputeStats(dir)
+	stats, err := ComputeStatsWithContext(t.Context(), dir)
 	if err != nil {
-		t.Fatalf("ComputeStats(empty) = _, %v; want nil error", err)
+		t.Fatalf("ComputeStatsWithContext(empty) = _, %v; want nil error", err)
 	}
 
 	if stats.TotalFiles != 0 {
@@ -36,7 +36,7 @@ func TestComputeStats_SingleExtension(t *testing.T) {
 		}
 	}
 
-	stats, err := ComputeStats(dir)
+	stats, err := ComputeStatsWithContext(t.Context(), dir)
 	if err != nil {
 		t.Fatalf("ComputeStats = _, %v; want nil error", err)
 	}
@@ -59,7 +59,7 @@ func TestComputeStats_MultipleExtensions(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(dir, "style.css"), []byte("body {}"), 0600)
 	_ = os.WriteFile(filepath.Join(dir, "README.md"), []byte("# Project"), 0600)
 
-	stats, err := ComputeStats(dir)
+	stats, err := ComputeStatsWithContext(t.Context(), dir)
 	if err != nil {
 		t.Fatalf("ComputeStats = _, %v; want nil error", err)
 	}
@@ -84,7 +84,7 @@ func TestComputeStats_SkipsGitDir(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(dir, ".git", "objects", "pack"), []byte("data"), 0600)
 	_ = os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main"), 0600)
 
-	stats, err := ComputeStats(dir)
+	stats, err := ComputeStatsWithContext(t.Context(), dir)
 	if err != nil {
 		t.Fatalf("ComputeStats = _, %v; want nil error", err)
 	}
@@ -121,7 +121,7 @@ func TestComputeStats_SkipsGitignoredDirs(t *testing.T) {
 	// Real source alongside the vendored trees: main.go plus .gitignore.
 	_ = os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main"), 0600)
 
-	stats, err := ComputeStats(dir)
+	stats, err := ComputeStatsWithContext(t.Context(), dir)
 	if err != nil {
 		t.Fatalf("ComputeStats = _, %v; want nil error", err)
 	}
@@ -234,7 +234,7 @@ func TestComputeStats_GitignorePatternSemantics(t *testing.T) {
 				}
 			}
 
-			stats, err := ComputeStats(dir)
+			stats, err := ComputeStatsWithContext(t.Context(), dir)
 			if err != nil {
 				t.Fatalf("ComputeStats = _, %v; want nil error", err)
 			}
@@ -253,7 +253,7 @@ func TestComputeStats_NoExtensionFiles(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(dir, "Makefile"), []byte("all:\n"), 0600)
 	_ = os.WriteFile(filepath.Join(dir, "Dockerfile"), []byte("FROM ubuntu"), 0600)
 
-	stats, err := ComputeStats(dir)
+	stats, err := ComputeStatsWithContext(t.Context(), dir)
 	if err != nil {
 		t.Fatalf("ComputeStats = _, %v; want nil error", err)
 	}

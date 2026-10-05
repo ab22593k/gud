@@ -1,11 +1,9 @@
 package git
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -174,7 +172,7 @@ func PreparedMessage(ctx context.Context, op Operation) string {
 
 // commitMessage returns the full message (%B) of the given revision, or "".
 func commitMessage(ctx context.Context, rev string) string {
-	return runGitOutput(ctx, "log", "-1", "--format=%B", rev)
+	return runGitQuietly(ctx, "log", "-1", "--format=%B", rev)
 }
 
 // revertMessage reconstructs git's default revert message:
@@ -183,9 +181,9 @@ func commitMessage(ctx context.Context, rev string) string {
 //
 //	This reverts commit <full sha>.
 func revertMessage(ctx context.Context) string {
-	sha := runGitOutput(ctx, "rev-parse", "REVERT_HEAD")
+	sha := runGitQuietly(ctx, "rev-parse", "REVERT_HEAD")
 
-	subject := runGitOutput(ctx, "log", "-1", "--format=%s", "REVERT_HEAD")
+	subject := runGitQuietly(ctx, "log", "-1", "--format=%s", "REVERT_HEAD")
 	if sha == "" || subject == "" {
 		return ""
 	}
@@ -214,29 +212,7 @@ func rebaseMessage(ctx context.Context, dir string) string {
 // aware: the same base git uses for MERGE_HEAD, CHERRY_PICK_HEAD, rebase-merge
 // and friends, so per-worktree state is read from the right place.
 func gitDir(ctx context.Context) (string, error) {
-	out, err := exec.CommandContext(ctx, "git", "rev-parse", "--absolute-git-dir").Output()
-	if err != nil {
-		return "", fmt.Errorf("get git dir: %w", err)
-	}
-
-	return strings.TrimSpace(string(out)), nil
-}
-
-// runGitOutput runs a git command and returns its trimmed stdout, or "" on
-// error. It is used for read-only queries whose failure should degrade
-// gracefully.
-func runGitOutput(ctx context.Context, args ...string) string {
-	cmd := exec.CommandContext(ctx, "git", args...)
-
-	var out bytes.Buffer
-
-	cmd.Stdout = &out
-
-	if err := cmd.Run(); err != nil {
-		return ""
-	}
-
-	return strings.TrimSpace(out.String())
+	return runGitTrimmed(ctx, "rev-parse", "--absolute-git-dir")
 }
 
 // stripCommentLines removes git comment lines (a leading # after trimming)

@@ -318,7 +318,7 @@ func TestPreparedMessage(t *testing.T) {
 		run("add", "file.txt")
 		run("-c", "user.name=T", "-c", "user.email=t@t", "commit", "-q", "-m", msg)
 
-		return strings.TrimSpace(runGitOutput(ctx, "rev-parse", "HEAD"))
+		return strings.TrimSpace(runGitQuietly(ctx, "rev-parse", "HEAD"))
 	}
 
 	sha := commit("feat: initial commit\n\nAdd file.txt.")

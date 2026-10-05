@@ -116,7 +116,8 @@ func TestBuildCommitMessagePrompt(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			prompt := BuildCommitMessagePrompt(tt.diff, tt.context, tt.detailLevel, tt.hint, tt.profile)
+			prompt := BuildCommitMessagePromptWithContent(
+				tt.diff, tt.context, tt.detailLevel, tt.hint, tt.profile, "", defaultWrapLine)
 			tt.validate(t, prompt)
 		})
 	}
@@ -166,7 +167,8 @@ func TestBuildCommitMessagePromptWithEmptyProfile(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			prompt := BuildCommitMessagePrompt(tt.diff, tt.context, tt.detailLevel, tt.hint, "")
+			prompt := BuildCommitMessagePromptWithContent(
+				tt.diff, tt.context, tt.detailLevel, tt.hint, "", "", defaultWrapLine)
 			tt.validate(t, prompt)
 		})
 	}
@@ -175,7 +177,8 @@ func TestBuildCommitMessagePromptWithEmptyProfile(t *testing.T) {
 func TestBuildCommitMessagePrompt_ContainsDeterministicRules(t *testing.T) {
 	t.Parallel()
 
-	prompt := BuildCommitMessagePrompt("diff --git a/main.go b/main.go", "", DetailStandard, "", "")
+	prompt := BuildCommitMessagePromptWithContent(
+		"diff --git a/main.go b/main.go", "", DetailStandard, "", "", "", defaultWrapLine)
 
 	for _, want := range []string{"imperative", "never end the subject", "blank line", "appear in the diff"} {
 		if !strings.Contains(prompt, want) {
@@ -219,7 +222,8 @@ func TestBuildPromptWithContent_EmptyFallsBackToDefault(t *testing.T) {
 func TestBuildCommitMessagePrompt_NoDuplicateDefault(t *testing.T) {
 	t.Parallel()
 
-	prompt := BuildCommitMessagePrompt("diff --git a/main.go b/main.go", "", DetailStandard, "", "")
+	prompt := BuildCommitMessagePromptWithContent(
+		"diff --git a/main.go b/main.go", "", DetailStandard, "", "", "", defaultWrapLine)
 
 	if n := strings.Count(prompt, "permanent technical documentation"); n != 1 {
 		t.Errorf("default system appears %d times, want exactly 1", n)

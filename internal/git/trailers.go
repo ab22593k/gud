@@ -1,10 +1,7 @@
 package git
 
 import (
-	"bytes"
 	"context"
-	"fmt"
-	"os/exec"
 )
 
 // Trailer is a single git commit-message trailer (e.g. "Fixes: #123").
@@ -20,6 +17,10 @@ type Trailer struct {
 // the block in the given order. Messages without a body get a trailer block
 // created with a blank separator. With no trailers to add, message is
 // returned unchanged.
+//
+// git's own parser is the single source of truth for trailer formatting, so a
+// failure here means git rejected the arguments rather than that gud mislaid
+// the trailers; the error surfaces unchanged.
 func AppendTrailers(ctx context.Context, message string, trailers []Trailer) (string, error) {
 	if len(trailers) == 0 {
 		return message, nil
@@ -32,16 +33,5 @@ func AppendTrailers(ctx context.Context, message string, trailers []Trailer) (st
 		args = append(args, "--trailer", tr.Key+": "+tr.Value)
 	}
 
-	cmd := exec.CommandContext(ctx, "git", args...)
-	cmd.Stdin = bytes.NewBufferString(message)
-
-	var out bytes.Buffer
-
-	cmd.Stdout = &out
-
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("git interpret-trailers: %w", err)
-	}
-
-	return out.String(), nil
+	return runGitStdin(ctx, message, args...)
 }

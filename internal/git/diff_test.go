@@ -8,60 +8,19 @@ import (
 	"testing"
 )
 
-func TestGetStagedDiff(t *testing.T) {
+func TestGetStagedChanges(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 
-	_, err := GetStagedDiff(ctx)
+	changes, err := GetStagedChanges(ctx)
 	if err != nil {
-		t.Errorf("GetStagedDiff() error = %v, want nil", err)
-	}
-}
-
-func TestGetStagedDiff_Integration(t *testing.T) {
-	t.Parallel()
-
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
+		t.Errorf("GetStagedChanges() error = %v, want nil", err)
 	}
 
-	ctx := context.Background()
-
-	diff, err := GetStagedDiff(ctx)
-	if err != nil {
-		t.Fatalf("GetStagedDiff() unexpected error: %v", err)
+	if changes == nil {
+		t.Fatal("GetStagedChanges() = nil, want non-nil")
 	}
-
-	t.Logf("Staged diff output:\n%s", diff)
-}
-
-func TestGetUnstagedDiff(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-
-	_, err := GetUnstagedDiff(ctx)
-	if err != nil {
-		t.Errorf("GetUnstagedDiff() error = %v, want nil", err)
-	}
-}
-
-func TestGetUnstagedDiff_Integration(t *testing.T) {
-	t.Parallel()
-
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
-	}
-
-	ctx := context.Background()
-
-	diff, err := GetUnstagedDiff(ctx)
-	if err != nil {
-		t.Fatalf("GetUnstagedDiff() unexpected error: %v", err)
-	}
-
-	t.Logf("Unstaged diff output:\n%s", diff)
 }
 
 func TestGetRecentCommits(t *testing.T) {
@@ -202,22 +161,9 @@ func TestCommit_EmptyMessage(t *testing.T) {
 	}
 }
 
-func TestGetStagedDeletedFiles(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-
-	got, err := GetStagedDeletedFiles(ctx)
-	if err != nil {
-		t.Errorf("GetStagedDeletedFiles() error = %v, want nil", err)
-	}
-
-	if got != "" {
-		t.Logf("GetStagedDeletedFiles() returned (expected if no staged deletions): %q", got)
-	}
-}
-
-func TestGetStagedDeletedFiles_WithDeletion(t *testing.T) {
+// TestGetStagedChanges_DeletedFiles verifies the deleted-file list returned
+// alongside the staged diff: a removed file is listed, a modified file is not.
+func TestGetStagedChanges_DeletedFiles(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")
 	}
@@ -285,36 +231,31 @@ func TestGetStagedDeletedFiles_WithDeletion(t *testing.T) {
 		t.Fatalf("git add keep.go failed: %v", err)
 	}
 
-	// Verify GetStagedDeletedFiles returns the deleted file name
-	deleted, err := GetStagedDeletedFiles(ctx)
+	changes, err := GetStagedChanges(ctx)
 	if err != nil {
-		t.Fatalf("GetStagedDeletedFiles() unexpected error: %v", err)
+		t.Fatalf("GetStagedChanges() unexpected error: %v", err)
 	}
 
+	deleted := strings.Join(changes.Deleted, "\n")
 	if !strings.Contains(deleted, "file.go") {
-		t.Errorf("GetStagedDeletedFiles() = %q, want to contain %q", deleted, "file.go")
+		t.Errorf("Deleted = %q, want to contain %q", deleted, "file.go")
 	}
 
 	if strings.Contains(deleted, "keep.go") {
-		t.Errorf("GetStagedDeletedFiles() = %q, should NOT contain %q", deleted, "keep.go")
+		t.Errorf("Deleted = %q, should NOT contain %q", deleted, "keep.go")
 	}
 
-	// Verify GetStagedDiff does NOT contain the deleted file's content
-	diff, err := GetStagedDiff(ctx)
-	if err != nil {
-		t.Fatalf("GetStagedDiff() unexpected error: %v", err)
-	}
-
-	if strings.Contains(diff, "package main") && strings.Contains(diff, "file.go") {
-		t.Errorf("GetStagedDiff() should NOT contain deleted file content, got:\n%s", diff)
-	}
-
-	if !strings.Contains(diff, "keep.go") {
-		t.Errorf("GetStagedDiff() should contain changes to keep.go, got:\n%s", diff)
+	// The full diff still carries the kept file's change, so the model sees
+	// both the deletion and the surviving edit.
+	if !strings.Contains(changes.Diff, "keep.go") {
+		t.Errorf("Diff should contain changes to keep.go, got:\n%s", changes.Diff)
 	}
 }
 
-func TestGetStagedDiff_ExcludesRenames(t *testing.T) {
+// TestGetStagedChanges_RenameIsNotDeletion verifies a staged rename is not
+// misread as a deletion: a rename entry pairs "--- a/old.go" with
+// "+++ b/new.go", and only "+++ /dev/null" marks a deletion.
+func TestGetStagedChanges_RenameIsNotDeletion(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")
 	}
@@ -361,32 +302,13 @@ func TestGetStagedDiff_ExcludesRenames(t *testing.T) {
 		t.Fatalf("git mv old.go new.go failed: %v", err)
 	}
 
-	// Verify GetStagedDiff excludes rename content
-	diff, err := GetStagedDiff(ctx)
+	changes, err := GetStagedChanges(ctx)
 	if err != nil {
-		t.Fatalf("GetStagedDiff() unexpected error: %v", err)
+		t.Fatalf("GetStagedChanges() unexpected error: %v", err)
 	}
 
-	if strings.Contains(diff, "old.go") {
-		t.Errorf("GetStagedDiff() should NOT contain renamed file name, got:\n%s", diff)
-	}
-
-	if strings.Contains(diff, "new.go") {
-		t.Errorf("GetStagedDiff() should NOT contain new file name of rename, got:\n%s", diff)
-	}
-
-	if diff != "" {
-		t.Errorf("GetStagedDiff() should be empty (only rename staged), got:\n%s", diff)
-	}
-
-	// Verify GetStagedDeletedFiles does not list the renamed file
-	deleted, err := GetStagedDeletedFiles(ctx)
-	if err != nil {
-		t.Fatalf("GetStagedDeletedFiles() unexpected error: %v", err)
-	}
-
-	if strings.Contains(deleted, "old.go") {
-		t.Errorf("GetStagedDeletedFiles() should NOT list renamed file, got: %q", deleted)
+	if len(changes.Deleted) != 0 {
+		t.Errorf("Deleted = %v for a staged rename, want empty", changes.Deleted)
 	}
 }
 

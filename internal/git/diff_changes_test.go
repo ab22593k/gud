@@ -3,18 +3,17 @@ package git
 import (
 	"context"
 	"os"
-	"os/exec"
 	"strings"
 	"testing"
 )
 
-// newGitRunner returns a function that runs git commands in the current
-// directory (the caller must have chdir'd into a repo via newTestRepo).
-func runGit(t *testing.T, args ...string) {
+// runGitInTest runs git in the current directory, failing the test on error.
+// The caller must have chdir'd into a repo (see newConfiguredRepo). It is
+// named distinctly from the package's runGit so the two never shadow each other.
+func runGitInTest(t *testing.T, args ...string) {
 	t.Helper()
 
-	cmd := exec.CommandContext(context.Background(), "git", args...)
-	if out, err := cmd.CombinedOutput(); err != nil {
+	if out, err := runGit(t.Context(), args...); err != nil {
 		t.Fatalf("git %v failed: %v\n%s", args, err, out)
 	}
 }
@@ -29,16 +28,8 @@ func newConfiguredRepo(t *testing.T) {
 	}
 
 	newTestRepo(t)
-	runGit(t, "config", "user.email", "test@example.com")
-	runGit(t, "config", "user.name", "Test User")
-}
-
-func TestGetAuthor(t *testing.T) {
-	newConfiguredRepo(t)
-
-	if got, want := GetAuthor(context.Background()), "Test User <test@example.com>"; got != want {
-		t.Errorf("GetAuthor() = %q, want %q", got, want)
-	}
+	runGitInTest(t, "config", "user.email", "test@example.com")
+	runGitInTest(t, "config", "user.name", "Test User")
 }
 
 func TestGetStagedChanges_NothingStaged(t *testing.T) {
@@ -74,7 +65,7 @@ func TestGetStagedChanges_StagedModificationAndDeletion(t *testing.T) {
 		t.Fatalf("write base.go: %v", err)
 	}
 
-	runGit(t, "add", ".")
+	runGitInTest(t, "add", ".")
 
 	if _, err := Commit(ctx, "init"); err != nil {
 		t.Fatalf("initial commit: %v", err)
@@ -88,13 +79,13 @@ func TestGetStagedChanges_StagedModificationAndDeletion(t *testing.T) {
 		t.Fatalf("write notes.md: %v", err)
 	}
 
-	runGit(t, "add", "notes.md")
+	runGitInTest(t, "add", "notes.md")
 
 	if err := os.Remove("base.go"); err != nil {
 		t.Fatalf("remove base.go: %v", err)
 	}
 
-	runGit(t, "add", "-A")
+	runGitInTest(t, "add", "-A")
 
 	sc, err := GetStagedChanges(ctx)
 	if err != nil {

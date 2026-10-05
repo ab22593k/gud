@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 )
 
 const slugTestAgent = "test-agent"
@@ -261,26 +260,6 @@ func TestFetchCatalog_ServerError(t *testing.T) {
 	_, err := m.FetchCatalog(context.Background())
 	if err == nil {
 		t.Fatal("FetchCatalog() expected error for 500")
-	}
-}
-
-func TestGetDownloadETA(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		count int
-		want  time.Duration
-	}{
-		{count: 0, want: 0},
-		{count: 1, want: 500 * time.Millisecond},
-		{count: 10, want: 5 * time.Second},
-	}
-
-	for _, tt := range tests {
-		got := GetDownloadETA(tt.count)
-		if got != tt.want {
-			t.Errorf("GetDownloadETA(%d) = %v, want %v", tt.count, got, tt.want)
-		}
 	}
 }
 

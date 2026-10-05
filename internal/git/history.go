@@ -1,10 +1,8 @@
 package git
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"os/exec"
 	"strings"
 )
 
@@ -12,7 +10,7 @@ import (
 // (e.g. "origin/main"), or "" when the branch has no upstream or HEAD is
 // detached. Callers fall back to recent-commit history when it is empty.
 func GetUpstreamBranch(ctx context.Context) string {
-	return runGitOutput(ctx, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
+	return runGitQuietly(ctx, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
 }
 
 // GetTopicHistory returns one-line summaries of commits on the current branch
@@ -54,26 +52,6 @@ func GetTopicHistory(ctx context.Context, upstream string, n int, paths []string
 	}
 
 	return out, nil
-}
-
-// runGitDir runs a git command with its working directory set to dir, so
-// relative arguments (such as log pathspecs) resolve against dir rather than
-// the caller's cwd.
-func runGitDir(ctx context.Context, dir string, args ...string) (string, error) {
-	//nolint:gosec // G204: binary is the fixed "git" command; arguments come from
-	// internal callers, not user input.
-	cmd := exec.CommandContext(ctx, "git", args...)
-	cmd.Dir = dir
-
-	var out bytes.Buffer
-
-	cmd.Stdout = &out
-
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("git %v: %w", args, err)
-	}
-
-	return strings.TrimSpace(out.String()), nil
 }
 
 // ExtractChangedPaths returns the paths of files changed in a diff, derived
