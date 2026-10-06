@@ -110,6 +110,18 @@ func TestLoadRegistryCorrupt(t *testing.T) {
 	badStamp := validEntryMap()
 	badStamp["fetched_at"] = "yesterday"
 
+	dashedRef := validEntryMap()
+	dashedRef["ref"] = "-flag"
+
+	spacedHost := validEntryMap()
+	spacedHost["host"] = "evil host"
+
+	escapingSubpath := validEntryMap()
+	escapingSubpath["subpath"] = "a/../../x"
+
+	credsURL := validEntryMap()
+	credsURL["source_url"] = "https://user:pass@github.com/OCA/server-tools/tree/19.0/auto_backup"
+
 	entryData, err := json.Marshal(validEntryMap())
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
@@ -129,6 +141,10 @@ func TestLoadRegistryCorrupt(t *testing.T) {
 		{name: "bad timestamp", content: envelopeJSON("./x", badStamp)},
 		{name: "absolute key", content: envelopeJSON("/abs", validEntryMap())},
 		{name: "escaping key", content: envelopeJSON("../out", validEntryMap())},
+		{name: "leading-dash ref", content: envelopeJSON("./x", dashedRef)},
+		{name: "host with whitespace", content: envelopeJSON("./x", spacedHost)},
+		{name: "escaping subpath", content: envelopeJSON("./x", escapingSubpath)},
+		{name: "source_url with userinfo", content: envelopeJSON("./x", credsURL)},
 		{name: "colliding keys", content: colliding},
 	}
 
@@ -254,6 +270,26 @@ func TestRegistryEntryBudgetEnforced(t *testing.T) {
 
 	if err := SaveRegistry(RegistryPath(t.TempDir()), overBudget); !errors.Is(err, ErrInvalidRecord) {
 		t.Fatalf("err = %v, want budget ErrInvalidRecord", err)
+	}
+}
+
+func TestRegistrySlashedRefEntry(t *testing.T) {
+	t.Parallel()
+
+	// Refs containing slashes (e.g. release/19.0) are legitimate resolved
+	// identities: load-time validation must accept what the parser accepts.
+	entry := testEntry()
+	entry.Ref = "release/19.0"
+
+	path := saveFixtureRegistry(t, Registry{Version: registryVersion, Entries: map[string]RegistryEntry{"./x": entry}})
+
+	got, err := LoadRegistry(path)
+	if err != nil {
+		t.Fatalf("slashed-ref entry rejected: %v", err)
+	}
+
+	if _, err := got.Lookup("./x"); err != nil {
+		t.Fatalf("Lookup: %v", err)
 	}
 }
 

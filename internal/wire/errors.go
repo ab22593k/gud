@@ -26,9 +26,14 @@ var (
 )
 
 // NextAction returns the user-facing next step for a wire failure class.
-// It never returns empty; unknown errors yield generic guidance.
+// It never returns empty; unknown errors yield generic guidance. The
+// registry-invalid case leads: entry validation re-roots parse defects at
+// the registry boundary (wrapping both sentinels), and the registry
+// recovery action is the useful one there.
 func NextAction(err error) string {
 	switch {
+	case errors.Is(err, ErrInvalidRecord):
+		return "re-fetch the folder to regenerate its registry entry"
 	case errors.Is(err, ErrBadURL):
 		return "expected shape: https://{host}/{owner}/{repo}/tree/{ref}/{path}"
 	case errors.Is(err, ErrUnknownRef):
@@ -39,8 +44,6 @@ func NextAction(err error) string {
 		return "use --force to replace the target, or choose an empty directory"
 	case errors.Is(err, ErrNotACheckout):
 		return "fetch the folder first with its source URL"
-	case errors.Is(err, ErrInvalidRecord):
-		return "re-fetch the folder to regenerate its registry entry"
 	case errors.Is(err, ErrDiverged):
 		return "back up local edits, then use --force to discard them"
 	case errors.Is(err, ErrUpstream):

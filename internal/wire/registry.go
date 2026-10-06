@@ -3,6 +3,7 @@ package wire
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -319,7 +320,12 @@ func normalizeKey(key string) (string, error) {
 }
 
 // checkEntry enforces the v1 entry schema: commit is 40 lowercase hex,
-// export hash is 64 lowercase hex, timestamps parse when set.
+// export hash is 64 lowercase hex, timestamps parse when set. Source
+// identity segments face the same rules as ParseSourceURL (host, owner,
+// repo, ref, subpath) plus a userinfo ban on the verbatim URL: update and
+// list never re-parse, so the load boundary carries the full parse
+// invariant and a hostile registry file cannot smuggle hostile values
+// past it.
 func checkEntry(entry RegistryEntry) error {
 	if !isLowerHex(entry.ResolvedCommit, 40) {
 		return fmt.Errorf("bad resolved_commit: %w", ErrInvalidRecord)
@@ -343,7 +349,38 @@ func checkEntry(entry RegistryEntry) error {
 		return fmt.Errorf("missing source identity: %w", ErrInvalidRecord)
 	}
 
+	if _, err := parseHost(entry.Host); err != nil {
+		return entryFieldError(err)
+	}
+
+	if _, err := checkName("owner", entry.Owner); err != nil {
+		return entryFieldError(err)
+	}
+
+	if _, err := checkName("repo", entry.Repo); err != nil {
+		return entryFieldError(err)
+	}
+
+	if _, err := checkName("ref", entry.Ref); err != nil {
+		return entryFieldError(err)
+	}
+
+	if _, err := parseSubpath(strings.Split(entry.Subpath, "/")); err != nil {
+		return entryFieldError(err)
+	}
+
+	if u, err := url.Parse(entry.SourceURL); err != nil || u.User != nil {
+		return fmt.Errorf("registry entry: bad source_url (must parse, must not embed credentials): %w", ErrInvalidRecord)
+	}
+
 	return nil
+}
+
+// entryFieldError re-roots a parse-time validation failure at the registry
+// boundary: the registry sentinel stays ErrInvalidRecord (fail-closed load)
+// while the underlying shape defect stays in the errors.Is chain.
+func entryFieldError(err error) error {
+	return fmt.Errorf("registry entry: %w: %w", err, ErrInvalidRecord)
 }
 
 // isLowerHex reports whether s is exactly n lowercase hex digits.
