@@ -4,6 +4,7 @@ package wire
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -67,6 +68,11 @@ func (f *gitFetcher) resolvePinned(ctx context.Context, mirror string, source So
 		return Resolution{}, fmt.Errorf("%s: %w", source.Display(), ErrMissingPath)
 	}
 
+	if !git.TreeIsDir(tctx, mirror, source.Ref, source.Subpath) {
+		return Resolution{}, fmt.Errorf("%s is a file, not a fetchable folder: %w",
+			source.Display(), ErrMissingPath)
+	}
+
 	return Resolution{Commit: source.Ref, Ref: source.Ref, Subpath: source.Subpath}, nil
 }
 
@@ -98,6 +104,12 @@ func (f *gitFetcher) resolveNamed(ctx context.Context, mirror string, source Sou
 		display := source.Host + "/" + source.Owner + "/" + source.Repo + "@" + actualRef + ":" + actualPath
 
 		return Resolution{}, fmt.Errorf("%s: %w", display, ErrMissingPath)
+	}
+
+	if !git.TreeIsDir(tctx, mirror, commit, actualPath) {
+		display := source.Host + "/" + source.Owner + "/" + source.Repo + "@" + actualRef + ":" + actualPath
+
+		return Resolution{}, fmt.Errorf("%s is a file, not a fetchable folder: %w", display, ErrMissingPath)
 	}
 
 	return Resolution{Commit: commit, Ref: actualRef, Subpath: actualPath}, nil
@@ -132,6 +144,11 @@ func (f *gitFetcher) Materialize(ctx context.Context, source SourceRef, res Reso
 	defer cancel()
 
 	if err := git.AddSparseWorktree(tctx, mirror, wt, res.Commit, res.Subpath); err != nil {
+		if errors.Is(err, git.ErrSubpathNotDir) {
+			return 0, fmt.Errorf("materialize %s: subpath %q is not a fetchable folder: %w",
+				source.Display(), res.Subpath, ErrMissingPath)
+		}
+
 		return 0, upstream("materialize "+source.Display(), err)
 	}
 

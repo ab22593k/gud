@@ -2,6 +2,7 @@ package wire
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -10,6 +11,76 @@ import (
 	"strings"
 	"testing"
 )
+
+// seedWireMirror builds a local remote with auto_backup/a.txt, seeds the
+// store mirror from it without network, and returns the store and HEAD.
+func seedWireMirror(t *testing.T) (*Store, string) {
+	t.Helper()
+
+	remote := t.TempDir() + "/remote"
+	mustInitFixture(t, remote)
+
+	store := NewStoreWithDir(t.TempDir())
+	mirror := store.MirrorDir("example.com", "o", "r")
+
+	if err := localClone(t, remote, mirror); err != nil {
+		t.Fatalf("seed mirror: %v", err)
+	}
+
+	return store, localHead(t, remote)
+}
+
+func TestGitFetcherResolveFileSubpath(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping temp-repo test in short mode")
+	}
+
+	ctx := context.Background()
+	store, head := seedWireMirror(t)
+	fetcher := NewFetcher(store)
+
+	fileSource := func(ref string) SourceRef {
+		return SourceRef{Host: "example.com", Owner: "o", Repo: "r", Ref: ref, Subpath: "auto_backup/a.txt"}
+	}
+
+	for _, tc := range []struct {
+		name   string
+		source SourceRef
+	}{
+		{name: "named ref", source: fileSource("main")},
+		{name: "pinned commit", source: fileSource(head)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := fetcher.Resolve(ctx, tc.source)
+			if !errors.Is(err, ErrMissingPath) {
+				t.Fatalf("err = %v, want ErrMissingPath", err)
+			}
+
+			if !strings.Contains(err.Error(), "example.com/o/r") {
+				t.Fatalf("err = %v, want parsed identity echoed", err)
+			}
+		})
+	}
+}
+
+func TestGitFetcherMaterializeFileSubpath(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping temp-repo test in short mode")
+	}
+
+	ctx := context.Background()
+	store, head := seedWireMirror(t)
+	fetcher := NewFetcher(store)
+
+	source := SourceRef{Host: "example.com", Owner: "o", Repo: "r", Ref: head, Subpath: "auto_backup/a.txt"}
+	target := t.TempDir() + "/out"
+
+	_, err := fetcher.Materialize(ctx, source,
+		Resolution{Commit: head, Ref: head, Subpath: "auto_backup/a.txt"}, target)
+	if !errors.Is(err, ErrMissingPath) {
+		t.Fatalf("err = %v, want ErrMissingPath", err)
+	}
+}
 
 func TestShortRefs(t *testing.T) {
 	t.Parallel()

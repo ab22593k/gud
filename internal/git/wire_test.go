@@ -2,6 +2,7 @@ package git
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -150,6 +151,56 @@ func TestCommitExists(t *testing.T) {
 
 	if CommitExists(ctx, src, strings.Repeat("0", 40)) {
 		t.Fatal("zero SHA should not exist")
+	}
+}
+
+func TestTreeIsDir(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping temp-repo test in short mode")
+	}
+
+	ctx := context.Background()
+	src, _ := initWireFixture(t)
+	head := strings.TrimSpace(mustGit(t, src, "rev-parse", "HEAD"))
+
+	for _, tc := range []struct {
+		name    string
+		commit  string
+		subpath string
+		want    bool
+	}{
+		{name: "directory", commit: head, subpath: "auto_backup", want: true},
+		{name: "file is not a directory", commit: head, subpath: "auto_backup/a.txt", want: false},
+		{name: "missing path", commit: head, subpath: "nope", want: false},
+		{name: "missing commit", commit: strings.Repeat("0", 40), subpath: "auto_backup", want: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := TreeIsDir(ctx, src, tc.commit, tc.subpath); got != tc.want {
+				t.Fatalf("TreeIsDir(%q) = %v, want %v", tc.subpath, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestAddSparseWorktreeRejectsFile(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping temp-repo test in short mode")
+	}
+
+	ctx := context.Background()
+	_, url := initWireFixture(t)
+	mirror := filepath.Join(t.TempDir(), "mirror")
+
+	if err := CloneMirror(ctx, url, mirror); err != nil {
+		t.Fatalf("CloneMirror: %v", err)
+	}
+
+	head := strings.TrimSpace(mustGit(t, mirror, "rev-parse", "HEAD"))
+	wt := filepath.Join(t.TempDir(), "wt")
+
+	err := AddSparseWorktree(ctx, mirror, wt, head, "auto_backup/a.txt")
+	if !errors.Is(err, ErrSubpathNotDir) {
+		t.Fatalf("err = %v, want ErrSubpathNotDir", err)
 	}
 }
 

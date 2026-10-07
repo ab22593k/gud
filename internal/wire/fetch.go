@@ -2,6 +2,7 @@ package wire
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -19,7 +20,9 @@ type FetchOptions struct {
 }
 
 // Fetch downloads only source's subfolder into target and upserts its
-// registry entry, returning the user-facing summary. The subset is
+// registry entry, returning the user-facing summary. A re-fetch of a
+// tracked checkout that already matches its upstream reports "Already up
+// to date" without re-downloading or rewriting anything. The subset is
 // acquired through a sparse checkout (see Fetcher.Materialize) and staged
 // aside first: a failed fetch never reports success and never leaves a
 // half-populated target behind. Targets outside the registry tree are
@@ -45,31 +48,66 @@ func Fetch(ctx context.Context, opts FetchOptions, source SourceRef, target stri
 		return "", fmt.Errorf("resolve %s: %w", opts.RegistryPath, err)
 	}
 
-	if err := checkTarget(target, opts.Force); err != nil {
-		return "", fmt.Errorf("fetch %s: %w", source.Display(), err)
-	}
-
 	key, err := KeyFor(absReg, target)
 	if err != nil {
 		return "", fmt.Errorf("fetch %s: %w", source.Display(), err)
 	}
 
-	res, err := opts.Fetcher.Resolve(ctx, source)
+	entry, tracked, err := trackedEntry(absReg, key)
 	if err != nil {
 		return "", fmt.Errorf("fetch %s: %w", source.Display(), err)
 	}
 
-	resolved := source
-	resolved.Ref = res.Ref
-	resolved.Subpath = res.Subpath
+	resolved, res := source, Resolution{}
 
-	files, err := installCheckout(ctx, opts.Fetcher, resolved, res, target)
+	if tracked {
+		var summary string
+
+		res, resolved, summary, err = fetchTracked(ctx, opts, source, target, entry)
+		if err != nil {
+			return "", fmt.Errorf("fetch %s: %w", source.Display(), err)
+		}
+
+		if summary != "" {
+			return summary, nil
+		}
+	}
+
+	if err := checkTarget(target, opts.Force); err != nil {
+		return "", fmt.Errorf("fetch %s: %w", source.Display(), err)
+	}
+
+	if !tracked {
+		res, resolved, err = fetchFresh(ctx, opts, source)
+		if err != nil {
+			return "", fmt.Errorf("fetch %s: %w", source.Display(), err)
+		}
+	}
+
+	summary, err := fetchInstall(ctx, opts, resolved, res, absReg, key, target)
 	if err != nil {
 		return "", fmt.Errorf("fetch %s: %w", source.Display(), err)
+	}
+
+	return summary, nil
+}
+
+// fetchInstall materializes res into target, upserts its registry entry,
+// and renders the fetch success summary.
+func fetchInstall(
+	ctx context.Context,
+	opts FetchOptions,
+	resolved SourceRef,
+	res Resolution,
+	absReg, key, target string,
+) (string, error) {
+	files, err := installCheckout(ctx, opts.Fetcher, resolved, res, target)
+	if err != nil {
+		return "", err
 	}
 
 	if err := recordCheckout(absReg, key, target, resolved, res.Commit); err != nil {
-		return "", fmt.Errorf("fetch %s: %w", source.Display(), err)
+		return "", err
 	}
 
 	slog.Debug("wire fetched", "source", resolved.Display(), "commit", res.Commit, "files", files)
@@ -125,6 +163,87 @@ func installCheckout(
 	}
 
 	return files, nil
+}
+
+// fetchFresh resolves a first-time source. The target guard already ran,
+// so this stays network-only like its tracked counterpart.
+func fetchFresh(ctx context.Context, opts FetchOptions, source SourceRef) (Resolution, SourceRef, error) {
+	resolved := source
+
+	res, err := opts.Fetcher.Resolve(ctx, source)
+	if err != nil {
+		return Resolution{}, SourceRef{}, err
+	}
+
+	resolved.Ref = res.Ref
+	resolved.Subpath = res.Subpath
+
+	return res, resolved, nil
+}
+
+// trackedEntry returns the registry entry for key. A missing registry
+// file or an absent key reports tracked=false without resolving; a
+// present-but-broken registry fails instead of guessing a source.
+func trackedEntry(registryPath, key string) (RegistryEntry, bool, error) {
+	reg, err := LoadRegistry(registryPath)
+	if err != nil {
+		return RegistryEntry{}, false, err
+	}
+
+	entry, err := reg.Lookup(key)
+	if err != nil {
+		if errors.Is(err, ErrNotACheckout) {
+			return RegistryEntry{}, false, nil
+		}
+
+		return RegistryEntry{}, false, err
+	}
+
+	return entry, true, nil
+}
+
+// fetchTracked resolves an already-tracked checkout and reports its
+// no-op summary when it already matches upstream. An empty summary means
+// fall through to the regular fetch flow with res resolved.
+func fetchTracked(
+	ctx context.Context,
+	opts FetchOptions,
+	source SourceRef,
+	target string,
+	entry RegistryEntry,
+) (Resolution, SourceRef, string, error) {
+	resolved := source
+
+	res, err := opts.Fetcher.Resolve(ctx, source)
+	if err != nil {
+		return Resolution{}, SourceRef{}, "", err
+	}
+
+	resolved.Ref = res.Ref
+	resolved.Subpath = res.Subpath
+
+	summary, _ := noOpSummary(target, entry, res)
+
+	return res, resolved, summary, nil
+}
+
+// noOpSummary reports "Already up to date" when the checkout at target
+// already matches the resolved upstream: same commit and unmodified
+// contents. Anything else (moved upstream, local edits, unreadable
+// target) reports false so the caller falls through to the regular flow.
+func noOpSummary(target string, entry RegistryEntry, res Resolution) (string, bool) {
+	if res.Commit != entry.ResolvedCommit {
+		return "", false
+	}
+
+	live, err := HashDir(target)
+	if err != nil || live != entry.ExportHash {
+		return "", false
+	}
+
+	slog.Debug("wire fetch up to date", "dir", target, "commit", res.Commit)
+
+	return fmt.Sprintf("Already up to date (%s).", ShortSHA(res.Commit)), true
 }
 
 // checkTarget verifies target is usable without touching it: missing

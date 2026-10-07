@@ -3,6 +3,7 @@ package git
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -18,6 +19,11 @@ import (
 // Every network-capable helper disables interactive credential prompts
 // (GIT_TERMINAL_PROMPT=0) so auth failures surface as errors instead of
 // hanging the CLI waiting on stdin.
+
+// ErrSubpathNotDir marks a populated worktree subset that is not a
+// directory: the subpath is missing or names a file. Callers map it to
+// their missing-path failure class instead of a transport failure.
+var ErrSubpathNotDir = errors.New("git: subpath not a directory in commit")
 
 // wireCmd builds a git command that never prompts for credentials.
 func wireCmd(ctx context.Context, args ...string) *exec.Cmd {
@@ -129,7 +135,7 @@ func AddSparseWorktree(ctx context.Context, mirror, path, commit, subpath string
 	if err != nil || !st.IsDir() {
 		_ = RemoveWorktree(ctx, mirror, path)
 
-		return fmt.Errorf("subpath %q not in %s", subpath, commit)
+		return fmt.Errorf("subpath %q not in %s as a directory: %w", subpath, commit, ErrSubpathNotDir)
 	}
 
 	return nil
@@ -156,4 +162,17 @@ func PruneWorktrees(ctx context.Context, mirror string) error {
 // TreeExists reports whether subpath exists under commit in the repo at dir.
 func TreeExists(ctx context.Context, dir, commit, subpath string) bool {
 	return wireCmd(ctx, "-C", dir, "cat-file", "-e", commit+":"+subpath).Run() == nil
+}
+
+// TreeIsDir reports whether subpath exists as a directory (a tree object)
+// under commit in the repo at dir. Files and missing paths both report
+// false; existence alone is TreeExists. Operands are safe by the same
+// construction as TreeExists: a resolved hex SHA plus validated segments.
+func TreeIsDir(ctx context.Context, dir, commit, subpath string) bool {
+	out, err := runMirror(ctx, dir, "cat-file", "-t", commit+":"+subpath)
+	if err != nil {
+		return false
+	}
+
+	return out == "tree"
 }

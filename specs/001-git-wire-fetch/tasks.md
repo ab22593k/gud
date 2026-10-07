@@ -185,3 +185,10 @@ Single implementer recommended (shared `internal/wire` files across stories); a 
 - Entry fields stay byte-identical to the v1 record — no migration logic, fixtures re-key by wrapping in the envelope
 - Merge matrix, sync-state derivation order, `TreeExists` pre-check, hash-exclusion (`-t .` self-containment), and transport (`internal/git/wire.go`) are untouched this round
 - Commit after each task or logical group; `git diff --check` before finishing
+
+---
+
+## Phase 7: Convergence
+
+- [X] T027 Detect already-up-to-date on re-fetch and skip re-download/rewrite per FR-008 (missing)
+- [X] T028 Report file-instead-of-folder subpaths as ErrMissingPath with parsed identity echoed per FR-011 (partial)

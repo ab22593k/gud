@@ -108,6 +108,93 @@ func TestFetchSuccess(t *testing.T) {
 	}
 }
 
+func TestFetchNoOp(t *testing.T) {
+	t.Parallel()
+
+	f := successFetcher()
+	registry, target := fetchRun(t, "auto_backup")
+	fetchWithRegistry(t, f, registry, target)
+
+	beforeReg, err := os.ReadFile(registry)
+	if err != nil {
+		t.Fatalf("read registry: %v", err)
+	}
+
+	mat, res := f.materializes, f.resolves
+
+	summary, err := Fetch(context.Background(),
+		FetchOptions{Fetcher: f, RegistryPath: registry}, testSource(), target)
+	if err != nil {
+		t.Fatalf("re-fetch: %v", err)
+	}
+
+	if !strings.Contains(summary, "Already up to date") || !strings.Contains(summary, ShortSHA(testCommitA)) {
+		t.Fatalf("summary = %q, want no-op status", summary)
+	}
+
+	if f.materializes != mat {
+		t.Fatal("no-op re-fetch re-downloaded contents")
+	}
+
+	if f.resolves != res+1 {
+		t.Fatal("no-op re-fetch skipped the freshness check")
+	}
+
+	afterReg, err := os.ReadFile(registry)
+	if err != nil {
+		t.Fatalf("read registry: %v", err)
+	}
+
+	if string(beforeReg) != string(afterReg) {
+		t.Fatal("no-op re-fetch rewrote the registry")
+	}
+
+	data, err := os.ReadFile(filepath.Join(target, "a.txt"))
+	if err != nil || string(data) != "alpha" {
+		t.Fatalf("content = %q, err = %v", data, err)
+	}
+}
+
+func TestFetchMovedUpstreamRefetchesWithForce(t *testing.T) {
+	t.Parallel()
+
+	f := successFetcher()
+	registry, target := fetchRun(t, "auto_backup")
+	fetchWithRegistry(t, f, registry, target)
+
+	f.commits["19.0"] = testCommitB
+	f.files[testCommitB] = map[string]string{"a.txt": "alpha2"}
+
+	summary, err := Fetch(context.Background(),
+		FetchOptions{Fetcher: f, Force: true, RegistryPath: registry}, testSource(), target)
+	if err != nil {
+		t.Fatalf("re-fetch: %v", err)
+	}
+
+	if !strings.Contains(summary, "Fetched") || !strings.Contains(summary, ShortSHA(testCommitB)) {
+		t.Fatalf("summary = %q, want fresh fetch", summary)
+	}
+
+	data, err := os.ReadFile(filepath.Join(target, "a.txt"))
+	if err != nil || string(data) != "alpha2" {
+		t.Fatalf("content = %q, err = %v", data, err)
+	}
+
+	reg, err := LoadRegistry(registry)
+	if err != nil {
+		t.Fatalf("LoadRegistry: %v", err)
+	}
+
+	entry, err := reg.Lookup("./auto_backup")
+	if err != nil {
+		t.Fatalf("Lookup: %v", err)
+	}
+
+	if entry.ResolvedCommit != testCommitB {
+		t.Fatalf("commit = %q, want %q", entry.ResolvedCommit, testCommitB)
+	}
+}
+
 func TestFetchUnknownRef(t *testing.T) {
 	t.Parallel()
 
