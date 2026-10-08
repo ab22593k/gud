@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
 // UpdateOptions tunes Update. Fetcher must be non-nil; Force discards local
@@ -224,20 +225,45 @@ func stageMergeSnaps(
 		}
 	}
 
-	snapped := make([]map[string]snapFile, 0, 3)
+	snapped, err := snapshotAll([]string{baseDir, target, newDir})
+	if err != nil {
+		cleanup()
 
-	for _, dir := range []string{baseDir, target, newDir} {
-		snap, err := snapshotDir(dir)
-		if err != nil {
-			cleanup()
-
-			return fail(err)
-		}
-
-		snapped = append(snapped, snap)
+		return fail(err)
 	}
 
 	return mergeSnaps{base: snapped[0], local: snapped[1], new: snapped[2], newDir: newDir}, cleanup, nil
+}
+
+// snapshotAll snapshots every directory concurrently, returning results in
+// input order with the first error in that order winning — the same contract
+// as snapshotting them one by one. The snapshots are independent
+// pure-filesystem reads (walk, read, SHA-256), while the Materialize calls
+// above stay sequential: they touch the fetcher and git worktrees, which are
+// not safe for concurrent use.
+func snapshotAll(dirs []string) ([]map[string]snapFile, error) {
+	snapped := make([]map[string]snapFile, len(dirs))
+	errs := make([]error, len(dirs))
+
+	var wg sync.WaitGroup
+
+	for i, dir := range dirs {
+		wg.Go(func() {
+			snap, err := snapshotDir(dir)
+			snapped[i] = snap
+			errs[i] = err
+		})
+	}
+
+	wg.Wait()
+
+	for _, err := range errs {
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return snapped, nil
 }
 
 // keptLocal counts locally-changed paths the merge preserves (changed

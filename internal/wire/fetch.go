@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -249,8 +250,14 @@ func noOpSummary(target string, entry RegistryEntry, res Resolution) (string, bo
 // checkTarget verifies target is usable without touching it: missing
 // directories are fine, empty ones are fine, and anything else requires
 // Force. Runs before any network use so local mistakes fail fast offline.
+//
+// Only one directory entry is read to decide: the previous shape used
+// os.ReadDir, which reads and sorts every entry, so a target holding tens of
+// thousands of files paid O(n log n) to answer "is it empty". The full
+// listing runs solely on the non-empty, non-force path, where the count is
+// needed for the error message.
 func checkTarget(target string, force bool) error {
-	entries, err := os.ReadDir(target)
+	f, err := os.Open(target)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
@@ -259,8 +266,20 @@ func checkTarget(target string, force bool) error {
 		return fmt.Errorf("inspect target: %w", err)
 	}
 
-	if len(entries) == 0 || force {
+	defer func() { _ = f.Close() }()
+
+	names, err := f.Readdirnames(1)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return fmt.Errorf("inspect target: %w", err)
+	}
+
+	if len(names) == 0 || force {
 		return nil
+	}
+
+	entries, err := os.ReadDir(target)
+	if err != nil {
+		return fmt.Errorf("inspect target: %w", err)
 	}
 
 	return fmt.Errorf("target %s holds %d entries: %w", target, len(entries), ErrTargetNotEmpty)

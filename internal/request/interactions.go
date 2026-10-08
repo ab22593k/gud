@@ -165,6 +165,7 @@ func (m *interactionsModel) create(
 			Input:       genai.Ptr(imodels.NewInteractionsInput(promptText(req.Contents))),
 			Environment: genai.Ptr(agentEnvironment(mounts)),
 			AgentConfig: agentConfig(m.resolveModel(req)),
+			Tools:       agentTools(),
 		}),
 	})
 	if err != nil {
@@ -280,6 +281,30 @@ func agentConfig(model string) *imodels.CreateAgentInteractionAgentConfig {
 	return genai.Ptr(imodels.NewCreateAgentInteractionAgentConfig(imodels.AntigravityAgentConfig{
 		Model: genai.Ptr(model),
 	}))
+}
+
+// agentTools restricts the agent to the minimal toolset commit-message
+// generation needs: none.
+//
+// The Antigravity agent enables code_execution, google_search, and
+// url_context by default; filesystem tools come from the environment, not
+// this list. A diff-to-message transform is grounded in the diff in the
+// prompt and in conventions from mounted AGENTS.md, so it needs none of the
+// declarative tools. An explicit empty (non-nil) list disables them: nil
+// would omit the field and restore the defaults, while [] marshals to
+// "tools":[] and withholds them.
+//
+// This is the fix for the server/SDK drift where code_execution steps arrive
+// with {"language":"bash"} while the pinned SDK's Language enum accepts only
+// "python": strict unmarshaling turns any code-execution step into a hard
+// generation failure ("invalid value for Language: bash"). With no
+// code-execution tool the agent emits no such steps and the bug cannot
+// trigger. It is also least privilege: no sandbox execution, no web access,
+// lower latency and cost.
+//
+// https://ai.google.dev/gemini-api/docs/antigravity-agent#supported-tools
+func agentTools() []imodels.Tool {
+	return []imodels.Tool{}
 }
 
 // agentEnvironment builds the remote environment, mounting every AGENTS.md the

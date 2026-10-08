@@ -549,3 +549,51 @@ func TestInteractionsModel_CreatesOncePerGeneration(t *testing.T) {
 		t.Errorf("creator called %d times, want exactly 1", fake.calls)
 	}
 }
+
+// Commit-message generation is a pure diff-to-text transform grounded in the
+// prompt and mounted AGENTS.md: it needs no code execution, web search, or URL
+// fetch. An explicit empty tools list withholds the agent's defaults; nil
+// would omit the field and restore them — including code_execution, whose bash
+// steps the pinned SDK cannot parse ("invalid value for Language: bash").
+//
+// Regression lock for the generation failure where the agent verified line
+// length via code execution and the whole call failed in SDK unmarshaling.
+func TestInteractionsModel_DisablesDeclarativeTools(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeInteractionCreator{resp: interactionResponse("fix: repair cache")}
+	m := newInteractionsModel("gemini-3.5-flash-lite", fake)
+
+	collect(t, m.GenerateContent(context.Background(), llmRequest("prompt", ""), false))
+
+	tools := fake.got.Body.CreateAgentInteraction.Tools
+	if tools == nil {
+		t.Fatal("tools is nil (field omitted, server restores defaults including code_execution); want explicit empty list")
+	}
+
+	if len(tools) != 0 {
+		t.Errorf("tools has %d entries, want 0 (no declarative tools for diff-to-message)", len(tools))
+	}
+}
+
+// The tools restriction must hold when files are mounted as well: filesystem
+// access comes from the environment, not the tools list, so mounts and an
+// empty tools list coexist.
+func TestInteractionsModel_DisablesToolsWithMounts(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeInteractionCreator{resp: interactionResponse("fix: repair cache")}
+	m := newInteractionsModel("gemini-3.5-flash-lite", fake)
+
+	collect(t, m.GenerateWithMounts(context.Background(), llmRequest("prompt", ""),
+		[]AgentFile{{Path: RootMountPath, Content: "conventions"}}))
+
+	tools := fake.got.Body.CreateAgentInteraction.Tools
+	if tools == nil {
+		t.Fatal("tools is nil with mounts; want explicit empty list")
+	}
+
+	if len(tools) != 0 {
+		t.Errorf("tools has %d entries with mounts, want 0", len(tools))
+	}
+}

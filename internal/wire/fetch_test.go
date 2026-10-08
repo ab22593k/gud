@@ -290,3 +290,45 @@ func TestFetchGuardsTargetBeforeNetwork(t *testing.T) {
 		t.Fatalf("err = %v, want local guard before network", err)
 	}
 }
+
+// TestCheckTargetEdges locks the guard contract the fast path must preserve:
+// missing and empty targets pass, a regular file fails without the
+// not-empty sentinel, a populated directory reports its count, and force
+// bypasses the population check.
+func TestCheckTargetEdges(t *testing.T) {
+	t.Parallel()
+
+	if err := checkTarget(filepath.Join(t.TempDir(), "nope"), false); err != nil {
+		t.Fatalf("missing target: %v", err)
+	}
+
+	if err := checkTarget(t.TempDir(), false); err != nil {
+		t.Fatalf("empty target: %v", err)
+	}
+
+	regular := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(regular, []byte("x"), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	if err := checkTarget(regular, false); err == nil {
+		t.Fatal("regular file target passed the guard")
+	} else if errors.Is(err, ErrTargetNotEmpty) {
+		t.Fatalf("regular file reported as non-empty directory: %v", err)
+	}
+
+	full := t.TempDir()
+	for _, name := range []string{"a.txt", "b.txt", "c.txt"} {
+		writeFile(t, full, name, "data")
+	}
+
+	if err := checkTarget(full, false); !errors.Is(err, ErrTargetNotEmpty) {
+		t.Fatalf("err = %v, want ErrTargetNotEmpty", err)
+	} else if !strings.Contains(err.Error(), "3 entries") {
+		t.Fatalf("err = %v, want the entry count", err)
+	}
+
+	if err := checkTarget(full, true); err != nil {
+		t.Fatalf("force on populated target: %v", err)
+	}
+}

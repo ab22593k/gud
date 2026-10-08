@@ -96,3 +96,34 @@ func TestBuildPrompt_OmitsEmptyContext(t *testing.T) {
 		t.Error("empty context should not emit a delimited region")
 	}
 }
+
+// Defense in depth alongside the explicit empty tools list in the API call:
+// the task steers the agent away from the code_execution tool whose bash
+// steps the pinned SDK cannot parse. It must live in the task (not the
+// replaceable system prompt) so custom AGENTS.md cannot drop it, and it must
+// not disturb the authoritative Output: terminator.
+func TestBuildPrompt_DirectsNoToolUse(t *testing.T) {
+	t.Parallel()
+
+	for _, custom := range []string{"", "CUSTOM SYSTEM"} {
+		instructions, prompt := BuildAgentPrompt(
+			"diff", "", config.DetailStandard, "", custom, defaultWrapLine)
+
+		if custom != "" && instructions != custom {
+			t.Fatalf("instructions = %q, want custom content verbatim", instructions)
+		}
+
+		for _, want := range []string{
+			"without using tools",
+			"do not execute code",
+		} {
+			if !strings.Contains(prompt, want) {
+				t.Errorf("prompt missing no-tool directive %q (custom=%q)", want, custom)
+			}
+		}
+
+		if !strings.HasSuffix(prompt, "Output:\n") {
+			t.Errorf("prompt must still end with Output: terminator (custom=%q)", custom)
+		}
+	}
+}

@@ -101,3 +101,35 @@ func TestHashDirEmpty(t *testing.T) {
 		t.Fatalf("bad empty hash %q", got)
 	}
 }
+
+// TestHashDirFollowsSymlinkToRegular guards the listFiles fast path: WalkDir
+// reports a symlink's own type, so a naive type check would skip links. A
+// link to a regular file must still count — removing it changes the hash.
+func TestHashDirFollowsSymlinkToRegular(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	writeFile(t, dir, "real.txt", "content")
+
+	if err := os.Symlink("real.txt", filepath.Join(dir, "link.txt")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	before, err := HashDir(dir)
+	if err != nil {
+		t.Fatalf("HashDir: %v", err)
+	}
+
+	if err := os.Remove(filepath.Join(dir, "link.txt")); err != nil {
+		t.Fatalf("remove link: %v", err)
+	}
+
+	after, err := HashDir(dir)
+	if err != nil {
+		t.Fatalf("HashDir: %v", err)
+	}
+
+	if before == after {
+		t.Fatal("symlinked file not hashed: removing the link left the hash unchanged")
+	}
+}

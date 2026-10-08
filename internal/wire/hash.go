@@ -59,7 +59,18 @@ func listFiles(dir string) ([]string, error) {
 			return nil
 		}
 
-		if !isHashable(path) {
+		// Fast path: WalkDir already reports the entry type on most filesystems,
+		// so a known-regular file skips the extra stat isHashable would do
+		// (one newfstatat per file). Symlinks still stat the target — a link
+		// to a regular file counts — and unknown types fall back to stat,
+		// exactly matching the previous behavior.
+		switch typ := d.Type(); {
+		case typ.IsRegular():
+		case typ == 0 || typ&fs.ModeSymlink != 0:
+			if !isHashable(path) {
+				return nil
+			}
+		default:
 			return nil
 		}
 
