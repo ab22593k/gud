@@ -13,14 +13,13 @@ import (
 //
 // Recognised variables:
 //
-//	GUD_DETAIL_LEVEL  GUD_PROFILE  GUD_MODEL
+//	GUD_DETAIL_LEVEL  GUD_MODEL
 //	GUD_HINT          GUD_HISTORY  GOOGLE_API_KEY GUD_WRAPLINE
 func configFromEnv() config.Config {
 	cfg := config.Config{
-		APIKey:  firstSet("GOOGLE_API_KEY"),
-		Model:   firstSet("GUD_MODEL", "GEMINI_MODEL"),
-		Profile: config.ProfileName(firstSet("GUD_PROFILE")),
-		Hint:    os.Getenv("GUD_HINT"),
+		APIKey: firstSet("GOOGLE_API_KEY"),
+		Model:  firstSet("GUD_MODEL", "GEMINI_MODEL"),
+		Hint:   os.Getenv("GUD_HINT"),
 	}
 
 	v := os.Getenv("GUD_DETAIL_LEVEL")

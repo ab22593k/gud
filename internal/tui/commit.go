@@ -1,3 +1,5 @@
+// Package tui provides interactive Terminal User Interface components
+// using the charmbracelet/bubbletea framework.
 package tui
 
 import (
@@ -28,6 +30,14 @@ const (
 )
 
 var (
+	// Shared chrome for the review list, kept here because the profile picker
+	// that used to own them is gone.
+	titleStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FAFAFA"))
+
+	paginationStyle = list.DefaultStyles().PaginationStyle.PaddingLeft(2)
+
+	helpStyle = list.DefaultStyles().HelpStyle.PaddingLeft(2).PaddingBottom(1)
+
 	commitKeyStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#7C56D9")).
 			Bold(true)

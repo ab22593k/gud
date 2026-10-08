@@ -35,13 +35,20 @@ type Client struct {
 }
 
 const (
-	// defaultModel is the Gemini model used when none is configured.
-	defaultModel = "gemini-flash-lite-latest"
+	// defaultModel is the Gemini model the Antigravity agent reasons with when
+	// none is configured: the agent's cheapest, lowest-latency option, which is
+	// all a commit message needs.
+	defaultModel = "gemini-3.5-flash-lite"
 
 	// defaultGenerateTimeout bounds a single content-generation call when
 	// the caller's context carries no deadline. Without it, a hung API
 	// would stall the CLI (and a prepare-commit-msg hook) indefinitely.
-	defaultGenerateTimeout = 2 * time.Minute
+	//
+	// The Antigravity agent provisions a sandbox and runs a tool-use loop
+	// before it can answer, so a call takes minutes rather than the seconds a
+	// plain model call needs; the documented client-side timeout for it is 300s.
+	// https://ai.google.dev/gemini-api/docs/antigravity-agent
+	defaultGenerateTimeout = 5 * time.Minute
 )
 
 // NewClient creates a new request client.
@@ -52,14 +59,27 @@ func NewClient(ctx context.Context, cfg ClientConfig) (*Client, error) {
 		return nil, errors.New("API key is required")
 	}
 
-	if cfg.Model == "" {
-		cfg.Model = defaultModel
+	// The agent serves a fixed model set, so the configured name is resolved to
+	// an available one here. Client.model — and with it ModelName() and the
+	// Assisted-by trailer — then names the model that actually served the
+	// request instead of the one that was asked for.
+	configured := cfg.Model
+	if configured == "" {
+		configured = defaultModel
 	}
+
+	model := antigravityModel(configured)
+	if model != configured {
+		slog.Debug("configured model is not offered by the Antigravity agent; using its default",
+			"configured", configured, "model", model)
+	}
+
+	cfg.Model = model
 
 	return newGeminiClient(ctx, cfg)
 }
 
-// newGeminiClient creates a client backed by the Gemini Interactions API.
+// newGeminiClient creates a client backed by the Gemini Antigravity agent.
 func newGeminiClient(ctx context.Context, cfg ClientConfig) (*Client, error) {
 	genaiClient, err := genai.NewClient(ctx, &genai.ClientConfig{
 		APIKey: cfg.APIKey,
@@ -68,7 +88,8 @@ func newGeminiClient(ctx context.Context, cfg ClientConfig) (*Client, error) {
 		return nil, fmt.Errorf("failed to create gemini client: %w", err)
 	}
 
-	slog.Debug("created gemini client via interactions API", "model", cfg.Model)
+	slog.Debug("created gemini client via the antigravity agent",
+		"agent", antigravityAgent, "model", cfg.Model)
 
 	return &Client{
 		modelImpl: newInteractionsModel(cfg.Model, genaiClient.Interactions),
@@ -106,29 +127,39 @@ func withDefaultTimeout(ctx context.Context, d time.Duration) (context.Context, 
 
 // GenerateCommitMessage generates a commit message based on the provided diff.
 func (c *Client) GenerateCommitMessage(
-	ctx context.Context, diff, commitContext string, detailLevel DetailLevel, hint string, profile ProfileName,
+	ctx context.Context, diff, commitContext string, detailLevel DetailLevel, hint string,
 ) (string, error) {
-	return c.GenerateCommitMessageWithContent(ctx, diff, commitContext, detailLevel, hint, profile, "", defaultWrapLine)
+	return c.GenerateCommitMessageWithContent(ctx, diff, commitContext, detailLevel, hint, "", defaultWrapLine)
 }
 
-// GenerateCommitMessageWithContent generates a commit message with an optional custom system prompt content.
+// GenerateCommitMessageWithContent generates a commit message, mounting
+// systemContent as AGENTS.md in the agent's environment. An empty
+// systemContent leaves the default system prompt inline in the task.
 func (c *Client) GenerateCommitMessageWithContent(
-	ctx context.Context, diff, commitContext string, detailLevel DetailLevel, hint string, profile ProfileName,
+	ctx context.Context, diff, commitContext string, detailLevel DetailLevel, hint string,
 	systemContent string, wrapLine int,
 ) (string, error) {
 	if diff == "" {
 		return "", errors.New("diff is required")
 	}
 
-	slog.Debug("generating commit message", "model", c.model, "detailLevel", detailLevel, "diff_bytes", len(diff),
-		"ctx_bytes", len(commitContext))
+	instructions, task := BuildAgentPrompt(diff, commitContext, detailLevel, hint, systemContent, wrapLine)
 
-	prompt := BuildCommitMessagePromptWithContent(diff, commitContext, detailLevel, hint, profile, systemContent, wrapLine)
+	slog.Debug("generating commit message", "model", c.model, "detailLevel", detailLevel, "diff_bytes", len(diff),
+		"ctx_bytes", len(commitContext), "agents_md_bytes", len(instructions))
+
+	// The instructions ride on the request rather than inside the prompt so the
+	// adapter can mount them as AGENTS.md. Leaving them inline as well would
+	// send the same guidance twice, by two different routes.
+	cfg := &genai.GenerateContentConfig{}
+	if instructions != "" {
+		cfg.SystemInstruction = genai.NewContentFromText(instructions, "system")
+	}
 
 	req := &model.LLMRequest{
 		Model:    c.model,
-		Contents: genai.Text(prompt),
-		Config:   &genai.GenerateContentConfig{},
+		Contents: genai.Text(task),
+		Config:   cfg,
 	}
 
 	ctx, cancel := withDefaultTimeout(ctx, defaultGenerateTimeout)

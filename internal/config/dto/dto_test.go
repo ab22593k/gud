@@ -19,7 +19,6 @@ func TestToEntity(t *testing.T) {
 			name: "all fields set",
 			dto: ConfigDTO{
 				DetailLevel: "detailed",
-				Profile:     "computer-scientist",
 				Model:       "gemini-flash-latest",
 				Hint:        "focus on security",
 				History:     config.Ptr(10),
@@ -28,7 +27,6 @@ func TestToEntity(t *testing.T) {
 			},
 			want: config.Config{
 				DetailLevel: config.DetailDetailed,
-				Profile:     config.ProfileName("computer-scientist"),
 				Model:       "gemini-flash-latest",
 				Hint:        "focus on security",
 				History:     config.Ptr(10),
@@ -74,7 +72,6 @@ func TestFromEntity(t *testing.T) {
 			name: "all fields set",
 			entity: config.Config{
 				DetailLevel: config.DetailDetailed,
-				Profile:     config.ProfileName("astrophysicist"),
 				Model:       "gemini-flash-lite-latest",
 				Hint:        "explain physics",
 				History:     config.Ptr(3),
@@ -83,7 +80,6 @@ func TestFromEntity(t *testing.T) {
 			},
 			want: ConfigDTO{
 				DetailLevel: "detailed",
-				Profile:     "astrophysicist",
 				Model:       "gemini-flash-lite-latest",
 				Hint:        "explain physics",
 				History:     config.Ptr(3),
@@ -111,7 +107,6 @@ func TestFromEntity(t *testing.T) {
 func TestRoundTrip(t *testing.T) {
 	original := config.Config{
 		DetailLevel: config.DetailStandard,
-		Profile:     config.ProfileName("chemist"),
 		Model:       "gemini-flash-latest",
 		Hint:        "mention reaction mechanisms",
 		History:     config.Ptr(8),
@@ -130,7 +125,6 @@ func TestRoundTrip(t *testing.T) {
 func TestJSONRoundTrip(t *testing.T) {
 	original := ConfigDTO{
 		DetailLevel: "standard",
-		Profile:     "biologist",
 		Model:       "gemini-flash-lite-latest",
 		History:     config.Ptr(5),
 		WrapLine:    72,

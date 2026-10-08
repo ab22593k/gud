@@ -83,7 +83,7 @@ func TestGenerateCommitMessageWithContent_RespectsCallerDeadline(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
-	_, err := c.GenerateCommitMessageWithContent(ctx, "diff", "", DetailLevel("standard"), "", "", "", 72)
+	_, err := c.GenerateCommitMessageWithContent(ctx, "diff", "", DetailLevel("standard"), "", "", 72)
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("err = %v, want context.DeadlineExceeded", err)
 	}
@@ -93,9 +93,10 @@ func TestNewClient(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name    string
-		cfg     ClientConfig
-		wantErr bool
+		name      string
+		cfg       ClientConfig
+		wantErr   bool
+		wantModel string
 	}{
 		{
 			name:    "empty API key returns error",
@@ -103,14 +104,24 @@ func TestNewClient(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "valid API key with no model uses default",
-			cfg:     ClientConfig{APIKey: "test-api-key"},
-			wantErr: false,
+			name:      "valid API key with no model uses default",
+			cfg:       ClientConfig{APIKey: "test-api-key"},
+			wantErr:   false,
+			wantModel: defaultModel,
 		},
 		{
-			name:    "valid API key with model",
-			cfg:     ClientConfig{APIKey: "test-api-key", Model: "gemini-flash-latest"},
-			wantErr: false,
+			name:      "valid API key with model",
+			cfg:       ClientConfig{APIKey: "test-api-key", Model: "gemini-3.5-flash"},
+			wantErr:   false,
+			wantModel: "gemini-3.5-flash",
+		},
+		// The agent serves a fixed model set, so a name outside it is resolved
+		// to the agent's own default rather than failing every request.
+		{
+			name:      "unavailable model resolves to the agent default",
+			cfg:       ClientConfig{APIKey: "test-api-key", Model: "gemini-flash-latest"},
+			wantErr:   false,
+			wantModel: "gemini-3.8-flash",
 		},
 	}
 
@@ -130,8 +141,11 @@ func TestNewClient(t *testing.T) {
 				t.Errorf("NewClient() should return non-nil client")
 			}
 
-			if !tt.wantErr && tt.cfg.Model != "" && client.model != tt.cfg.Model {
-				t.Errorf("client.model = %q, want %q", client.model, tt.cfg.Model)
+			// The resolved model is what ModelName() reports and what the
+			// Assisted-by trailer records, so it must be the one that would
+			// serve the request.
+			if !tt.wantErr && client.model != tt.wantModel {
+				t.Errorf("client.model = %q, want %q", client.model, tt.wantModel)
 			}
 		})
 	}
@@ -347,7 +361,7 @@ func TestOracle_Comparable_ModelInRequestMatchesClientModel(t *testing.T) {
 
 	_, err := client.GenerateCommitMessage(context.Background(),
 		"diff --git a/main.go b/main.go", "",
-		DetailStandard, "", "")
+		DetailStandard, "")
 	if err != nil {
 		t.Fatalf("GenerateCommitMessage: %v", err)
 	}
@@ -373,7 +387,7 @@ func TestOracle_Comparable_ModelNameMatchesConfigured(t *testing.T) {
 
 	_, err := client.GenerateCommitMessage(context.Background(),
 		"diff --git a/main.go b/main.go", "",
-		DetailStandard, "", "")
+		DetailStandard, "")
 	if err != nil {
 		t.Fatalf("GenerateCommitMessage: %v", err)
 	}
@@ -398,7 +412,7 @@ func TestOracle_Claims_NoDeprecatedSamplingParams(t *testing.T) {
 
 	_, err := client.GenerateCommitMessage(context.Background(),
 		"diff --git a/main.go b/main.go", "",
-		DetailStandard, "", "")
+		DetailStandard, "")
 	if err != nil {
 		t.Fatalf("GenerateCommitMessage: %v", err)
 	}
@@ -431,7 +445,7 @@ func TestOracle_Claims_DefaultModelIsUsedWhenEmpty(t *testing.T) {
 
 	_, err := client.GenerateCommitMessage(context.Background(),
 		"diff --git a/main.go b/main.go", "",
-		DetailStandard, "", "")
+		DetailStandard, "")
 	if err != nil {
 		t.Fatalf("GenerateCommitMessage: %v", err)
 	}
@@ -453,7 +467,6 @@ func TestClient_GenerateCommitMessage(t *testing.T) {
 		context       string
 		detailLevel   DetailLevel
 		hint          string
-		profile       ProfileName
 		mockContent   string
 		mockError     string
 		mockRespError string
@@ -466,7 +479,6 @@ func TestClient_GenerateCommitMessage(t *testing.T) {
 			context:     "",
 			detailLevel: DetailStandard,
 			hint:        "",
-			profile:     "",
 			wantErr:     true,
 		},
 		{
@@ -475,7 +487,6 @@ func TestClient_GenerateCommitMessage(t *testing.T) {
 			context:     "",
 			detailLevel: DetailStandard,
 			hint:        "",
-			profile:     "",
 			mockContent: "feat: add hello world output",
 			wantErr:     false,
 			validateMsg: func(t *testing.T, msg string) {
@@ -492,7 +503,6 @@ func TestClient_GenerateCommitMessage(t *testing.T) {
 			context:     "",
 			detailLevel: DetailMinimal,
 			hint:        "",
-			profile:     "",
 			mockContent: "feat: add hello",
 			wantErr:     false,
 		},
@@ -502,7 +512,6 @@ func TestClient_GenerateCommitMessage(t *testing.T) {
 			context:     "",
 			detailLevel: DetailStandard,
 			hint:        "focus on security",
-			profile:     "",
 			mockContent: "fix: patch security vulnerability",
 			wantErr:     false,
 		},
@@ -512,7 +521,6 @@ func TestClient_GenerateCommitMessage(t *testing.T) {
 			context:     "",
 			detailLevel: DetailStandard,
 			hint:        "",
-			profile:     "",
 			mockError:   "API error",
 			wantErr:     true,
 		},
@@ -522,7 +530,6 @@ func TestClient_GenerateCommitMessage(t *testing.T) {
 			context:       "",
 			detailLevel:   DetailStandard,
 			hint:          "",
-			profile:       "",
 			mockRespError: "API quota exceeded",
 			wantErr:       true,
 		},
@@ -531,7 +538,6 @@ func TestClient_GenerateCommitMessage(t *testing.T) {
 			context:     "",
 			detailLevel: DetailStandard,
 			hint:        "",
-			profile:     "",
 			mockContent: "",
 			wantErr:     true,
 		},
@@ -568,7 +574,7 @@ func TestClient_GenerateCommitMessage(t *testing.T) {
 			client := NewClientWithGenerator(mock, "gemini-flash-lite-latest")
 
 			msg, err := client.GenerateCommitMessage(context.Background(),
-				tt.diff, tt.context, tt.detailLevel, tt.hint, tt.profile)
+				tt.diff, tt.context, tt.detailLevel, tt.hint)
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GenerateCommitMessage() error = %v, wantErr %v", err, tt.wantErr)

@@ -17,7 +17,6 @@ func TestConfigFromEnv(t *testing.T) {
 	)
 
 	t.Setenv("GUD_DETAIL_LEVEL", "minimal")
-	t.Setenv("GUD_PROFILE", "env-profile")
 	t.Setenv("GUD_MODEL", testModel)
 	t.Setenv("GUD_HINT", "env-hint")
 	t.Setenv("GUD_HISTORY", "7")
@@ -28,10 +27,6 @@ func TestConfigFromEnv(t *testing.T) {
 
 	if cfg.DetailLevel != config.DetailMinimal {
 		t.Errorf("DetailLevel = %q, want %q", cfg.DetailLevel, config.DetailMinimal)
-	}
-
-	if cfg.Profile != config.ProfileName("env-profile") {
-		t.Errorf("Profile = %q", cfg.Profile)
 	}
 
 	if cfg.Model != testModel {
@@ -62,10 +57,6 @@ func TestConfigFromEnvUnset(t *testing.T) {
 
 	if cfg.DetailLevel != "" {
 		t.Errorf("DetailLevel = %q, want empty", cfg.DetailLevel)
-	}
-
-	if cfg.Profile != "" {
-		t.Errorf("Profile = %q, want empty", cfg.Profile)
 	}
 
 	if cfg.Model != "" {

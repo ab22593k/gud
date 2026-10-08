@@ -132,30 +132,6 @@ func TestOracle_Familiarity_NoGitRepo(t *testing.T) {
 
 // E - Explainability: error messages tell a clear, actionable story
 
-// E: profile not found gives a fix‑oriented message.
-func TestOracle_Explainability_ProfileNotFound(t *testing.T) {
-	var buf bytes.Buffer
-	rootCmd.SetOut(&buf)
-	rootCmd.SetArgs([]string{"--profile", "nonexistent-slug-12345", testVersionCmdName})
-	t.Cleanup(func() {
-		rootCmd.SetOut(os.Stdout)
-		rootCmd.SetArgs(nil)
-	})
-
-	_ = rootCmd.Execute()
-	// Profile validation happens in NewAppContext which is called by runGenerate,
-	// not by the version command, so this may succeed. Let's verify the error
-	// path at the function level instead.
-	got := requireProfile("nonexistent-slug-12345")
-	if got == nil {
-		t.Skip("[E] requireProfile passed (unexpected) — skipping")
-	}
-
-	if !strings.Contains(got.Error(), "git message profile save") {
-		t.Errorf("[E] error should suggest how to fix it, got: %v", got)
-	}
-}
-
 // E: missing staged changes error is actionable. The probe runs in a
 // throwaway repo so it asserts a genuinely empty index instead of whatever
 // the package's own repository happens to have staged.
@@ -280,7 +256,6 @@ func TestOracle_History_HelpTextSmoke(t *testing.T) {
 		"Available Commands:",
 		"Flags:",
 		"--history",
-		"--profile",
 		"--detail-level",
 		"--wrapline",
 		"--model",
@@ -483,29 +458,6 @@ func TestOracle_Claims_LongDescription(t *testing.T) {
 	}
 }
 
-// C: profile subcommand help matches implementation.
-func TestOracle_Claims_ProfileCommands(t *testing.T) {
-	var buf bytes.Buffer
-	rootCmd.SetOut(&buf)
-	rootCmd.SetArgs([]string{testProfileCmdName, testHelpFlag})
-	t.Cleanup(func() {
-		rootCmd.SetOut(os.Stdout)
-		rootCmd.SetArgs(nil)
-	})
-
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatal(err)
-	}
-
-	got := buf.String()
-	// The profile Cmd struct claims "list/save/remove/show"
-	for _, cmd := range []string{testListCmdName, "save", "remove", "show"} {
-		if !strings.Contains(got, cmd) {
-			t.Errorf("[C] profile help missing subcommand %q", cmd)
-		}
-	}
-}
-
 // C: hook subcommand help claims "install/uninstall/run".
 func TestOracle_Claims_HookCommands(t *testing.T) {
 	var buf bytes.Buffer
@@ -580,29 +532,6 @@ func TestOracle_UserExpectations_HelpOffline(t *testing.T) {
 // P - Purpose: fulfils the intended goal
 
 // P: profile list command returns a predictable structure.
-func TestOracle_Purpose_ProfileListStructure(t *testing.T) {
-	var buf bytes.Buffer
-	rootCmd.SetOut(&buf)
-	rootCmd.SetIn(&bytes.Buffer{}) // non-terminal stdin to prevent TUI launch
-	rootCmd.SetArgs([]string{"profile", "list"})
-	t.Cleanup(func() {
-		rootCmd.SetOut(os.Stdout)
-		rootCmd.SetIn(os.Stdin)
-		rootCmd.SetArgs(nil)
-	})
-
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatal(err)
-	}
-
-	got := buf.String()
-	// Should either say "No cached profiles" or show a profile listing.
-	if !strings.Contains(got, "Cached profiles") &&
-		!strings.Contains(got, "No cached profiles") {
-		t.Errorf("[P] profile list output unexpected, got %q", got)
-	}
-}
-
 // P: the version command exists and reports a version (purpose: inform user).
 func TestOracle_Purpose_VersionReportsVersion(t *testing.T) {
 	var buf bytes.Buffer
@@ -689,7 +618,6 @@ func TestOracle_Aspirations_ConfigLoadSpeed(t *testing.T) {
 func TestOracle_Aspirations_ValidateSpeed(t *testing.T) {
 	cfg := config.Config{
 		DetailLevel: config.DetailDetailed,
-		Profile:     testAstrophysicist,
 		History:     config.Ptr(10),
 		WrapLine:    100,
 	}

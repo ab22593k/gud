@@ -16,112 +16,52 @@ import (
 )
 
 const (
-	testUnknownProfile = "unknown"
 	testHelpFlag       = "--help"
-	testProfileCmdName = "profile"
 	testVersionCmdName = "version"
-	testListCmdName    = "list"
 	testHookCmdName    = "hook"
-	testAstrophysicist = "astrophysicist"
 	testModelName      = "gemini-flash-latest"
 	testDoneStr        = "done"
 )
 
 func TestValidateConfig(t *testing.T) {
 	tests := []struct {
-		name         string
-		inputDetail  config.DetailLevel
-		inputProfile config.ProfileName
-		wantDetail   config.DetailLevel
-		wantProfile  config.ProfileName
+		name        string
+		inputDetail config.DetailLevel
+		wantDetail  config.DetailLevel
 	}{
 		{
-			name:         "valid minimal detail level preserved",
-			inputDetail:  config.DetailMinimal,
-			inputProfile: "",
-			wantDetail:   config.DetailMinimal,
-			wantProfile:  "",
+			name:        "valid minimal detail level preserved",
+			inputDetail: config.DetailMinimal,
+			wantDetail:  config.DetailMinimal,
 		},
 		{
-			name:         "valid standard detail level preserved",
-			inputDetail:  config.DetailStandard,
-			inputProfile: "",
-			wantDetail:   config.DetailStandard,
-			wantProfile:  "",
+			name:        "valid standard detail level preserved",
+			inputDetail: config.DetailStandard,
+			wantDetail:  config.DetailStandard,
 		},
 		{
-			name:         "valid detailed detail level preserved",
-			inputDetail:  config.DetailDetailed,
-			inputProfile: "",
-			wantDetail:   config.DetailDetailed,
-			wantProfile:  "",
+			name:        "valid detailed detail level preserved",
+			inputDetail: config.DetailDetailed,
+			wantDetail:  config.DetailDetailed,
 		},
 		{
-			name:         "invalid detail level defaults to standard",
-			inputDetail:  "verbose",
-			inputProfile: "",
-			wantDetail:   config.DetailStandard,
-			wantProfile:  "",
+			name:        "invalid detail level defaults to standard",
+			inputDetail: "verbose",
+			wantDetail:  config.DetailStandard,
 		},
 		{
-			name:         "empty detail level defaults to standard",
-			inputDetail:  "",
-			inputProfile: "",
-			wantDetail:   config.DetailStandard,
-			wantProfile:  "",
-		},
-		{
-			name:         "empty profile preserved as empty",
-			inputDetail:  config.DetailStandard,
-			inputProfile: "",
-			wantDetail:   config.DetailStandard,
-			wantProfile:  "",
-		},
-		{
-			name:         "unknown profile preserved (cached remote profiles are valid)",
-			inputDetail:  config.DetailStandard,
-			inputProfile: testAstrophysicist,
-			wantDetail:   config.DetailStandard,
-			wantProfile:  testAstrophysicist,
-		},
-		{
-			name:         "both detail invalid profile unknown",
-			inputDetail:  "ultra",
-			inputProfile: testUnknownProfile,
-			wantDetail:   config.DetailStandard,
-			wantProfile:  testUnknownProfile,
-		},
-		{
-			name:         "minimal detail with cached profile",
-			inputDetail:  config.DetailMinimal,
-			inputProfile: "computer-scientist",
-			wantDetail:   config.DetailMinimal,
-			wantProfile:  "computer-scientist",
-		},
-		{
-			name:         "detailed detail with empty profile",
-			inputDetail:  config.DetailDetailed,
-			inputProfile: "",
-			wantDetail:   config.DetailDetailed,
-			wantProfile:  "",
+			name:        "empty detail level defaults to standard",
+			inputDetail: "",
+			wantDetail:  config.DetailStandard,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := config.Config{
-				DetailLevel: tt.inputDetail,
-				Profile:     tt.inputProfile,
-			}
-
-			got := cfg.Validate()
+			got := config.Config{DetailLevel: tt.inputDetail}.Validate()
 
 			if got.DetailLevel != tt.wantDetail {
 				t.Errorf("DetailLevel = %q, want %q", got.DetailLevel, tt.wantDetail)
-			}
-
-			if got.Profile != tt.wantProfile {
-				t.Errorf("Profile = %q, want %q", got.Profile, tt.wantProfile)
 			}
 		})
 	}
@@ -345,7 +285,7 @@ func TestConfigFromCmdChangedFlags(t *testing.T) {
 		t.Errorf("Issues = %v, want [123 456]", cfg.Issues)
 	}
 	// Unchanged flags stay zero so they don't override lower priorities.
-	if cfg.Profile != "" || cfg.Model != "" || cfg.Hint != "" {
+	if cfg.Model != "" || cfg.Hint != "" {
 		t.Errorf("unchanged string flags set: %+v (want all empty)", cfg)
 	}
 }
@@ -527,10 +467,6 @@ func TestRootCommandHelp(t *testing.T) {
 		t.Errorf("help output should list 'hook' subcommand, got %q", output)
 	}
 
-	if !strings.Contains(output, "profile") {
-		t.Errorf("help output should list 'profile' subcommand, got %q", output)
-	}
-
 	if !strings.Contains(output, "version") {
 		t.Errorf("help output should list 'version' subcommand, got %q", output)
 	}
@@ -545,67 +481,6 @@ func TestRootCommandHelp(t *testing.T) {
 
 	if !strings.Contains(output, "--issue") {
 		t.Errorf("help output should include --issue flag, got %q", output)
-	}
-}
-
-func TestProfileCommandHelp(t *testing.T) {
-	origOut := rootCmd.OutOrStdout()
-
-	t.Cleanup(func() {
-		rootCmd.SetOut(origOut)
-		rootCmd.SetArgs(nil)
-	})
-
-	var buf bytes.Buffer
-	rootCmd.SetOut(&buf)
-	rootCmd.SetArgs([]string{testProfileCmdName, testHelpFlag})
-
-	err := rootCmd.Execute()
-	if err != nil {
-		t.Fatalf("profile help command failed: %v", err)
-	}
-
-	output := buf.String()
-	if !strings.Contains(output, "list") {
-		t.Errorf("profile help should contain 'list', got %q", output)
-	}
-
-	if !strings.Contains(output, "save") {
-		t.Errorf("profile help should contain 'save', got %q", output)
-	}
-
-	if !strings.Contains(output, "remove") {
-		t.Errorf("profile help should contain 'remove', got %q", output)
-	}
-
-	if !strings.Contains(output, "show") {
-		t.Errorf("profile help should contain 'show', got %q", output)
-	}
-}
-
-func TestProfileListCommand(t *testing.T) {
-	origOut := rootCmd.OutOrStdout()
-	origIn := rootCmd.InOrStdin()
-
-	t.Cleanup(func() {
-		rootCmd.SetOut(origOut)
-		rootCmd.SetIn(origIn)
-		rootCmd.SetArgs(nil)
-	})
-
-	var buf bytes.Buffer
-	rootCmd.SetOut(&buf)
-	rootCmd.SetIn(&bytes.Buffer{}) // non-terminal stdin to prevent TUI launch
-	rootCmd.SetArgs([]string{testProfileCmdName, testListCmdName})
-
-	err := rootCmd.Execute()
-	if err != nil {
-		t.Fatalf("profile list command failed: %v", err)
-	}
-
-	output := buf.String()
-	if !strings.Contains(output, "Cached profiles") && !strings.Contains(output, "No cached profiles") {
-		t.Errorf("profile list output unexpected, got %q", output)
 	}
 }
 

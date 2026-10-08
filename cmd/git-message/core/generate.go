@@ -53,8 +53,7 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 
 	// Check for staged changes before any interactive flow. A user with
 	// nothing staged should get the "no staged changes" error immediately,
-	// not a profile suggestion that may write
-	// .gud-skip/gud.json. InitClient runs after this check.
+	// not a wizard. InitClient runs after this check.
 	diff, err := getStagedDiffOrError(ctx)
 	if err != nil {
 		if op == git.OperationNone {
@@ -76,15 +75,6 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 			slog.Debug("no request client while a git operation is in progress; regeneration will be unavailable", "error", err)
 		} else {
 			return err
-		}
-	}
-
-	// Suggest a profile if none is configured (first invocation in this repo).
-	// Skipped during an operation stop: completing a merge must not be
-	// interrupted by a first-run profile prompt.
-	if app.Config().Profile == "" && op == git.OperationNone {
-		if err := suggestProfileIfNeeded(ctx, cmd, app); err != nil {
-			slog.Debug("profile suggestion skipped", "error", err)
 		}
 	}
 
@@ -162,51 +152,6 @@ func buildSubmoduleContext(ctx context.Context, app *AppContext, diff string) st
 	}
 
 	return git.SubmoduleContext(ctx, root, changes)
-}
-
-// resolveProfileContent returns the AGENTS.md content for a cached profile.
-// Returns empty string if no profile is set.
-//
-// A configured profile that is not cached logs a warning (not just debug):
-// the content silently degrades to "", and in practice only hook mode reaches
-// this branch — interactive mode fails earlier in the strict NewAppContext —
-// so the warning surfaces the degradation to users instead of hiding it.
-func resolveProfileContent(profileName string) string {
-	if profileName == "" {
-		return ""
-	}
-
-	initProfileManager()
-
-	p, err := profileManager.Get(profileName)
-	if err != nil {
-		slog.Warn("configured profile not cached; proceeding without profile content",
-			"profile", profileName,
-			"hint", "git message profile save "+profileName)
-
-		return ""
-	}
-
-	return p.Content
-}
-
-// requireProfile checks that the given profile is cached (or empty).
-// If set but not found, it tells the user to download it first.
-func requireProfile(profileName string) error {
-	if profileName == "" {
-		return nil
-	}
-
-	initProfileManager()
-
-	_, err := profileManager.Get(profileName)
-	if err != nil {
-		return fmt.Errorf("profile %q not found.\n\n"+
-			"First download it:  git message profile save %s\n"+
-			"See all:            git message profile list --remote", profileName, profileName)
-	}
-
-	return nil
 }
 
 // getStagedDiffOrError retrieves the staged diff and returns an error if none exists.

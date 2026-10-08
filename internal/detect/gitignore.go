@@ -184,7 +184,7 @@ func globToRegexp(pattern string) string {
 }
 
 // noExtensionKey marks files without an extension in FilesByExtension. It is
-// plumbing for counts, never a keyword for profile suggestion.
+// plumbing for counts, never a keyword for suggestion.
 const noExtensionKey = "(no extension)"
 
 // MaxFilesForStats caps files counted by ComputeStatsWithContext so a huge

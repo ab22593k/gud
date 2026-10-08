@@ -68,7 +68,7 @@ func TestInteractionsModel_ReturnsOutputText(t *testing.T) {
 	t.Parallel()
 
 	fake := &fakeInteractionCreator{resp: interactionResponse("feat: add login endpoint")}
-	m := newInteractionsModel("gemini-flash-lite-latest", fake)
+	m := newInteractionsModel("gemini-3.5-flash-lite", fake)
 
 	resp, err, count := collect(t, m.GenerateContent(context.Background(), llmRequest("prompt", ""), false))
 
@@ -112,7 +112,7 @@ func TestInteractionsModel_ReadsTextFromModelOutputSteps(t *testing.T) {
 			},
 		},
 	}}
-	m := newInteractionsModel("gemini-flash-lite-latest", fake)
+	m := newInteractionsModel("gemini-3.5-flash-lite", fake)
 
 	resp, err, _ := collect(t, m.GenerateContent(context.Background(), llmRequest("prompt", ""), false))
 	if err != nil {
@@ -144,7 +144,7 @@ func TestInteractionsModel_ConcatenatesModelOutputContents(t *testing.T) {
 			},
 		},
 	}}
-	m := newInteractionsModel("gemini-flash-lite-latest", fake)
+	m := newInteractionsModel("gemini-3.5-flash-lite", fake)
 
 	resp, err, _ := collect(t, m.GenerateContent(context.Background(), llmRequest("prompt", ""), false))
 	if err != nil {
@@ -157,13 +157,91 @@ func TestInteractionsModel_ConcatenatesModelOutputContents(t *testing.T) {
 	}
 }
 
+// An Antigravity run walks a tool-use loop that emits a model_output step per
+// reasoning turn. Only the last step is the answer: splicing every step
+// together would prepend the agent's intermediate turns to the commit message.
+func TestInteractionsModel_ReadsTextFromLastModelOutputStep(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeInteractionCreator{resp: &operations.CreateInteractionResponse{
+		Interaction: &imodels.Interaction{
+			Steps: []imodels.Step{
+				{Type: imodels.StepTypeThought},
+				{
+					Type: imodels.StepTypeModelOutput,
+					ModelOutputStep: &imodels.ModelOutputStep{
+						Content: []imodels.Content{
+							{TextContent: &imodels.TextContent{Text: "I will inspect the diff first."}},
+						},
+					},
+				},
+				{Type: imodels.StepTypeCodeExecutionCall},
+				{Type: imodels.StepTypeCodeExecutionResult},
+				{
+					Type: imodels.StepTypeModelOutput,
+					ModelOutputStep: &imodels.ModelOutputStep{
+						Content: []imodels.Content{
+							{TextContent: &imodels.TextContent{Text: "feat: add login endpoint\n"}},
+							{TextContent: &imodels.TextContent{Text: "Handles expired tokens."}},
+						},
+					},
+				},
+			},
+		},
+	}}
+	m := newInteractionsModel("gemini-3.5-flash-lite", fake)
+
+	resp, err, _ := collect(t, m.GenerateContent(context.Background(), llmRequest("prompt", ""), false))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	want := "feat: add login endpoint\nHandles expired tokens."
+	if got := resp.Content.Parts[0].Text; got != want {
+		t.Errorf("text = %q, want %q (intermediate turns must be dropped)", got, want)
+	}
+}
+
+// OutputText is the SDK's own aggregation of the last model output, so it wins
+// over the steps array when the service populates it — which is what the
+// Antigravity agent does.
+func TestInteractionsModel_PrefersOutputTextOverSteps(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeInteractionCreator{resp: &operations.CreateInteractionResponse{
+		Interaction: &imodels.Interaction{
+			OutputText: genai.Ptr("feat: add login endpoint"),
+			Steps: []imodels.Step{
+				{
+					Type: imodels.StepTypeModelOutput,
+					ModelOutputStep: &imodels.ModelOutputStep{
+						Content: []imodels.Content{
+							{TextContent: &imodels.TextContent{Text: "an earlier turn"}},
+						},
+					},
+				},
+			},
+		},
+	}}
+	m := newInteractionsModel("gemini-3.5-flash-lite", fake)
+
+	resp, err, _ := collect(t, m.GenerateContent(context.Background(), llmRequest("prompt", ""), false))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got := resp.Content.Parts[0].Text; got != "feat: add login endpoint" {
+		t.Errorf("text = %q, want %q", got, "feat: add login endpoint")
+	}
+}
+
 // OutputText is still a real field on some response shapes, so it stays
 // supported as a fallback rather than being deleted.
 func TestInteractionsModel_FallsBackToOutputText(t *testing.T) {
 	t.Parallel()
 
 	fake := &fakeInteractionCreator{resp: interactionResponse("chore: bump deps")}
-	m := newInteractionsModel("gemini-flash-lite-latest", fake)
+	m := newInteractionsModel("gemini-3.5-flash-lite", fake)
 
 	resp, err, _ := collect(t, m.GenerateContent(context.Background(), llmRequest("prompt", ""), false))
 	if err != nil {
@@ -185,7 +263,7 @@ func TestInteractionsModel_NoModelOutputStepIsAnError(t *testing.T) {
 			Steps: []imodels.Step{{Type: imodels.StepTypeThought}},
 		},
 	}}
-	m := newInteractionsModel("gemini-flash-lite-latest", fake)
+	m := newInteractionsModel("gemini-3.5-flash-lite", fake)
 
 	_, err, _ := collect(t, m.GenerateContent(context.Background(), llmRequest("prompt", ""), false))
 	if err == nil {
@@ -198,7 +276,7 @@ func TestInteractionsModel_PropagatesCreatorError(t *testing.T) {
 
 	boom := errors.New("API error occurred: Status 429\nquota exceeded")
 	fake := &fakeInteractionCreator{err: boom}
-	m := newInteractionsModel("gemini-flash-lite-latest", fake)
+	m := newInteractionsModel("gemini-3.5-flash-lite", fake)
 
 	_, err, _ := collect(t, m.GenerateContent(context.Background(), llmRequest("prompt", ""), false))
 	if !errors.Is(err, boom) {
@@ -212,7 +290,7 @@ func TestInteractionsModel_NilInteractionIsError(t *testing.T) {
 	t.Parallel()
 
 	fake := &fakeInteractionCreator{resp: &operations.CreateInteractionResponse{}}
-	m := newInteractionsModel("gemini-flash-lite-latest", fake)
+	m := newInteractionsModel("gemini-3.5-flash-lite", fake)
 
 	_, err, _ := collect(t, m.GenerateContent(context.Background(), llmRequest("prompt", ""), false))
 	if err == nil {
@@ -234,7 +312,7 @@ func TestInteractionsModel_EmptyOutputIsNotAnError(t *testing.T) {
 			}},
 		},
 	}}
-	m := newInteractionsModel("gemini-flash-lite-latest", fake)
+	m := newInteractionsModel("gemini-3.5-flash-lite", fake)
 
 	resp, err, _ := collect(t, m.GenerateContent(context.Background(), llmRequest("prompt", ""), false))
 	if err != nil {
@@ -259,8 +337,11 @@ func TestInteractionsModel_PrefersRequestModelThenFallsBack(t *testing.T) {
 		configured string
 		want       string
 	}{
-		{"request model wins", "gemini-2.5-pro", "gemini-flash-lite-latest", "gemini-2.5-pro"},
-		{"falls back to configured", "", "gemini-flash-lite-latest", "gemini-flash-lite-latest"},
+		{"request model wins", "gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3.5-flash"},
+		{"falls back to configured", "", "gemini-3.5-flash-lite", "gemini-3.5-flash-lite"},
+		// The agent serves a fixed model set; a name outside it resolves to the
+		// agent's own default rather than failing every request.
+		{"unavailable model falls back to agent default", "gemini-2.5-pro", "gemini-3.5-flash-lite", "gemini-3.8-flash"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -271,11 +352,126 @@ func TestInteractionsModel_PrefersRequestModelThenFallsBack(t *testing.T) {
 
 			collect(t, m.GenerateContent(context.Background(), llmRequest("prompt", tc.reqModel), false))
 
-			got := fake.got.Body.CreateModelInteraction.Model
-			if string(got) != tc.want {
-				t.Errorf("model = %q, want %q", got, tc.want)
+			got := fake.got.Body.CreateAgentInteraction.GetAgentConfigAntigravity().GetModel()
+			if got == nil {
+				t.Fatal("agent_config.model was not set")
+			}
+
+			if *got != tc.want {
+				t.Errorf("agent_config.model = %q, want %q", *got, tc.want)
 			}
 		})
+	}
+}
+
+// Every generation runs on the Antigravity agent inside a remote environment;
+// either one missing turns the request into a plain model call (or a rejected
+// one), which this adapter is no longer written for.
+func TestInteractionsModel_UsesAntigravityAgent(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeInteractionCreator{resp: interactionResponse("feat: add login endpoint")}
+	m := newInteractionsModel("gemini-3.5-flash-lite", fake)
+
+	collect(t, m.GenerateContent(context.Background(), llmRequest("prompt", ""), false))
+
+	agent := fake.got.Body.CreateAgentInteraction
+	if agent.Agent != antigravityAgent {
+		t.Errorf("agent = %q, want %q", agent.Agent, antigravityAgent)
+	}
+
+	env := agent.GetEnvironment()
+	if env == nil || env.Str == nil {
+		t.Fatal("environment was not sent")
+	}
+
+	if *env.Str != remoteEnvironment {
+		t.Errorf("environment = %q, want %q", *env.Str, remoteEnvironment)
+	}
+}
+
+// With instructions the environment carries an inline source that lands the
+// content at the environment root, which is where the Antigravity runtime
+// looks for AGENTS.md.
+func TestInteractionsModel_MountsInstructionsAsAgentsMd(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeInteractionCreator{resp: interactionResponse("feat: add login endpoint")}
+	m := newInteractionsModel("gemini-3.5-flash-lite", fake)
+
+	req := llmRequest("prompt", "")
+	req.Config.SystemInstruction = genai.NewContentFromText("Use conventional commits.", "system")
+
+	collect(t, m.GenerateContent(context.Background(), req, false))
+
+	env := fake.got.Body.CreateAgentInteraction.GetEnvironment()
+	if env == nil || env.Environment == nil {
+		t.Fatal("expected an environment object with sources, got a bare string")
+	}
+
+	sources := env.Environment.Sources
+	if len(sources) != 1 {
+		t.Fatalf("sources = %d, want exactly 1", len(sources))
+	}
+
+	src := sources[0]
+	if src.Type == nil || *src.Type != imodels.SourceTypeInline {
+		t.Errorf("source type = %v, want inline", src.Type)
+	}
+
+	if src.Target == nil || *src.Target != agentsMdTarget {
+		t.Errorf("target = %v, want %q", src.Target, agentsMdTarget)
+	}
+
+	if src.Content == nil || *src.Content != "Use conventional commits." {
+		t.Errorf("content = %v, want the instructions verbatim", src.Content)
+	}
+}
+
+// Without instructions the environment stays the bare "remote" string: no
+// sources are sent, so a generation with nothing to mount is byte-identical to
+// one that never had the feature.
+func TestInteractionsModel_NoInstructionsSendsBareRemoteEnvironment(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeInteractionCreator{resp: interactionResponse("feat: add login endpoint")}
+	m := newInteractionsModel("gemini-3.5-flash-lite", fake)
+
+	collect(t, m.GenerateContent(context.Background(), llmRequest("prompt", ""), false))
+
+	env := fake.got.Body.CreateAgentInteraction.GetEnvironment()
+	if env == nil || env.Str == nil {
+		t.Fatalf("environment = %v, want the bare %q string", env, remoteEnvironment)
+	}
+
+	if *env.Str != remoteEnvironment {
+		t.Errorf("environment = %q, want %q", *env.Str, remoteEnvironment)
+	}
+}
+
+// An instruction made of several parts is concatenated, matching how the
+// prompt flattens multi-part content — a split instruction must not be
+// truncated to its first part.
+func TestInteractionsModel_ConcatenatesInstructionParts(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeInteractionCreator{resp: interactionResponse("feat: add login endpoint")}
+	m := newInteractionsModel("gemini-3.5-flash-lite", fake)
+
+	req := llmRequest("prompt", "")
+	req.Config.SystemInstruction = &genai.Content{
+		Parts: []*genai.Part{{Text: "first "}, {Text: "second"}},
+	}
+
+	collect(t, m.GenerateContent(context.Background(), req, false))
+
+	env := fake.got.Body.CreateAgentInteraction.GetEnvironment()
+	if env == nil || env.Environment == nil || len(env.Environment.Sources) != 1 {
+		t.Fatal("expected exactly one mounted source")
+	}
+
+	if got := env.Environment.Sources[0].GetContent(); got == nil || *got != "first second" {
+		t.Errorf("content = %v, want %q", env.Environment.Sources[0].GetContent(), "first second")
 	}
 }
 
@@ -285,10 +481,10 @@ func TestInteractionsModel_ConcatenatesPromptParts(t *testing.T) {
 	t.Parallel()
 
 	fake := &fakeInteractionCreator{resp: interactionResponse("chore: bump deps")}
-	m := newInteractionsModel("gemini-flash-lite-latest", fake)
+	m := newInteractionsModel("gemini-3.5-flash-lite", fake)
 
 	req := &model.LLMRequest{
-		Model: "gemini-flash-lite-latest",
+		Model: "gemini-3.5-flash-lite",
 		Contents: []*genai.Content{
 			{Parts: []*genai.Part{{Text: "first "}}},
 			{Parts: []*genai.Part{{Text: "second"}}},
@@ -298,7 +494,7 @@ func TestInteractionsModel_ConcatenatesPromptParts(t *testing.T) {
 
 	collect(t, m.GenerateContent(context.Background(), req, false))
 
-	input := fake.got.Body.CreateModelInteraction.Input
+	input := fake.got.Body.CreateAgentInteraction.Input
 	if input == nil || input.Str == nil {
 		t.Fatal("expected the prompt to be sent as a string input")
 	}
@@ -311,9 +507,9 @@ func TestInteractionsModel_ConcatenatesPromptParts(t *testing.T) {
 func TestInteractionsModel_Name(t *testing.T) {
 	t.Parallel()
 
-	m := newInteractionsModel("gemini-2.5-pro", &fakeInteractionCreator{})
-	if got := m.Name(); got != "gemini-2.5-pro" {
-		t.Errorf("Name() = %q, want %q", got, "gemini-2.5-pro")
+	m := newInteractionsModel("gemini-3.6-flash", &fakeInteractionCreator{})
+	if got := m.Name(); got != "gemini-3.6-flash" {
+		t.Errorf("Name() = %q, want %q", got, "gemini-3.6-flash")
 	}
 }
 
@@ -331,7 +527,7 @@ func TestInteractionsModel_CreatesOncePerGeneration(t *testing.T) {
 	t.Parallel()
 
 	fake := &fakeInteractionCreator{resp: interactionResponse("docs: clarify usage")}
-	m := newInteractionsModel("gemini-flash-lite-latest", fake)
+	m := newInteractionsModel("gemini-3.5-flash-lite", fake)
 
 	collect(t, m.GenerateContent(context.Background(), llmRequest("prompt", ""), true))
 

@@ -122,11 +122,11 @@ func generateCommitMessage(ctx context.Context, app *AppContext, diff, promptCon
 	}
 
 	cfg := app.Config()
-	profileContent := resolveProfileContent(string(cfg.Profile))
+	instructions := resolveAgentInstructions(ctx, app)
 
 	msg, err := showProgress(ctx, "Rolling in, obscuring the landscape of the codebase...", func() (string, error) {
 		return app.Client().GenerateCommitMessageWithContent(ctx, diff, promptContext, cfg.DetailLevel,
-			cfg.Hint, cfg.Profile, profileContent, cfg.WrapLine)
+			cfg.Hint, instructions, cfg.WrapLine)
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to generate commit message: %w", err)

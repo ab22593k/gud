@@ -13,7 +13,6 @@ func TestBuildCommitMessagePrompt(t *testing.T) {
 		context     string
 		detailLevel DetailLevel
 		hint        string
-		profile     ProfileName
 		validate    func(t *testing.T, prompt string)
 	}{
 		{
@@ -22,7 +21,6 @@ func TestBuildCommitMessagePrompt(t *testing.T) {
 			context:     "",
 			detailLevel: DetailStandard,
 			hint:        "",
-			profile:     "",
 			validate: func(t *testing.T, prompt string) {
 				t.Helper()
 
@@ -41,7 +39,6 @@ func TestBuildCommitMessagePrompt(t *testing.T) {
 			context:     "Adding hello world feature",
 			detailLevel: DetailStandard,
 			hint:        "",
-			profile:     "",
 			validate: func(t *testing.T, prompt string) {
 				t.Helper()
 
@@ -56,7 +53,6 @@ func TestBuildCommitMessagePrompt(t *testing.T) {
 			context:     "",
 			detailLevel: DetailMinimal,
 			hint:        "",
-			profile:     "",
 			validate: func(t *testing.T, prompt string) {
 				t.Helper()
 
@@ -71,7 +67,6 @@ func TestBuildCommitMessagePrompt(t *testing.T) {
 			context:     "",
 			detailLevel: DetailDetailed,
 			hint:        "",
-			profile:     "",
 			validate: func(t *testing.T, prompt string) {
 				t.Helper()
 
@@ -86,7 +81,6 @@ func TestBuildCommitMessagePrompt(t *testing.T) {
 			context:     "",
 			detailLevel: DetailStandard,
 			hint:        "focus on security changes",
-			profile:     "",
 			validate: func(t *testing.T, prompt string) {
 				t.Helper()
 
@@ -101,7 +95,6 @@ func TestBuildCommitMessagePrompt(t *testing.T) {
 			context:     "",
 			detailLevel: DetailStandard,
 			hint:        "",
-			profile:     "",
 			validate: func(t *testing.T, prompt string) {
 				t.Helper()
 
@@ -116,9 +109,9 @@ func TestBuildCommitMessagePrompt(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			prompt := BuildCommitMessagePromptWithContent(
-				tt.diff, tt.context, tt.detailLevel, tt.hint, tt.profile, "", defaultWrapLine)
-			tt.validate(t, prompt)
+			_, task := BuildAgentPrompt(
+				tt.diff, tt.context, tt.detailLevel, tt.hint, "", defaultWrapLine)
+			tt.validate(t, task)
 		})
 	}
 }
@@ -167,9 +160,9 @@ func TestBuildCommitMessagePromptWithEmptyProfile(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			prompt := BuildCommitMessagePromptWithContent(
-				tt.diff, tt.context, tt.detailLevel, tt.hint, "", "", defaultWrapLine)
-			tt.validate(t, prompt)
+			_, task := BuildAgentPrompt(
+				tt.diff, tt.context, tt.detailLevel, tt.hint, "", defaultWrapLine)
+			tt.validate(t, task)
 		})
 	}
 }
@@ -177,8 +170,8 @@ func TestBuildCommitMessagePromptWithEmptyProfile(t *testing.T) {
 func TestBuildCommitMessagePrompt_ContainsDeterministicRules(t *testing.T) {
 	t.Parallel()
 
-	prompt := BuildCommitMessagePromptWithContent(
-		"diff --git a/main.go b/main.go", "", DetailStandard, "", "", "", defaultWrapLine)
+	_, prompt := BuildAgentPrompt(
+		"diff --git a/main.go b/main.go", "", DetailStandard, "", "", defaultWrapLine)
 
 	for _, want := range []string{"imperative", "never end the subject", "blank line", "appear in the diff"} {
 		if !strings.Contains(prompt, want) {
@@ -187,28 +180,34 @@ func TestBuildCommitMessagePrompt_ContainsDeterministicRules(t *testing.T) {
 	}
 }
 
-func TestBuildPromptWithContent_ReplacesDefault(t *testing.T) {
+// Custom content is mounted as AGENTS.md, not inlined in the task: the two must
+// never both carry it.
+func TestBuildAgentPrompt_MountsCustomContentInsteadOfInlining(t *testing.T) {
 	t.Parallel()
 
 	const custom = "CUSTOM SYSTEM PROMPT FOR TESTING"
 
-	prompt := BuildCommitMessagePromptWithContent(
-		"diff --git a/main.go b/main.go", "", DetailStandard, "", "", custom, defaultWrapLine)
+	instructions, task := BuildAgentPrompt(
+		"diff --git a/main.go b/main.go", "", DetailStandard, "", custom, defaultWrapLine)
 
-	if !strings.Contains(prompt, custom) {
-		t.Errorf("custom system content missing, got:\n%s", prompt)
+	if instructions != custom {
+		t.Errorf("instructions = %q, want the custom content verbatim", instructions)
 	}
 
-	if strings.Contains(prompt, "permanent technical documentation") {
-		t.Errorf("default system appended alongside custom content, got:\n%s", prompt)
+	if strings.Contains(task, custom) {
+		t.Errorf("custom content also inlined in the task, got:\n%s", task)
+	}
+
+	if strings.Contains(task, "permanent technical documentation") {
+		t.Errorf("default system appended alongside custom content, got:\n%s", task)
 	}
 }
 
 func TestBuildPromptWithContent_EmptyFallsBackToDefault(t *testing.T) {
 	t.Parallel()
 
-	prompt := BuildCommitMessagePromptWithContent(
-		"diff --git a/main.go b/main.go", "", DetailStandard, "", "", "", defaultWrapLine)
+	_, prompt := BuildAgentPrompt(
+		"diff --git a/main.go b/main.go", "", DetailStandard, "", "", defaultWrapLine)
 
 	if !strings.Contains(prompt, "permanent technical documentation") {
 		t.Errorf("empty content should fall back to default system, got:\n%s", prompt)
@@ -222,8 +221,8 @@ func TestBuildPromptWithContent_EmptyFallsBackToDefault(t *testing.T) {
 func TestBuildCommitMessagePrompt_NoDuplicateDefault(t *testing.T) {
 	t.Parallel()
 
-	prompt := BuildCommitMessagePromptWithContent(
-		"diff --git a/main.go b/main.go", "", DetailStandard, "", "", "", defaultWrapLine)
+	_, prompt := BuildAgentPrompt(
+		"diff --git a/main.go b/main.go", "", DetailStandard, "", "", defaultWrapLine)
 
 	if n := strings.Count(prompt, "permanent technical documentation"); n != 1 {
 		t.Errorf("default system appears %d times, want exactly 1", n)

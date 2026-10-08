@@ -11,7 +11,6 @@ The repository is a Go workspace using Go 1.26.8:
 - `internal/detect`: change detection and suggestions.
 - `internal/git`: Git operations; separate workspace module.
 - `internal/pipeline`: commit-message generation pipeline.
-- `internal/profile`: profile catalog and cache management.
 - `internal/request`: model requests; separate workspace module.
 - `internal/tui`: terminal interfaces.
 
@@ -71,8 +70,6 @@ are explicitly integration tests.
   ignored output-write errors (`_, _ = fmt...`).
 - Preserve explicit pointer and zero-value semantics in configuration merging;
   omitted Cobra defaults must not override environment or file configuration.
-- Treat profile slugs as cache/catalog identifiers and use
-  `internal/profile.Manager` for cached profile operations.
 - Add or update focused tests for behavioral changes. Prefer table-driven tests
   when several cases exercise the same behavior.
 - Do not edit generated files, vendored dependencies, or module sums manually.

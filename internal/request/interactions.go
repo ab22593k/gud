@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"iter"
+	"slices"
 	"strings"
 
 	"google.golang.org/adk/model"
@@ -12,6 +13,48 @@ import (
 	imodels "google.golang.org/genai/interactions/models/interactions"
 	"google.golang.org/genai/interactions/models/operations"
 )
+
+const (
+	// antigravityAgent is the managed agent that runs every generation: it
+	// reasons, executes code, and manages files inside a remote sandbox.
+	//
+	// Spelled out rather than taken from the SDK's AgentOption enum because the
+	// pinned genai release predates this agent — its enum carries only
+	// antigravity-preview-05-2026. AgentOption is a plain string type, so the
+	// documented value marshals and sends unchanged.
+	//
+	// https://ai.google.dev/gemini-api/docs/antigravity-agent
+	antigravityAgent imodels.AgentOption = "antigravity-preview-09-2026"
+
+	// remoteEnvironment provisions the agent's sandbox. Setting it is what
+	// enables the filesystem tools and returns the environment_id a follow-up
+	// turn reattaches to.
+	remoteEnvironment = "remote"
+
+	// agentsMdTarget is where a mounted AGENTS.md lands: the root of the
+	// environment, which is the directory the agent works in. The Antigravity
+	// runtime scans .agents/ and the environment root for this file and loads
+	// it as system instructions on startup.
+	agentsMdTarget = "AGENTS.md"
+
+	// agentDefaultModel is the Antigravity agent's own default model, applied
+	// when the configured model is not one the agent offers.
+	agentDefaultModel = "gemini-3.8-flash"
+)
+
+// antigravityModels lists the models the Antigravity agent accepts in
+// agent_config.model. Any other value is rejected by the API, so a configured
+// name outside this set is replaced by agentDefaultModel rather than failing
+// every request.
+//
+// https://ai.google.dev/gemini-api/docs/antigravity-agent#model-selection
+var antigravityModels = []string{
+	"gemini-3.8-flash",
+	"gemini-3.7-flash",
+	"gemini-3.6-flash",
+	"gemini-3.5-flash",
+	"gemini-3.5-flash-lite",
+}
 
 // interactionCreator is the slice of the Interactions API this adapter uses.
 // *interactions.Interactions satisfies it; tests substitute a fake so no
@@ -23,20 +66,21 @@ type interactionCreator interface {
 }
 
 // interactionsModel routes commit-message generation through the Gemini
-// Interactions API while presenting the agent toolkit's model.LLM interface.
+// Antigravity agent while presenting the agent toolkit's model.LLM interface.
 //
 // Implementing that interface rather than calling the Interactions API directly
 // is deliberate: Client.modelImpl is typed as model.LLM, so every call site,
 // every test mock, and the test-only generator constructor are unchanged.
 //
 // Each generation is a single independent interaction. No previous-interaction
-// reference is sent, so no conversation state accumulates across invocations.
+// reference is sent, so no conversation state accumulates across invocations
+// and the agent's remote environment is never reused between runs.
 type interactionsModel struct {
 	name    string
 	creator interactionCreator
 }
 
-// newInteractionsModel returns a model.LLM backed by the Interactions API.
+// newInteractionsModel returns a model.LLM backed by the Antigravity agent.
 func newInteractionsModel(name string, creator interactionCreator) *interactionsModel {
 	return &interactionsModel{name: name, creator: creator}
 }
@@ -48,8 +92,9 @@ func (m *interactionsModel) Name() string { return m.name }
 // response.
 //
 // The stream argument is accepted to satisfy model.LLM but does not select
-// partial delivery: gud always consumes a single complete message, and
-// delivering a half-written commit message would be worse than waiting.
+// partial delivery: gud always consumes a single complete message, and a
+// half-written commit message — or a partial agent turn that still has tool
+// calls to make — would be worse than waiting for the run to finish.
 func (m *interactionsModel) GenerateContent(
 	ctx context.Context, req *model.LLMRequest, _ bool,
 ) iter.Seq2[*model.LLMResponse, error] {
@@ -70,9 +115,11 @@ func (m *interactionsModel) create(
 	ctx context.Context, req *model.LLMRequest,
 ) (*model.LLMResponse, error) {
 	res, err := m.creator.Create(ctx, operations.CreateInteractionRequest{
-		Body: operations.NewCreateInteractionRequestBody(imodels.CreateModelInteraction{
-			Model: imodels.Model(m.resolveModel(req)),
-			Input: genai.Ptr(imodels.NewInteractionsInput(promptText(req.Contents))),
+		Body: operations.NewCreateInteractionRequestBody(imodels.CreateAgentInteraction{
+			Agent:       antigravityAgent,
+			Input:       genai.Ptr(imodels.NewInteractionsInput(promptText(req.Contents))),
+			Environment: genai.Ptr(agentEnvironment(instructionsText(req))),
+			AgentConfig: agentConfig(m.resolveModel(req)),
 		}),
 	})
 	if err != nil {
@@ -98,37 +145,24 @@ func (m *interactionsModel) create(
 
 // interactionText extracts the model's reply from a completed interaction.
 //
-// The message lives in the steps array, on the step whose type is
-// "model_output"; thought and tool-call steps carry no user-facing text and are
-// skipped. The convenience OutputText field is nil for this response shape, so
-// reading only that field silently yields an empty commit message — it is
-// consulted afterwards purely as a fallback for response shapes that do
-// populate it.
+// OutputText is the SDK's own aggregation — "concatenated text from the last
+// model output" — so it is read first. That matters here: an Antigravity run
+// walks a tool-use loop that emits a model_output step per reasoning turn, and
+// only the last one is the answer. Reading every step instead would splice the
+// agent's intermediate turns into the commit message.
+//
+// The steps array is the fallback for response shapes that leave OutputText
+// unset. There the message is the last step of type "model_output", with its
+// content parts concatenated; thought and tool-call steps carry no user-facing
+// text and are skipped.
 func interactionText(interaction *imodels.Interaction) (string, error) {
-	var sb strings.Builder
-
-	found := false
-
-	for _, step := range interaction.GetSteps() {
-		if step.Type != imodels.StepTypeModelOutput || step.ModelOutputStep == nil {
-			continue
-		}
-
-		for _, content := range step.ModelOutputStep.Content {
-			if content.TextContent != nil {
-				sb.WriteString(content.TextContent.Text)
-			}
-		}
-
-		found = true
-	}
-
-	if sb.Len() > 0 {
-		return sb.String(), nil
-	}
-
 	if out := interaction.GetOutputText(); out != nil && *out != "" {
 		return *out, nil
+	}
+
+	text, found := lastModelOutputText(interaction.GetSteps())
+	if text != "" {
+		return text, nil
 	}
 
 	if !found {
@@ -140,15 +174,106 @@ func interactionText(interaction *imodels.Interaction) (string, error) {
 	return "", nil
 }
 
-// resolveModel prefers the model named on the request, falling back to the
-// adapter's configured model so a caller that omits it still reaches the API
-// with a valid model.
-func (m *interactionsModel) resolveModel(req *model.LLMRequest) string {
-	if req != nil && req.Model != "" {
-		return req.Model
+// lastModelOutputText concatenates the text of the final model_output step,
+// which is the one carrying the reply.
+func lastModelOutputText(steps []imodels.Step) (string, bool) {
+	var last *imodels.ModelOutputStep
+
+	for i := range steps {
+		if steps[i].Type != imodels.StepTypeModelOutput || steps[i].ModelOutputStep == nil {
+			continue
+		}
+
+		last = steps[i].ModelOutputStep
 	}
 
-	return m.name
+	if last == nil {
+		return "", false
+	}
+
+	var sb strings.Builder
+
+	for _, content := range last.Content {
+		if content.TextContent != nil {
+			sb.WriteString(content.TextContent.Text)
+		}
+	}
+
+	return sb.String(), true
+}
+
+// resolveModel picks the model the agent reasons with, preferring the model
+// named on the request and falling back to the adapter's configured model. Names
+// the agent does not offer — every pre-3.5 Gemini model, for instance — resolve
+// to the agent's own default so a stale configuration degrades instead of
+// erroring on every call.
+func (m *interactionsModel) resolveModel(req *model.LLMRequest) string {
+	name := m.name
+	if req != nil && req.Model != "" {
+		name = req.Model
+	}
+
+	return antigravityModel(name)
+}
+
+// antigravityModel maps a configured model name onto one the Antigravity agent
+// accepts. NewClient applies the same mapping so the model reported to the user
+// and written into the Assisted-by trailer is the one that actually served the
+// request; a caller comparing the result against the input can see that a name
+// outside the agent's set was remapped.
+func antigravityModel(configured string) string {
+	if slices.Contains(antigravityModels, configured) {
+		return configured
+	}
+
+	return agentDefaultModel
+}
+
+// agentConfig states the model the agent should reason with. It is always set:
+// resolveModel has already mapped the incoming name onto an accepted value.
+func agentConfig(model string) *imodels.CreateAgentInteractionAgentConfig {
+	return genai.Ptr(imodels.NewCreateAgentInteractionAgentConfig(imodels.AntigravityAgentConfig{
+		Model: genai.Ptr(model),
+	}))
+}
+
+// agentEnvironment builds the remote environment, mounting AGENTS.md content as
+// .agents/AGENTS.md when the caller supplied instructions.
+//
+// With nothing to mount the bare "remote" string is sent instead, which
+// provisions the sandbox unchanged; sources are only added when there is a file
+// to put in it.
+func agentEnvironment(instructions string) imodels.CreateAgentInteractionEnvironment {
+	if instructions == "" {
+		return imodels.NewCreateAgentInteractionEnvironment(remoteEnvironment)
+	}
+
+	return imodels.NewCreateAgentInteractionEnvironment(imodels.Environment{
+		Sources: []imodels.Source{{
+			Type:    imodels.SourceTypeInline.ToPointer(),
+			Target:  genai.Ptr(agentsMdTarget),
+			Content: genai.Ptr(instructions),
+		}},
+	})
+}
+
+// instructionsText reads the system instruction the client carried on the
+// request, which is what becomes the mounted AGENTS.md. An empty result means
+// there is nothing to mount.
+func instructionsText(req *model.LLMRequest) string {
+	if req == nil || req.Config == nil || req.Config.SystemInstruction == nil {
+		return ""
+	}
+
+	var sb strings.Builder
+
+	for _, part := range req.Config.SystemInstruction.Parts {
+		if part != nil {
+			sb.WriteString(part.Text)
+		}
+	}
+
+	return sb.String()
 }
 
 // promptText flattens request content into the single string the Interactions

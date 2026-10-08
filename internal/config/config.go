@@ -12,9 +12,6 @@ const (
 	DetailDetailed DetailLevel = "detailed"
 )
 
-// ProfileName identifies an AI agent profile used for commit message generation.
-type ProfileName string
-
 // Config is the domain entity representing the full application configuration.
 // It contains no format-specific tags — it is the pure business concept.
 // Zero values represent "not set" and are treated as undefined, allowing
@@ -25,7 +22,6 @@ type ProfileName string
 // non-nil pointer — including one pointing to 0 — means "explicitly set".
 type Config struct {
 	DetailLevel DetailLevel
-	Profile     ProfileName
 	Model       string
 	Hint        string
 	History     *int
@@ -128,10 +124,6 @@ func (c Config) Merge(override Config) Config {
 
 	if override.DetailLevel != "" {
 		merged.DetailLevel = override.DetailLevel
-	}
-
-	if override.Profile != "" {
-		merged.Profile = override.Profile
 	}
 
 	if override.Model != "" {

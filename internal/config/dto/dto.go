@@ -8,7 +8,6 @@ import "gud/internal/config"
 // round-trips; nil means the key is absent and is omitted from output.
 type ConfigDTO struct {
 	DetailLevel string `json:"detail_level,omitempty"`
-	Profile     string `json:"profile,omitempty"`
 	Model       string `json:"model,omitempty"`
 	Hint        string `json:"hint,omitempty"`
 	History     *int   `json:"history,omitempty"`
@@ -20,7 +19,6 @@ type ConfigDTO struct {
 func (d ConfigDTO) ToEntity() config.Config {
 	return config.Config{
 		DetailLevel: config.DetailLevel(d.DetailLevel),
-		Profile:     config.ProfileName(d.Profile),
 		Model:       d.Model,
 
 		Hint:     d.Hint,
@@ -34,7 +32,6 @@ func (d ConfigDTO) ToEntity() config.Config {
 func FromEntity(c config.Config) ConfigDTO {
 	return ConfigDTO{
 		DetailLevel: string(c.DetailLevel),
-		Profile:     string(c.Profile),
 		Model:       c.Model,
 
 		Hint:     c.Hint,

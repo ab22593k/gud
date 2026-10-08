@@ -145,10 +145,8 @@ func runHookUninstall(ctx context.Context, global bool) error {
 const hookTimeout = 2 * time.Minute
 
 func runHookMode(cmd *cobra.Command, msgFile string) error {
-	// Hook mode must never block the user's commit. Use the tolerant
-	// constructor: a configured profile that isn't cached degrades to an
-	// empty profile (resolveProfileContent returns "") instead of failing.
-	app, err := NewAppContextTolerant(cmd)
+	// Hook mode must never block the user's commit.
+	app, err := NewAppContext(cmd)
 	if err != nil {
 		return err
 	}
@@ -192,11 +190,11 @@ func generateAndWriteMsg(ctx context.Context, app *AppContext, diff, msgFile str
 	}
 
 	cfg := app.Config()
-	profileContent := resolveProfileContent(string(cfg.Profile))
+	instructions := resolveAgentInstructions(ctx, app)
 
 	msg, err := app.Client().GenerateCommitMessageWithContent(
 		ctx, diff, "", cfg.DetailLevel,
-		cfg.Hint, cfg.Profile, profileContent, cfg.WrapLine,
+		cfg.Hint, instructions, cfg.WrapLine,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to generate commit message: %w", err)

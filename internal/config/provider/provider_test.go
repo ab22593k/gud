@@ -36,7 +36,6 @@ func TestSaveAndLoad(t *testing.T) {
 
 	original := config.Config{
 		DetailLevel: config.DetailDetailed,
-		Profile:     config.ProfileName("chemist"),
 		Model:       "gemini-flash-latest",
 		Hint:        "focus on catalysis",
 		History:     config.Ptr(10),

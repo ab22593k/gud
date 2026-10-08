@@ -15,14 +15,11 @@ concisely describe code changes in natural language
 
 ```bash
 git message                          Generate a commit message from staged changes
-git message --profile <slug>         Use a scientific agent profile
 git message --detail detailed        More verbose commit messages
 git message --issue 123,456          Reference fixed issues (adds "Fixes: #123" trailer per issue)
 git message --amend                  Regenerate the HEAD message
 git message --amend HEAD~2           Regenerate only the HEAD~2 message
 git message hook install             Install git prepare-commit-msg hook
-git message profile list --remote    Browse available AI profiles
-git message profile save <slug>      Download a profile
 git wire <url> -t <dir>  Fetch one subfolder (tracked for updates)
 git wire update <dir>    Update a tracked folder from its source
 git wire list            Show tracked folders and sync state
@@ -60,19 +57,16 @@ network.
 
 Priority (highest to lowest): CLI flags → env vars → `./gud.json` → `~/.config/gud/config.json`
 
-Key env vars: `GOOGLE_API_KEY`, `GUD_MODEL`, `GUD_DETAIL_LEVEL`, `GUD_PROFILE`
+Key env vars: `GOOGLE_API_KEY`, `GUD_MODEL`, `GUD_DETAIL_LEVEL`
 
 Set `GUD_LOG_LEVEL=debug` (also `info`, `warn`, `error`) to see diagnostics on stderr:
 
-## Profiles
+## Repository instructions
 
-Browse 500+ scientific agent profiles from the [scientific-agents](https://github.com/K-Dense-AI/scientific-agents) catalog:
-
-```bash
-git message profile list --remote
-git message profile save astrophysicist
-git message --profile astrophysicist
-```
+`git message` reads `AGENTS.md` from the directory it was invoked in, falling
+back to the repository root, and mounts it into the agent's environment as its
+instructions. Repository conventions therefore apply to the generated commit
+message without being pasted into the prompt.
 
 ```bash
 git message

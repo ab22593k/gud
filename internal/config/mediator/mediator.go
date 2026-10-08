@@ -127,7 +127,6 @@ func validateStrict(cfg config.Config) error {
 		"model":     cfg.Model,
 		fieldAPIKey: cfg.APIKey,
 		"hint":      cfg.Hint,
-		"profile":   string(cfg.Profile),
 	}
 
 	for name, value := range stringFields {
