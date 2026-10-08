@@ -19,7 +19,7 @@
 
 **Purpose**: Baseline verification before the rework
 
-- [X] T001 Verify clean baseline: `go build ./cmd/git-wire`, `go test ./... ./internal/git/... ./internal/request/...`, `golangci-lint run`, `git diff --check` from repo root
+- [x] T001 Verify clean baseline: `go build ./cmd/git-wire`, `go test ./... ./internal/git/... ./internal/request/...`, `golangci-lint run`, `git diff --check` from repo root
 
 ---
 
@@ -29,12 +29,12 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [X] T002 Create `internal/wire/registry.go` with versioned envelope (`version` MUST equal `1`, `entries` map) plus entry type carrying byte-identical fields to the retired record (`source_url`, `host`/`owner`/`repo`/`ref`/`subpath`, `resolved_commit` 40 lowercase hex, `export_hash` 64 lowercase hex, RFC 3339 `fetched_at`/`updated_at`)
-- [X] T003 [P] Implement registry key rules in `internal/wire/registry.go`: registry-relative slash paths (`./auto_backup`); absolute, empty, or `..`-escaping keys rejected as invalid
-- [X] T004 [P] Implement registry I/O in `internal/wire/registry.go`: missing file reads as empty registry; atomic write via temp-file + rename; `Upsert` and single-key lookup; every domain function takes an explicit registry path (only the Cobra layer resolves it from the working directory)
-- [X] T005 Retire colocated persistence: delete `internal/wire/track.go` and `RecordPath` in `internal/wire/store.go`, moving entry-validation helpers (`isLowerHex`, schema checks) into `internal/wire/registry.go`
-- [X] T006 Add registry unit tests in `internal/wire/registry_test.go`: envelope round-trip, key normalization/rejection, missing-file tolerance, atomic write install, maximal-entry under-10-KB bound (SC-006 per folder), one bad entry fails the load naming the file and defect
-- [X] T007 Delete obsolete `internal/wire/track_test.go` cases covering colocated load/save paths (superseded by T006)
+- [x] T002 Create `internal/wire/registry.go` with versioned envelope (`version` MUST equal `1`, `entries` map) plus entry type carrying byte-identical fields to the retired record (`source_url`, `host`/`owner`/`repo`/`ref`/`subpath`, `resolved_commit` 40 lowercase hex, `export_hash` 64 lowercase hex, RFC 3339 `fetched_at`/`updated_at`)
+- [x] T003 [P] Implement registry key rules in `internal/wire/registry.go`: registry-relative slash paths (`./auto_backup`); absolute, empty, or `..`-escaping keys rejected as invalid
+- [x] T004 [P] Implement registry I/O in `internal/wire/registry.go`: missing file reads as empty registry; atomic write via temp-file + rename; `Upsert` and single-key lookup; every domain function takes an explicit registry path (only the Cobra layer resolves it from the working directory)
+- [x] T005 Retire colocated persistence: delete `internal/wire/track.go` and `RecordPath` in `internal/wire/store.go`, moving entry-validation helpers (`isLowerHex`, schema checks) into `internal/wire/registry.go`
+- [x] T006 Add registry unit tests in `internal/wire/registry_test.go`: envelope round-trip, key normalization/rejection, missing-file tolerance, atomic write install, maximal-entry under-10-KB bound (SC-006 per folder), one bad entry fails the load naming the file and defect
+- [x] T007 Delete obsolete `internal/wire/track_test.go` cases covering colocated load/save paths (superseded by T006)
 
 **Checkpoint**: `go test ./internal/wire/` compiles — callers (`fetch.go`, `update.go`, `list.go`) still reference removed symbols, so story phases rewire them; foundation ready means registry API is stable and tested
 
@@ -48,14 +48,14 @@
 
 ### Tests for User Story 1
 
-- [X] T008 [P] [US1] Rework fetch tests in `internal/wire/fetch_test.go` against explicit temp-dir registries: upsert creates entry, re-fetch upserts same key, non-empty target still refused without force, `-t .` self-containment (registry excluded from content hash)
-- [X] T009 [P] [US1] Add Cobra flag tests in `cmd/git-wire/core/wire_test.go`: `-n` creates `./NAME`, existing name refused, `-t` + `-n` fails naming the conflict with no fetch attempted, neither flag keeps `./<subpath-basename>` default
+- [x] T008 [P] [US1] Rework fetch tests in `internal/wire/fetch_test.go` against explicit temp-dir registries: upsert creates entry, re-fetch upserts same key, non-empty target still refused without force, `-t .` self-containment (registry excluded from content hash)
+- [x] T009 [P] [US1] Add Cobra flag tests in `cmd/git-wire/core/wire_test.go`: `-n` creates `./NAME`, existing name refused, `-t` + `-n` fails naming the conflict with no fetch attempted, neither flag keeps `./<subpath-basename>` default
 
 ### Implementation for User Story 1
 
-- [X] T010 [US1] Rework `Fetch` and `recordCheckout` in `internal/wire/fetch.go` to take an explicit registry path, upsert the entry on success, stop writing records into the target, and report `Tracked for future updates (<registry-path>).` in the success summary
-- [X] T011 [US1] Add `-n/--target-name` flag with single-segment validation (non-empty, no separators, no dot elements, no leading dash — same segment discipline as `ParseSourceURL`) and dual-flag usage-error rejection in `cmd/git-wire/core/wire.go` (`addWireTargetFlags`, `targetFromFlags`)
-- [X] T012 [US1] Run live fetch validation per `specs/001-git-wire-fetch/quickstart.md` §3 with `RUN_GITWIRE_INTEGRATION=1` (OCA example via `-t` and `-n`, dual-flag failure, `ls -a` pristine-target proof)
+- [x] T010 [US1] Rework `Fetch` and `recordCheckout` in `internal/wire/fetch.go` to take an explicit registry path, upsert the entry on success, stop writing records into the target, and report `Tracked for future updates (<registry-path>).` in the success summary
+- [x] T011 [US1] Add `-n/--target-name` flag with single-segment validation (non-empty, no separators, no dot elements, no leading dash — same segment discipline as `ParseSourceURL`) and dual-flag usage-error rejection in `cmd/git-wire/core/wire.go` (`addWireTargetFlags`, `targetFromFlags`)
+- [x] T012 [US1] Run live fetch validation per `specs/001-git-wire-fetch/quickstart.md` §3 with `RUN_GITWIRE_INTEGRATION=1` (OCA example via `-t` and `-n`, dual-flag failure, `ls -a` pristine-target proof)
 
 **Checkpoint**: US1 fully functional — fetch → pristine target + registry entry; `-n` and conflict rule behave per contract
 
@@ -69,14 +69,14 @@
 
 ### Tests for User Story 2
 
-- [X] T013 [P] [US2] Rework update tests in `internal/wire/update_test.go` against explicit temp-dir registries: entry lookup by key, single-entry default resolution, zero-entry `ErrNotACheckout`, multi-entry usage error naming candidates, missing target dir → diverged
-- [X] T014 [P] [US2] Update Cobra tests in `cmd/git-wire/core/wire_test.go` for reworked `updateTarget`: `--target-path` wins, then positional, then single-entry shortcut (zero/multi rules per contract)
+- [x] T013 [P] [US2] Rework update tests in `internal/wire/update_test.go` against explicit temp-dir registries: entry lookup by key, single-entry default resolution, zero-entry `ErrNotACheckout`, multi-entry usage error naming candidates, missing target dir → diverged
+- [x] T014 [P] [US2] Update Cobra tests in `cmd/git-wire/core/wire_test.go` for reworked `updateTarget`: `--target-path` wins, then positional, then single-entry shortcut (zero/multi rules per contract)
 
 ### Implementation for User Story 2
 
-- [X] T015 [US2] Rework `Update` in `internal/wire/update.go` to resolve via explicit registry path + entry key (no `LoadRecord`), keep merge matrix/force semantics untouched
-- [X] T016 [US2] Rework `updateTarget` in `cmd/git-wire/core/wire.go` to implement the single-entry default (resolve registry from cwd, count entries: one → use it, zero → `ErrNotACheckout`, multiple → usage error naming candidates)
-- [X] T017 [US2] Run live no-op update validation per `specs/001-git-wire-fetch/quickstart.md` §4 with `RUN_GITWIRE_INTEGRATION=1` (`Already up to date`, zero file rewrites)
+- [x] T015 [US2] Rework `Update` in `internal/wire/update.go` to resolve via explicit registry path + entry key (no `LoadRecord`), keep merge matrix/force semantics untouched
+- [x] T016 [US2] Rework `updateTarget` in `cmd/git-wire/core/wire.go` to implement the single-entry default (resolve registry from cwd, count entries: one → use it, zero → `ErrNotACheckout`, multiple → usage error naming candidates)
+- [x] T017 [US2] Run live no-op update validation per `specs/001-git-wire-fetch/quickstart.md` §4 with `RUN_GITWIRE_INTEGRATION=1` (`Already up to date`, zero file rewrites)
 
 **Checkpoint**: US1 + US2 both work — fetch then update (explicit and bare) against the registry
 
@@ -90,14 +90,14 @@
 
 ### Tests for User Story 3
 
-- [X] T018 [P] [US3] Rework list tests in `internal/wire/list_test.go` for registry-driven `List`: entries straight from registry, missing registry file → empty, missing target dir → `diverged`, no walk/depth-cap behavior
-- [X] T019 [P] [US3] Update Cobra tests in `cmd/git-wire/core/wire_test.go` for `listWith`: default root resolves the cwd registry, empty-registry message preserved
+- [x] T018 [P] [US3] Rework list tests in `internal/wire/list_test.go` for registry-driven `List`: entries straight from registry, missing registry file → empty, missing target dir → `diverged`, no walk/depth-cap behavior
+- [x] T019 [P] [US3] Update Cobra tests in `cmd/git-wire/core/wire_test.go` for `listWith`: default root resolves the cwd registry, empty-registry message preserved
 
 ### Implementation for User Story 3
 
-- [X] T020 [US3] Rewrite `List` in `internal/wire/list.go` to iterate registry entries (explicit registry path) with per-entry sync-state derivation; delete `findCheckouts`, `hasRecord`, `depth`, and `maxListDepth`
-- [X] T021 [US3] Rework `Entry` type in `internal/wire/list.go` (registry key + entry instead of colocated `Record`) and update `listSHA`/`describeCheckout`/`resolveSHA` call sites in `internal/wire/list.go` and `cmd/git-wire/core/wire.go`
-- [X] T022 [US3] Run offline degradation validation per `specs/001-git-wire-fetch/quickstart.md` §5 (unreachable rows, exit 0, locals untouched) plus guard-rails §6
+- [x] T020 [US3] Rewrite `List` in `internal/wire/list.go` to iterate registry entries (explicit registry path) with per-entry sync-state derivation; delete `findCheckouts`, `hasRecord`, `depth`, and `maxListDepth`
+- [x] T021 [US3] Rework `Entry` type in `internal/wire/list.go` (registry key + entry instead of colocated `Record`) and update `listSHA`/`describeCheckout`/`resolveSHA` call sites in `internal/wire/list.go` and `cmd/git-wire/core/wire.go`
+- [x] T022 [US3] Run offline degradation validation per `specs/001-git-wire-fetch/quickstart.md` §5 (unreachable rows, exit 0, locals untouched) plus guard-rails §6
 
 **Checkpoint**: All three stories independently functional against the registry
 
@@ -107,10 +107,10 @@
 
 **Purpose**: Gates, hygiene, and contract cross-checks
 
-- [X] T023 [P] Cross-check user-facing phrases against `specs/001-git-wire-fetch/contracts/cli.md` (`Fetched … at … into …`, `Tracked for future updates (<registry-path>)`, `Already up to date`, conflict/usage-error namings) and fix drift in `internal/wire/fetch.go`, `internal/wire/update.go`, `cmd/git-wire/core/wire.go`
-- [X] T024 [P] Remove remaining colocated-record references (doc comments in `internal/wire/doc.go`, `status.go`, error strings in `internal/wire/errors.go`, stale `Record` mentions) found via `rg -n 'RecordPath|colocated|track\.go|findCheckouts|maxListDepth' internal/wire cmd/git-wire`
-- [X] T025 Full gate run from repo root: `gofmt` on changed files, `go test ./... ./internal/git/... ./internal/request/...`, `golangci-lint run`, `git diff --check`
-- [X] T026 Run `specs/001-git-wire-fetch/quickstart.md` end-to-end (build binary, run-dir fetches, update, list, offline, guard rails) with `RUN_GITWIRE_INTEGRATION=1` and record results
+- [x] T023 [P] Cross-check user-facing phrases against `specs/001-git-wire-fetch/contracts/cli.md` (`Fetched … at … into …`, `Tracked for future updates (<registry-path>)`, `Already up to date`, conflict/usage-error namings) and fix drift in `internal/wire/fetch.go`, `internal/wire/update.go`, `cmd/git-wire/core/wire.go`
+- [x] T024 [P] Remove remaining colocated-record references (doc comments in `internal/wire/doc.go`, `status.go`, error strings in `internal/wire/errors.go`, stale `Record` mentions) found via `rg -n 'RecordPath|colocated|track\.go|findCheckouts|maxListDepth' internal/wire cmd/git-wire`
+- [x] T025 Full gate run from repo root: `gofmt` on changed files, `go test ./... ./internal/git/... ./internal/request/...`, `golangci-lint run`, `git diff --check`
+- [x] T026 Run `specs/001-git-wire-fetch/quickstart.md` end-to-end (build binary, run-dir fetches, update, list, offline, guard rails) with `RUN_GITWIRE_INTEGRATION=1` and record results
 
 ---
 
@@ -190,5 +190,5 @@ Single implementer recommended (shared `internal/wire` files across stories); a 
 
 ## Phase 7: Convergence
 
-- [X] T027 Detect already-up-to-date on re-fetch and skip re-download/rewrite per FR-008 (missing)
-- [X] T028 Report file-instead-of-folder subpaths as ErrMissingPath with parsed identity echoed per FR-011 (partial)
+- [x] T027 Detect already-up-to-date on re-fetch and skip re-download/rewrite per FR-008 (missing)
+- [x] T028 Report file-instead-of-folder subpaths as ErrMissingPath with parsed identity echoed per FR-011 (partial)

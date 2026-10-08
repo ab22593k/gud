@@ -18,7 +18,7 @@
 - Q: Where should the `.git-wire.json` tracking record live instead of inside the fetched folder? → A: Option A - single registry file at the run level mapping each target folder to its source.
 - Q: How should the new `--target-name` (`-n`) flag relate to the existing `--target-path` (`-t`) flag? → A: Option A - `-n NAME` creates a new `./NAME` folder and refuses if it exists, while `-t` keeps its full-path meaning; passing both flags together is an error.
 
-## User Scenarios & Testing *(mandatory)*
+## User Scenarios & Testing _(mandatory)_
 
 ### User Story 1 - Fetch a single subfolder from a hosted URL (Priority: P1)
 
@@ -158,7 +158,7 @@ observing a fast no-op with bounded cache size.
   The command reports the registry as invalid (naming the file and the
   problem) instead of guessing a source.
 
-## Requirements *(mandatory)*
+## Requirements _(mandatory)_
 
 ### Functional Requirements
 
@@ -166,7 +166,7 @@ observing a fast no-op with bounded cache size.
   (binary built from `cmd/git-wire`, invoked as `git wire`) that accepts a
   hosted repository subfolder URL as its primary input (e.g.
   `https://github.com/OCA/server-tools/tree/19.0/auto_backup`). The `git
-  message` command tree MUST NOT carry git-wire subcommands; the two
+message` command tree MUST NOT carry git-wire subcommands; the two
   binaries stay separated.
 - **FR-002**: The system MUST accept a `--target-path` flag with short form
   `-t` specifying where the subfolder contents are placed; both spellings MUST
@@ -240,7 +240,7 @@ observing a fast no-op with bounded cache size.
   reported by list/status. At update time a diverged checkout is further split
   per changed file into cleanly mergeable vs. conflicting (see FR-013).
 
-## Success Criteria *(mandatory)*
+## Success Criteria _(mandatory)_
 
 ### Measurable Outcomes
 

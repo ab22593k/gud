@@ -16,23 +16,23 @@ type gitignorePattern struct {
 	rootOnly bool // pattern contains a slash: relative to the .gitignore dir
 }
 
-// gitignoreMatcher prunes the stats walk using the repo's root .gitignore,
+// GitignoreMatcher prunes a walk using the repo's root .gitignore,
 // so vendored/generated trees (node_modules, vendor, build output) do not
 // dominate walk time or pollute the extension statistics.
-type gitignoreMatcher struct {
+type GitignoreMatcher struct {
 	patterns []gitignorePattern
 }
 
-// loadGitignore reads repoRoot/.gitignore. A missing or unreadable file
+// LoadGitignore reads repoRoot/.gitignore. A missing or unreadable file
 // yields an empty matcher: the walk then skips only .git.
-func loadGitignore(repoRoot string) *gitignoreMatcher {
+func LoadGitignore(repoRoot string) *GitignoreMatcher {
 	//nolint:gosec // G304: repoRoot is the user's own repo directory from the CLI.
 	data, err := os.ReadFile(filepath.Join(repoRoot, ".gitignore"))
 	if err != nil {
-		return &gitignoreMatcher{}
+		return &GitignoreMatcher{}
 	}
 
-	return &gitignoreMatcher{patterns: parseGitignore(string(data))}
+	return &GitignoreMatcher{patterns: parseGitignore(string(data))}
 }
 
 // parseGitignore compiles .gitignore patterns. Blank lines and '#' comments
@@ -89,7 +89,7 @@ func parseGitignore(data string) []gitignorePattern {
 
 // ignored reports whether the directory at rel (slash-separated path relative
 // to the repo root) should be pruned. The last matching pattern wins.
-func (m *gitignoreMatcher) ignored(rel string) bool {
+func (m *GitignoreMatcher) Ignored(rel string) bool {
 	ignored := false
 	base := path.Base(rel)
 

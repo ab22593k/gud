@@ -126,10 +126,10 @@ still refuses; `--force` discards).
 
 ## Troubleshooting
 
-| Symptom | Likely cause | Check |
-|---|---|---|
-| `unknown ref` on a slashed branch | v1 greedy ref parse (D3) | use the first-segment ref form or wait for `--ref` support |
-| `unreachable` for a private repo | git credentials absent | `git ls-remote <repo-url>` manually; tool reuses env git auth |
-| Slow first fetch, fast repeats | expected: mirror warms once (blobless), then SHA-compare no-ops | `GUD_LOG_LEVEL=debug` shows memo hits and skipped exports |
-| Stale worktrees under cache `worktrees/` | killed run skipped removal | `git -C <mirror> worktree prune`; next fetch/update prunes automatically |
-| Record rejected as invalid | hand-edited or newer-version record | error names file + defect; re-fetch to regenerate |
+| Symptom                                  | Likely cause                                                    | Check                                                                    |
+| ---------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `unknown ref` on a slashed branch        | v1 greedy ref parse (D3)                                        | use the first-segment ref form or wait for `--ref` support               |
+| `unreachable` for a private repo         | git credentials absent                                          | `git ls-remote <repo-url>` manually; tool reuses env git auth            |
+| Slow first fetch, fast repeats           | expected: mirror warms once (blobless), then SHA-compare no-ops | `GUD_LOG_LEVEL=debug` shows memo hits and skipped exports                |
+| Stale worktrees under cache `worktrees/` | killed run skipped removal                                      | `git -C <mirror> worktree prune`; next fetch/update prunes automatically |
+| Record rejected as invalid               | hand-edited or newer-version record                             | error names file + defect; re-fetch to regenerate                        |

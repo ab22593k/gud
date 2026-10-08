@@ -390,19 +390,20 @@ func TestInteractionsModel_UsesAntigravityAgent(t *testing.T) {
 	}
 }
 
-// With instructions the environment carries an inline source that lands the
-// content at the environment root, which is where the Antigravity runtime
-// looks for AGENTS.md.
-func TestInteractionsModel_MountsInstructionsAsAgentsMd(t *testing.T) {
+// Mounted files become inline sources at the paths they were given, so a
+// monorepo's tree of nested AGENTS.md files is reproduced in the sandbox.
+func TestInteractionsModel_MountsFilesAtTheirPaths(t *testing.T) {
 	t.Parallel()
 
 	fake := &fakeInteractionCreator{resp: interactionResponse("feat: add login endpoint")}
 	m := newInteractionsModel("gemini-3.5-flash-lite", fake)
 
-	req := llmRequest("prompt", "")
-	req.Config.SystemInstruction = genai.NewContentFromText("Use conventional commits.", "system")
+	mounts := []AgentFile{
+		{Path: RootMountPath, Content: "root conventions"},
+		{Path: "packages/ui/" + RootMountPath, Content: "ui conventions"},
+	}
 
-	collect(t, m.GenerateContent(context.Background(), req, false))
+	collect(t, m.GenerateWithMounts(context.Background(), llmRequest("prompt", ""), mounts))
 
 	env := fake.got.Body.CreateAgentInteraction.GetEnvironment()
 	if env == nil || env.Environment == nil {
@@ -410,28 +411,51 @@ func TestInteractionsModel_MountsInstructionsAsAgentsMd(t *testing.T) {
 	}
 
 	sources := env.Environment.Sources
-	if len(sources) != 1 {
-		t.Fatalf("sources = %d, want exactly 1", len(sources))
+	if len(sources) != len(mounts) {
+		t.Fatalf("sources = %d, want %d", len(sources), len(mounts))
 	}
 
-	src := sources[0]
-	if src.Type == nil || *src.Type != imodels.SourceTypeInline {
-		t.Errorf("source type = %v, want inline", src.Type)
-	}
+	for i, want := range mounts {
+		got := sources[i]
+		if got.Type == nil || *got.Type != imodels.SourceTypeInline {
+			t.Errorf("source %d type = %v, want inline", i, got.Type)
+		}
 
-	if src.Target == nil || *src.Target != agentsMdTarget {
-		t.Errorf("target = %v, want %q", src.Target, agentsMdTarget)
-	}
+		if got.Target == nil || *got.Target != want.Path {
+			t.Errorf("source %d target = %v, want %q", i, got.Target, want.Path)
+		}
 
-	if src.Content == nil || *src.Content != "Use conventional commits." {
-		t.Errorf("content = %v, want the instructions verbatim", src.Content)
+		if got.Content == nil || *got.Content != want.Content {
+			t.Errorf("source %d content = %v, want %q", i, got.Content, want.Content)
+		}
 	}
 }
 
-// Without instructions the environment stays the bare "remote" string: no
-// sources are sent, so a generation with nothing to mount is byte-identical to
-// one that never had the feature.
-func TestInteractionsModel_NoInstructionsSendsBareRemoteEnvironment(t *testing.T) {
+// The nearest file occupies the root slot, which is the one the Antigravity
+// runtime loads as system instructions — that is what makes it take precedence.
+func TestInteractionsModel_NearestFileTakesRootSlot(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeInteractionCreator{resp: interactionResponse("feat: add login endpoint")}
+	m := newInteractionsModel("gemini-3.5-flash-lite", fake)
+
+	collect(t, m.GenerateWithMounts(context.Background(), llmRequest("prompt", ""),
+		[]AgentFile{{Path: RootMountPath, Content: "nearest conventions"}}))
+
+	env := fake.got.Body.CreateAgentInteraction.GetEnvironment()
+	if env == nil || env.Environment == nil || len(env.Environment.Sources) != 1 {
+		t.Fatal("expected exactly one mounted source")
+	}
+
+	if got := env.Environment.Sources[0].GetTarget(); got == nil || *got != RootMountPath {
+		t.Errorf("target = %v, want %q", got, RootMountPath)
+	}
+}
+
+// Without files the environment stays the bare "remote" string: no sources are
+// sent, so a generation with nothing to mount is byte-identical to one that
+// never had the feature.
+func TestInteractionsModel_NoMountsSendsBareRemoteEnvironment(t *testing.T) {
 	t.Parallel()
 
 	fake := &fakeInteractionCreator{resp: interactionResponse("feat: add login endpoint")}
@@ -449,29 +473,19 @@ func TestInteractionsModel_NoInstructionsSendsBareRemoteEnvironment(t *testing.T
 	}
 }
 
-// An instruction made of several parts is concatenated, matching how the
-// prompt flattens multi-part content — a split instruction must not be
-// truncated to its first part.
-func TestInteractionsModel_ConcatenatesInstructionParts(t *testing.T) {
+// An empty mount list is the same as no list at all, not an environment with an
+// empty sources array.
+func TestInteractionsModel_EmptyMountListSendsBareRemoteEnvironment(t *testing.T) {
 	t.Parallel()
 
 	fake := &fakeInteractionCreator{resp: interactionResponse("feat: add login endpoint")}
 	m := newInteractionsModel("gemini-3.5-flash-lite", fake)
 
-	req := llmRequest("prompt", "")
-	req.Config.SystemInstruction = &genai.Content{
-		Parts: []*genai.Part{{Text: "first "}, {Text: "second"}},
-	}
-
-	collect(t, m.GenerateContent(context.Background(), req, false))
+	collect(t, m.GenerateWithMounts(context.Background(), llmRequest("prompt", ""), []AgentFile{}))
 
 	env := fake.got.Body.CreateAgentInteraction.GetEnvironment()
-	if env == nil || env.Environment == nil || len(env.Environment.Sources) != 1 {
-		t.Fatal("expected exactly one mounted source")
-	}
-
-	if got := env.Environment.Sources[0].GetContent(); got == nil || *got != "first second" {
-		t.Errorf("content = %v, want %q", env.Environment.Sources[0].GetContent(), "first second")
+	if env == nil || env.Str == nil || *env.Str != remoteEnvironment {
+		t.Errorf("environment = %v, want the bare %q string", env, remoteEnvironment)
 	}
 }
 

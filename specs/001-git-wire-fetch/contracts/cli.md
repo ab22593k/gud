@@ -51,7 +51,7 @@ extra positionals are a usage error.
 - Outcomes (stable phrases): `Already up to date (<commit-short>).` (no
   files rewritten — SC-004); `Updated <dir> to <commit-short> (<n> files).`
   (clean upstream-only change); `Merged <commit-short> into <dir> (<n>
-  upstream files, <m> local files kept).` (conflict-free merge with local
+upstream files, <m> local files kept).` (conflict-free merge with local
   edits preserved).
 - Missing upstream path/ref on a tracked source: hard error naming the
   source path; local files untouched.
@@ -75,11 +75,11 @@ as empty.
 
 ## Exit codes
 
-| Code | Meaning |
-|---|---|
-| `0` | Success, including no-op `Already up to date` and `list` with unreachable entries |
-| `1` | Operational failure (any sentinel above) with a user-facing message on stderr |
-| `2` | Usage error (bad flags/args) via Cobra convention |
+| Code | Meaning                                                                           |
+| ---- | --------------------------------------------------------------------------------- |
+| `0`  | Success, including no-op `Already up to date` and `list` with unreachable entries |
+| `1`  | Operational failure (any sentinel above) with a user-facing message on stderr     |
+| `2`  | Usage error (bad flags/args) via Cobra convention                                 |
 
 ## Non-goals (not in this contract)
 

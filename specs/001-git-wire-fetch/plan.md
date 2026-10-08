@@ -114,7 +114,7 @@ exactly one source.
 
 ## Constitution Check
 
-*GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
+_GATE: Must pass before Phase 0 research. Re-check after Phase 1 design._
 
 - **I. Gated Code Quality** — Plan mandates `gofmt -s`, `goimports`,
   `golangci-lint run`, ≤120-col lines, `funlen`-sized functions (the skill's
@@ -166,17 +166,17 @@ hermetic (Principle II); single-entry default avoids inventing batch sync
 
 **Skill-vs-constitution adjudication** (`@golang-clean-coder` items):
 
-| Skill item | Verdict | Reason |
-|---|---|---|
-| Stepdown/newspaper layout, small funcs, SRP, one abstraction level | ADOPT | Fits inside funlen/lll gates; file order = policy → helpers in call order |
-| Domain types over primitives (`SourceRef`, `Checkout`, `SyncState`) | ADOPT | Cures primitive obsession; aligns with explicit pointer/zero-value config semantics |
-| Isolated error handling (happy-path extraction) | ADOPT | Complements `%w` + sentinel-error taxonomy |
-| `slog` structured logging | ADOPT | Already the repo standard (`GUD_LOG_LEVEL=debug` observability) |
-| `context.Context` first on I/O paths | ADOPT | Matches `internal/git` execution helpers and lint (`noctx`, `fatcontext`) |
-| `synctest` concurrency bubbles | REJECT (v1) | No concurrency planned — fetch/update/list run sequentially; no goroutines, no `time.Sleep` in logic. Revisit only if parallel multi-folder update is proposed |
-| Memory arenas (`src/arena`) | REJECT | No performance-critical bulk allocation; tree copy uses bounded buffers. YAGNI (Principle III) |
-| Native `uuid` package | REJECT | No generated identities needed — natural keys are (repo, ref, subpath) and content SHAs. New import without a caller is speculative (Principle III) |
-| Interfaces/polymorphism beyond one seam | DEFER | Single narrow `fetcher` interface for testability; no switch chains exist to replace. Further abstraction only with a second caller |
+| Skill item                                                          | Verdict     | Reason                                                                                                                                                         |
+| ------------------------------------------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Stepdown/newspaper layout, small funcs, SRP, one abstraction level  | ADOPT       | Fits inside funlen/lll gates; file order = policy → helpers in call order                                                                                      |
+| Domain types over primitives (`SourceRef`, `Checkout`, `SyncState`) | ADOPT       | Cures primitive obsession; aligns with explicit pointer/zero-value config semantics                                                                            |
+| Isolated error handling (happy-path extraction)                     | ADOPT       | Complements `%w` + sentinel-error taxonomy                                                                                                                     |
+| `slog` structured logging                                           | ADOPT       | Already the repo standard (`GUD_LOG_LEVEL=debug` observability)                                                                                                |
+| `context.Context` first on I/O paths                                | ADOPT       | Matches `internal/git` execution helpers and lint (`noctx`, `fatcontext`)                                                                                      |
+| `synctest` concurrency bubbles                                      | REJECT (v1) | No concurrency planned — fetch/update/list run sequentially; no goroutines, no `time.Sleep` in logic. Revisit only if parallel multi-folder update is proposed |
+| Memory arenas (`src/arena`)                                         | REJECT      | No performance-critical bulk allocation; tree copy uses bounded buffers. YAGNI (Principle III)                                                                 |
+| Native `uuid` package                                               | REJECT      | No generated identities needed — natural keys are (repo, ref, subpath) and content SHAs. New import without a caller is speculative (Principle III)            |
+| Interfaces/polymorphism beyond one seam                             | DEFER       | Single narrow `fetcher` interface for testability; no switch chains exist to replace. Further abstraction only with a second caller                            |
 
 ## Project Structure
 
@@ -207,28 +207,29 @@ cmd/git-wire/             # NEW standalone binary (invoked as `git wire`); mirro
 cmd/git-message/core/     # git-wire REMOVED: gitwire.go + gitwire_test.go deleted, registration dropped
 ```
 
-internal/wire/          # NEW package, root module (mirrors internal/profile, internal/detect precedent)
-├── source.go            # SourceRef domain type + ParseSourceURL (pure, table-tested)
+internal/wire/ # NEW package, root module (mirrors internal/profile, internal/detect precedent)
+├── source.go # SourceRef domain type + ParseSourceURL (pure, table-tested)
 ├── source_test.go
-├── registry.go         # Run-level `.git-wire.json` registry: envelope + entries, atomic load/save/validate (D12)
-├── registry_test.go   # Envelope round-trip, key normalization/rejection, atomicity, missing-file tolerance
-├── fetch.go             # Fetch orchestration + `-n` name validation/creation (happy path extracted)
-├── fetch_test.go        # Orchestration against fake fetcher (divergence, no-op, missing-source cases)
-├── status.go            # Sync-state derivation (pure) + registry-driven list (walk retired)
+├── registry.go # Run-level `.git-wire.json` registry: envelope + entries, atomic load/save/validate (D12)
+├── registry_test.go # Envelope round-trip, key normalization/rejection, atomicity, missing-file tolerance
+├── fetch.go # Fetch orchestration + `-n` name validation/creation (happy path extracted)
+├── fetch_test.go # Orchestration against fake fetcher (divergence, no-op, missing-source cases)
+├── status.go # Sync-state derivation (pure) + registry-driven list (walk retired)
 ├── status_test.go
-├── hash.go              # Aggregate content-SHA walker (stdlib sha256, bounded buffers)
+├── hash.go # Aggregate content-SHA walker (stdlib sha256, bounded buffers)
 ├── hash_test.go
-├── copytree.go          # Tree copy-out from populated sparse worktree (regular files only, budgets)
+├── copytree.go # Tree copy-out from populated sparse worktree (regular files only, budgets)
 ├── copytree_test.go
-├── merge.go             # File-level three-way merge: classify (pure) + apply onto staging (D10)
-├── merge_test.go        # Classification matrix + apply tests against fake base/new commits
-└── errors.go            # Sentinel errors + user-facing mapping (one place, no scattered switches)
+├── merge.go # File-level three-way merge: classify (pure) + apply onto staging (D10)
+├── merge_test.go # Classification matrix + apply tests against fake base/new commits
+└── errors.go # Sentinel errors + user-facing mapping (one place, no scattered switches)
 
-internal/git/           # SEPARATE module gud/internal/git (boundary preserved, see Complexity Tracking)
-├── wire.go              # NEW: narrow exported surface — CloneMirror, FetchMirror, LsRemoteSHA,
-│                        #   TreeExists, AddSparseWorktree, RemoveWorktree, PruneWorktrees
-│                        #   (ExportArchive RETIRED by the sparse-checkout amendment)
-├── wire_test.go         # Unit tests with local git repos where possible; network paths via seam
+internal/git/ # SEPARATE module gud/internal/git (boundary preserved, see Complexity Tracking)
+├── wire.go # NEW: narrow exported surface — CloneMirror, FetchMirror, LsRemoteSHA,
+│ # TreeExists, AddSparseWorktree, RemoveWorktree, PruneWorktrees
+│ # (ExportArchive RETIRED by the sparse-checkout amendment)
+├── wire_test.go # Unit tests with local git repos where possible; network paths via seam
+
 ```
 
 **Structure Decision**: Two thin CLI trees over one domain library. The wire
@@ -249,3 +250,4 @@ live in the root module.
 |---|---|---|
 | New `internal/wire` package instead of adding to `core/` | Command needs a testable domain layer (parse/track/hash/state) independent of Cobra; `core/` files are presentation + handlers per `profile.go` precedent, and `internal/profile`, `internal/detect` establish one-package-per-area as the house pattern | Putting orchestration in `core/gitwire.go` would mix CLI presentation with fetch policy, violating one-level-of-abstraction and making deterministic tests depend on Cobra plumbing |
 | Narrow exported addition to `internal/git` module (`CloneMirror`, `FetchMirror`, `LsRemoteSHA`, `TreeExists`, `AddSparseWorktree`, `RemoveWorktree`, `PruneWorktrees`) | `exec.go` declares that module the single place where gud spawns git; worktree lifecycle and sparse-checkout invocation need its subprocess discipline (fixed `git` binary, G204 rationale, no-prompt env, error wrapping) | Duplicating subprocess handling in the root module risks divergent arg-safety for URL-derived operands; the addition is small coherent transport surface, no new deps, no change to existing API |
+```

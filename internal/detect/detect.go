@@ -25,7 +25,7 @@ type RepoStats struct {
 // about.
 func ComputeStatsWithContext(ctx context.Context, repoRoot string) (*RepoStats, error) {
 	stats := &RepoStats{FilesByExtension: make(map[string]int)}
-	matcher := loadGitignore(repoRoot)
+	matcher := LoadGitignore(repoRoot)
 
 	err := filepath.WalkDir(repoRoot, func(p string, d fs.DirEntry, err error) error {
 		if ctx.Err() != nil {
@@ -41,7 +41,7 @@ func ComputeStatsWithContext(ctx context.Context, repoRoot string) (*RepoStats, 
 				return filepath.SkipDir
 			}
 
-			if p != repoRoot && matcher.ignored(relPath(repoRoot, p)) {
+			if p != repoRoot && matcher.Ignored(relPath(repoRoot, p)) {
 				return filepath.SkipDir
 			}
 

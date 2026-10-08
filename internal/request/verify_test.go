@@ -87,7 +87,7 @@ func TestGenerate_RegeneratesOnFindings(t *testing.T) {
 	client := NewClientWithGenerator(llm, "m")
 
 	got, err := client.GenerateCommitMessageWithContent(context.Background(), diff, "",
-		DetailStandard, "", "", defaultWrapLine)
+		DetailStandard, "", nil, defaultWrapLine)
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
@@ -107,7 +107,7 @@ func TestGenerate_ReturnsLastOnPersistentFindings(t *testing.T) {
 	client := NewClientWithGenerator(llm, "m")
 
 	got, err := client.GenerateCommitMessageWithContent(context.Background(), diff, "",
-		DetailStandard, "", "", defaultWrapLine)
+		DetailStandard, "", nil, defaultWrapLine)
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}

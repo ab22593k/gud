@@ -190,11 +190,11 @@ func generateAndWriteMsg(ctx context.Context, app *AppContext, diff, msgFile str
 	}
 
 	cfg := app.Config()
-	instructions := resolveAgentInstructions(ctx, app)
+	mounts := resolveAgentFiles(ctx, app)
 
 	msg, err := app.Client().GenerateCommitMessageWithContent(
 		ctx, diff, "", cfg.DetailLevel,
-		cfg.Hint, instructions, cfg.WrapLine,
+		cfg.Hint, mounts, cfg.WrapLine,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to generate commit message: %w", err)

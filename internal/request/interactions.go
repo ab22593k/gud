@@ -31,11 +31,11 @@ const (
 	// turn reattaches to.
 	remoteEnvironment = "remote"
 
-	// agentsMdTarget is where a mounted AGENTS.md lands: the root of the
-	// environment, which is the directory the agent works in. The Antigravity
-	// runtime scans .agents/ and the environment root for this file and loads
-	// it as system instructions on startup.
-	agentsMdTarget = "AGENTS.md"
+	// RootMountPath is the environment-root location the Antigravity runtime
+	// loads as system instructions on startup. Discovery puts the nearest
+	// AGENTS.md there, which is what makes the closest file take precedence
+	// over every other one mounted.
+	RootMountPath = "AGENTS.md"
 
 	// agentDefaultModel is the Antigravity agent's own default model, applied
 	// when the configured model is not one the agent offers.
@@ -56,6 +56,40 @@ var antigravityModels = []string{
 	"gemini-3.5-flash-lite",
 }
 
+// AgentFile is one AGENTS.md to mount into the agent's environment. Path is
+// the slash-separated location it occupies there — relative to the environment
+// root, or the root itself for the nearest file — and Content is its text.
+type AgentFile struct {
+	Path    string
+	Content string
+}
+
+// Generator is the seam Client uses to reach the model.
+//
+// It extends model.LLM with the AGENTS.md mount list because the ADK signature
+// carries no field for one: GenerateContent's *model.LLMRequest can hold a
+// system instruction, but not a set of files to place in the agent's
+// environment. Adapters that mount nothing ignore the list.
+type Generator interface {
+	model.LLM
+
+	GenerateWithMounts(
+		ctx context.Context, req *model.LLMRequest, mounts []AgentFile,
+	) iter.Seq2[*model.LLMResponse, error]
+}
+
+// plainGenerator adapts a model.LLM into a Generator that discards mounts, for
+// callers that only exercise prompt construction.
+type plainGenerator struct {
+	model.LLM
+}
+
+func (p plainGenerator) GenerateWithMounts(
+	ctx context.Context, req *model.LLMRequest, _ []AgentFile,
+) iter.Seq2[*model.LLMResponse, error] {
+	return p.LLM.GenerateContent(ctx, req, false)
+}
+
 // interactionCreator is the slice of the Interactions API this adapter uses.
 // *interactions.Interactions satisfies it; tests substitute a fake so no
 // generation reaches the network.
@@ -68,9 +102,10 @@ type interactionCreator interface {
 // interactionsModel routes commit-message generation through the Gemini
 // Antigravity agent while presenting the agent toolkit's model.LLM interface.
 //
-// Implementing that interface rather than calling the Interactions API directly
-// is deliberate: Client.modelImpl is typed as model.LLM, so every call site,
-// every test mock, and the test-only generator constructor are unchanged.
+// Presenting that interface is deliberate: Client.modelImpl is typed as
+// Generator, which model.LLM satisfies, so every call site and every test mock
+// stays unchanged. The mount-aware suffix exists only because the ADK signature
+// has no field for a file list.
 //
 // Each generation is a single independent interaction. No previous-interaction
 // reference is sent, so no conversation state accumulates across invocations
@@ -89,7 +124,8 @@ func newInteractionsModel(name string, creator interactionCreator) *interactions
 func (m *interactionsModel) Name() string { return m.name }
 
 // GenerateContent performs one interaction and yields exactly one aggregated
-// response.
+// response. It is model.LLM's entry point; the mount-aware path is
+// GenerateWithMounts, which this delegates to with nothing to mount.
 //
 // The stream argument is accepted to satisfy model.LLM but does not select
 // partial delivery: gud always consumes a single complete message, and a
@@ -98,8 +134,17 @@ func (m *interactionsModel) Name() string { return m.name }
 func (m *interactionsModel) GenerateContent(
 	ctx context.Context, req *model.LLMRequest, _ bool,
 ) iter.Seq2[*model.LLMResponse, error] {
+	return m.GenerateWithMounts(ctx, req, nil)
+}
+
+// GenerateWithMounts performs one interaction, mounting the given AGENTS.md
+// files into the agent's environment, and yields exactly one aggregated
+// response.
+func (m *interactionsModel) GenerateWithMounts(
+	ctx context.Context, req *model.LLMRequest, mounts []AgentFile,
+) iter.Seq2[*model.LLMResponse, error] {
 	return func(yield func(*model.LLMResponse, error) bool) {
-		resp, err := m.create(ctx, req)
+		resp, err := m.create(ctx, req, mounts)
 		if err != nil {
 			yield(nil, err)
 
@@ -112,13 +157,13 @@ func (m *interactionsModel) GenerateContent(
 
 // create performs the interaction and converts the result into a model.LLMResponse.
 func (m *interactionsModel) create(
-	ctx context.Context, req *model.LLMRequest,
+	ctx context.Context, req *model.LLMRequest, mounts []AgentFile,
 ) (*model.LLMResponse, error) {
 	res, err := m.creator.Create(ctx, operations.CreateInteractionRequest{
 		Body: operations.NewCreateInteractionRequestBody(imodels.CreateAgentInteraction{
 			Agent:       antigravityAgent,
 			Input:       genai.Ptr(imodels.NewInteractionsInput(promptText(req.Contents))),
-			Environment: genai.Ptr(agentEnvironment(instructionsText(req))),
+			Environment: genai.Ptr(agentEnvironment(mounts)),
 			AgentConfig: agentConfig(m.resolveModel(req)),
 		}),
 	})
@@ -237,43 +282,33 @@ func agentConfig(model string) *imodels.CreateAgentInteractionAgentConfig {
 	}))
 }
 
-// agentEnvironment builds the remote environment, mounting AGENTS.md content as
-// .agents/AGENTS.md when the caller supplied instructions.
+// agentEnvironment builds the remote environment, mounting every AGENTS.md the
+// caller discovered.
 //
 // With nothing to mount the bare "remote" string is sent instead, which
-// provisions the sandbox unchanged; sources are only added when there is a file
-// to put in it.
-func agentEnvironment(instructions string) imodels.CreateAgentInteractionEnvironment {
-	if instructions == "" {
+// provisions the sandbox unchanged.
+//
+// Files keep the paths they were given, so a monorepo's tree of nested
+// AGENTS.md files is reproduced in the sandbox. The nearest file occupies the
+// environment root, which is the slot the Antigravity runtime loads as system
+// instructions; the rest sit at their repository-relative paths, where the
+// agent can read the one that matches whatever it is looking at.
+func agentEnvironment(mounts []AgentFile) imodels.CreateAgentInteractionEnvironment {
+	if len(mounts) == 0 {
 		return imodels.NewCreateAgentInteractionEnvironment(remoteEnvironment)
 	}
 
-	return imodels.NewCreateAgentInteractionEnvironment(imodels.Environment{
-		Sources: []imodels.Source{{
+	sources := make([]imodels.Source, 0, len(mounts))
+
+	for _, file := range mounts {
+		sources = append(sources, imodels.Source{
 			Type:    imodels.SourceTypeInline.ToPointer(),
-			Target:  genai.Ptr(agentsMdTarget),
-			Content: genai.Ptr(instructions),
-		}},
-	})
-}
-
-// instructionsText reads the system instruction the client carried on the
-// request, which is what becomes the mounted AGENTS.md. An empty result means
-// there is nothing to mount.
-func instructionsText(req *model.LLMRequest) string {
-	if req == nil || req.Config == nil || req.Config.SystemInstruction == nil {
-		return ""
+			Target:  genai.Ptr(file.Path),
+			Content: genai.Ptr(file.Content),
+		})
 	}
 
-	var sb strings.Builder
-
-	for _, part := range req.Config.SystemInstruction.Parts {
-		if part != nil {
-			sb.WriteString(part.Text)
-		}
-	}
-
-	return sb.String()
+	return imodels.NewCreateAgentInteractionEnvironment(imodels.Environment{Sources: sources})
 }
 
 // promptText flattens request content into the single string the Interactions

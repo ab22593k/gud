@@ -28,9 +28,9 @@ type ClientConfig struct {
 	Model  string
 }
 
-// Client wraps an ADK model.LLM for generating commit messages.
+// Client wraps a Generator for generating commit messages.
 type Client struct {
-	modelImpl model.LLM
+	modelImpl Generator
 	model     string
 }
 
@@ -103,13 +103,15 @@ func (c *Client) ModelName() string {
 }
 
 // NewClientWithGenerator creates a new client with a custom model for testing.
+// The generator mounts nothing: only the Antigravity adapter places files in
+// the environment, so a test generator is wrapped in one that discards them.
 func NewClientWithGenerator(llm model.LLM, modelName string) *Client {
 	if modelName == "" {
 		modelName = defaultModel
 	}
 
 	return &Client{
-		modelImpl: llm,
+		modelImpl: plainGenerator{llm},
 		model:     modelName,
 	}
 }
@@ -129,37 +131,38 @@ func withDefaultTimeout(ctx context.Context, d time.Duration) (context.Context, 
 func (c *Client) GenerateCommitMessage(
 	ctx context.Context, diff, commitContext string, detailLevel DetailLevel, hint string,
 ) (string, error) {
-	return c.GenerateCommitMessageWithContent(ctx, diff, commitContext, detailLevel, hint, "", defaultWrapLine)
+	return c.GenerateCommitMessageWithContent(ctx, diff, commitContext, detailLevel, hint, nil, defaultWrapLine)
 }
 
-// GenerateCommitMessageWithContent generates a commit message, mounting
-// systemContent as AGENTS.md in the agent's environment. An empty
-// systemContent leaves the default system prompt inline in the task.
+// GenerateCommitMessageWithContent generates a commit message, mounting the
+// given AGENTS.md files into the agent's environment. The list is ordered
+// nearest first, so mounts[0] supplies the instruction set. An empty list
+// leaves the default system prompt inline in the task.
 func (c *Client) GenerateCommitMessageWithContent(
 	ctx context.Context, diff, commitContext string, detailLevel DetailLevel, hint string,
-	systemContent string, wrapLine int,
+	mounts []AgentFile, wrapLine int,
 ) (string, error) {
 	if diff == "" {
 		return "", errors.New("diff is required")
 	}
 
-	instructions, task := BuildAgentPrompt(diff, commitContext, detailLevel, hint, systemContent, wrapLine)
+	// The nearest file becomes the mounted root AGENTS.md, so its content is the
+	// instruction set: when there is one, the default system prompt stays out of
+	// the task and the guidance is not sent twice by two different routes.
+	primary := ""
+	if len(mounts) > 0 {
+		primary = mounts[0].Content
+	}
+
+	_, task := BuildAgentPrompt(diff, commitContext, detailLevel, hint, primary, wrapLine)
 
 	slog.Debug("generating commit message", "model", c.model, "detailLevel", detailLevel, "diff_bytes", len(diff),
-		"ctx_bytes", len(commitContext), "agents_md_bytes", len(instructions))
-
-	// The instructions ride on the request rather than inside the prompt so the
-	// adapter can mount them as AGENTS.md. Leaving them inline as well would
-	// send the same guidance twice, by two different routes.
-	cfg := &genai.GenerateContentConfig{}
-	if instructions != "" {
-		cfg.SystemInstruction = genai.NewContentFromText(instructions, "system")
-	}
+		"ctx_bytes", len(commitContext), "agents_md_files", len(mounts), "agents_md_bytes", len(primary))
 
 	req := &model.LLMRequest{
 		Model:    c.model,
 		Contents: genai.Text(task),
-		Config:   cfg,
+		Config:   &genai.GenerateContentConfig{},
 	}
 
 	ctx, cancel := withDefaultTimeout(ctx, defaultGenerateTimeout)
@@ -167,7 +170,7 @@ func (c *Client) GenerateCommitMessageWithContent(
 
 	tm := obs.Start("model.generate")
 
-	result, err := generateVerified(ctx, c, req, diff, wrapLine)
+	result, err := generateVerified(ctx, c, req, diff, wrapLine, mounts)
 
 	tm.Done("model", c.model, "ok", err == nil)
 
@@ -188,14 +191,14 @@ const maxVerifyAttempts = 2
 // return immediately with the historical error messages; persistent heuristic
 // findings serve the last output.
 func generateVerified(
-	ctx context.Context, c *Client, req *model.LLMRequest, diff string, wrapLine int,
+	ctx context.Context, c *Client, req *model.LLMRequest, diff string, wrapLine int, mounts []AgentFile,
 ) (string, error) {
 	var result string
 
 	for attempt := 1; attempt <= maxVerifyAttempts; attempt++ {
 		var err error
 
-		result, err = generateWithRetry(ctx, c, req)
+		result, err = generateWithRetry(ctx, c, req, mounts)
 		if err != nil {
 			return "", fmt.Errorf("failed to generate content: %w", err)
 		}
@@ -244,7 +247,9 @@ func isTransientErr(err error) bool {
 
 // generateWithRetry calls generateContent with up to 2 retries on transient
 // errors (200ms then 500ms backoff). It respects ctx cancellation.
-func generateWithRetry(ctx context.Context, c *Client, req *model.LLMRequest) (string, error) {
+func generateWithRetry(
+	ctx context.Context, c *Client, req *model.LLMRequest, mounts []AgentFile,
+) (string, error) {
 	backoffs := []time.Duration{200 * time.Millisecond, 500 * time.Millisecond}
 
 	var result string
@@ -252,7 +257,7 @@ func generateWithRetry(ctx context.Context, c *Client, req *model.LLMRequest) (s
 	var err error
 
 	for attempt := 0; ; attempt++ {
-		result, err = generateContent(ctx, c, req)
+		result, err = generateContent(ctx, c, req, mounts)
 		if err == nil || ctx.Err() != nil || !isTransientErr(err) || attempt >= len(backoffs) {
 			return result, err
 		}
@@ -266,10 +271,12 @@ func generateWithRetry(ctx context.Context, c *Client, req *model.LLMRequest) (s
 	}
 }
 
-func generateContent(ctx context.Context, c *Client, req *model.LLMRequest) (string, error) {
+func generateContent(
+	ctx context.Context, c *Client, req *model.LLMRequest, mounts []AgentFile,
+) (string, error) {
 	var response *model.LLMResponse
 
-	for resp, err := range c.modelImpl.GenerateContent(ctx, req, false) {
+	for resp, err := range c.modelImpl.GenerateWithMounts(ctx, req, mounts) {
 		if err != nil {
 			return "", fmt.Errorf("model error: %w", err)
 		}

@@ -20,7 +20,7 @@ follows the required format.
   bare mirror. For each fetch/update materialization, create an ephemeral
   detached linked worktree (`git worktree add --detach --no-checkout`),
   populate ONLY the requested subpath with `git sparse-checkout set
-  <subpath>` (cone mode; blobs fetched on demand for the subset only), copy
+<subpath>` (cone mode; blobs fetched on demand for the subset only), copy
   the populated files out to the target with a pure-Go tree copy, then
   remove the worktree (`git worktree remove --force`).
 - **Ordering constraint** (load-bearing for SC-002): worktree added with
@@ -33,26 +33,26 @@ follows the required format.
   path; if the git version under test refuses, the fallback is a non-bare
   no-checkout mirror. Implementation tests decide; both satisfy the mandate.
 - **Rationale**: satisfies the literal mandate observably (`sparse-checkout
-  set` populates exactly the requested subset); preserves everything the
+set` populates exactly the requested subset); preserves everything the
   original D1 achieved (SC-002 proportionality, any-host generality,
   environment git credentials, precise commit tracking, no new dependencies
   — stdlib copy replaces stdlib tar); avoids shared-mutable-worktree
   fragility; ephemeral state keeps the cache light per the user's primary
   focus.
 - **Alternatives considered**:
-  - *`git archive` export (shipped v1)*: retired — meets the outcome but not
+  - _`git archive` export (shipped v1)_: retired — meets the outcome but not
     the literal mandate; rejected by user decision 2026-10-05.
-  - *Single shared sparse worktree with per-op commit switching*: rejected —
+  - _Single shared sparse worktree with per-op commit switching_: rejected —
     shared mutable HEAD, commit flapping across refs in one `list` run,
     interrupted runs leave the wrong commit checked out.
-  - *Per-checkout persistent worktrees*: rejected — retains a populated file
+  - _Per-checkout persistent worktrees_: rejected — retains a populated file
     copy per checkout (≈2× disk vs. the target) plus reconciliation state;
     ephemeral gives the same isolation with zero retained state.
-  - *Targets as sparse-checkout worktrees*: rejected — violates Option A
+  - _Targets as sparse-checkout worktrees_: rejected — violates Option A
     (contracts unchanged; targets stay plain copies, never repositories).
 - **Implementation notes for tasks**: the `Fetcher` seam changes from
   tar-stream `Export` to `Materialize(ctx, source, res, dir) (files int,
-  err error)`; the fake writes files directly (simpler — no tar). The
+err error)`; the fake writes files directly (simpler — no tar). The
   zip-slip class disappears (source is a local populated dir, subpath
   validated at parse); the copy keeps regular-files-only, symlink skipping
   (consistent with `HashDir`), and a byte budget. The `TreeExists`
@@ -69,7 +69,7 @@ follows the required format.
   the same traversal discipline as `profile` slug handling — see D8), so two
   folders from one repo share objects; materialization uses ephemeral linked
   sparse worktrees (D1) removed after each operation, with `git worktree
-  prune` on mirror ensure. (2) Colocated `.git-wire.json` in each
+prune` on mirror ensure. (2) Colocated `.git-wire.json` in each
   checkout (moving the folder moves its tracking; no global registry — per
   spec assumption). (3) In-process `internal/cache.Cache` memoizing
   remote-SHA resolutions within a run, so `list` over N folders from one repo
@@ -80,19 +80,19 @@ follows the required format.
   makes repeat/status runs cheap. Mirrors the proven `~/.config/gud/profiles`
   precedent, so no new config-location policy is invented.
 - **Alternatives considered**:
-  - *Per-checkout hidden `.git/` dir*: rejected — duplicates objects across
+  - _Per-checkout hidden `.git/` dir_: rejected — duplicates objects across
     checkouts of one repo and turns the target into a repo (surprising `git`
     behavior inside the user's tree).
-  - *Global registry of checkouts instead of colocated records*: originally
+  - _Global registry of checkouts instead of colocated records_: originally
     rejected for move-with-folder and corruption reasons — STRUCK 2026-10-05
     by D12, which adopts a run-level registry (not global) with the orphan
     trade-off accepted to keep fetched folders pristine. (Original text
     retained for history: it breaks the move-the-folder invariant and adds
     registry-corruption failure modes; spec assumes colocation.)
-  - *Persistent on-disk SHA cache*: rejected (v1) — staleness invalidation
+  - _Persistent on-disk SHA cache_: rejected (v1) — staleness invalidation
     policy is new complexity; in-memory TTL memo per run is sufficient for
     the ≤20-folder list bound. Noted as future work.
-  - *Automatic mirror eviction/LRU pruning*: rejected (v1, YAGNI) — no caller
+  - _Automatic mirror eviction/LRU pruning_: rejected (v1, YAGNI) — no caller
     or requirement demands it; blobless mirrors are small by construction.
     Recorded as future work, not a v1 task.
 
@@ -107,9 +107,9 @@ follows the required format.
   table; server-side verification is already required for precise FR-011
   errors, so longest-match disambiguation costs no extra round-trip. A `--ref`
   flag is speculative surface (YAGNI) until a caller hits a slashed branch.
-- **Alternatives considered**: *Mandatory `--ref` flag* — rejected, extra
-  friction on the primary flow for an edge case; *full ref enumeration
-  client-side before parse* — rejected, requires network just to explain a
+- **Alternatives considered**: _Mandatory `--ref` flag_ — rejected, extra
+  friction on the primary flow for an edge case; _full ref enumeration
+  client-side before parse_ — rejected, requires network just to explain a
   malformed URL, violating the offline-friendly parse-error requirement.
 
 ## D4 — Local-divergence detection without per-file manifests
@@ -124,11 +124,11 @@ follows the required format.
   deterministic in tests. Ignores mtimes (unreliable) and needs no git repo
   in the target.
 - **Alternatives considered**:
-  - *Per-file hash manifest in the record*: rejected — O(files) state breaks
+  - _Per-file hash manifest in the record_: rejected — O(files) state breaks
     SC-006 for large folders.
-  - *`git status` on the target*: rejected — the target is deliberately not a
+  - _`git status` on the target_: rejected — the target is deliberately not a
     repository (plain export); init-ing one pollutes the user's tree.
-  - *mtime/size comparison*: rejected — editors and copy tools defeat it;
+  - _mtime/size comparison_: rejected — editors and copy tools defeat it;
     not a content guarantee.
 
 ## D5 — Sync-state derivation and offline-tolerant `list`
@@ -143,9 +143,9 @@ follows the required format.
 - **Rationale**: Ordering (divergence first) prevents an update from ever
   silently clobbering edits even when upstream also moved. Exit-0-with-states
   keeps the command useful offline and composes with scripts.
-- **Alternatives considered**: *`list` fails hard on first unreachable
-  remote* — rejected, one dead host would hide all other entries and violate
-  FR-012; *separate `status` verb* — rejected, FR-007 names one "list/status
+- **Alternatives considered**: _`list` fails hard on first unreachable
+  remote_ — rejected, one dead host would hide all other entries and violate
+  FR-012; _separate `status` verb_ — rejected, FR-007 names one "list/status
   operation"; merging avoids verb sprawl (YAGNI).
 
 ## D6 — Test strategy: fake `fetcher` seam + gated live integration
@@ -162,17 +162,17 @@ follows the required format.
   stay deterministic and credential-free. The seam also enforces the
   stepdown/SRP structure: orchestration never touches the network directly,
   so it stays testable and small.
-- **Alternatives considered**: *`file://` local git repos as fake remotes in
-  unit tests* — partially adopted: allowed inside `internal/git/wire_test.go`
+- **Alternatives considered**: _`file://` local git repos as fake remotes in
+  unit tests_ — partially adopted: allowed inside `internal/git/wire_test.go`
   for transport primitives (local `git init` repos are deterministic and
   offline), but orchestration tests still use the fake seam so they never
-  depend on a `git` binary's presence/speed. *Live tests ungated* — rejected,
+  depend on a `git` binary's presence/speed. _Live tests ungated_ — rejected,
   violates Principle II outright.
 
 ## D7 — CLI shape: fetch-by-default root, `update`, `list`
 
 - **Decision**: `git wire <url> [-t|--target-path <dir> | -n|--target-name
-  <name>] [--force]` performs fetch (matches the spec's example invocations
+<name>] [--force]` performs fetch (matches the spec's example invocations
   verbatim; default target = `./<subpath-basename>` when neither flag is
   given; `-n` creates `./NAME`, must-not-exist, mutually exclusive with
   `-t`). `git wire update [<path>] [-t ...] [--force]` re-resolves from
@@ -185,10 +185,10 @@ follows the required format.
 - **Rationale**: Zero new verbs beyond the three user stories (P1 fetch, P2
   update, P3 list) — minimal surface, each independently testable and
   demonstrable. Fetch-as-root-action preserves the requested UX exactly.
-- **Alternatives considered**: *Explicit `fetch` subverb* (`git-wire fetch
-  <url>`) — rejected as the only spelling; accepted as a hidden alias only if
+- **Alternatives considered**: _Explicit `fetch` subverb_ (`git-wire fetch
+<url>`) — rejected as the only spelling; accepted as a hidden alias only if
   implementation finds root-action routing awkward (tasks-phase detail, not a
-  contract promise). *Separate `--discard` flag for update* — rejected, one
+  contract promise). _Separate `--discard` flag for update_ — rejected, one
   intent flag with context-specific help text is sufficient for v1.
 
 ## D8 — Security: URL-derived values never trusted
@@ -208,10 +208,10 @@ follows the required format.
   operands — the classic injection sink. Validation lives in the pure
   `ParseSourceURL` layer so it is table-testable without git. Constitution
   secret-hygiene and gosec posture are preserved (no new exclusions needed).
-- **Alternatives considered**: *Allowlist of hosts (github.com only)* —
+- **Alternatives considered**: _Allowlist of hosts (github.com only)_ —
   rejected, transport is host-agnostic by design (D1); validation is
-  scheme/shape-based instead. *Passing credentials for private repos via new
-  flags* — rejected, spec assumes environment-provided git credentials; no
+  scheme/shape-based instead. _Passing credentials for private repos via new
+  flags_ — rejected, spec assumes environment-provided git credentials; no
   new secret surface.
 
 ## D9 — Progress and presentation reuse
@@ -250,14 +250,14 @@ follows the required format.
   extra work happens only on the rare diverged-and-moved path — no-op,
   clean-behind, and diverged-same-commit paths cost nothing new.
 - **Alternatives considered**:
-  - *Per-file content manifest in the record*: rejected — ~100 bytes/file
+  - _Per-file content manifest in the record_: rejected — ~100 bytes/file
     breaks the SC-006 10 KB budget by 5× at the 500-file scale, and
     duplicates state the mirror already holds.
-  - *Line-level merge via temp git repo (`merge`/`diff3`)*: rejected —
+  - _Line-level merge via temp git repo (`merge`/`diff3`)_: rejected —
     exceeds FR-013's file-level semantics, risks conflict markers touching
     files the spec requires left untouched, and adds temp-repo lifecycle
     machinery for unrequested granularity. YAGNI.
-  - *Union copy (new-over-local, no base)*: rejected — cannot distinguish
+  - _Union copy (new-over-local, no base)_: rejected — cannot distinguish
     "deleted upstream, clean locally" (should delete) from "deleted
     upstream, edited locally" (conflict), nor detect same-path independent
     adds; silently loses user intent. The base is what makes deletion and
@@ -292,12 +292,12 @@ follows the required format.
   phrases; the `git-message` diff being deletion-only is the strongest
   evidence of the requested separation.
 - **Alternatives considered**:
-  - *Flat single-package `cmd/git-wire/main.go`*: rejected — breaks the
+  - _Flat single-package `cmd/git-wire/main.go`_: rejected — breaks the
     house `main + core` precedent for no benefit; test seam placement gets
     murky without a non-main package.
-  - *Thin shim left in `git message`*: rejected — Option A mandates
+  - _Thin shim left in `git message`_: rejected — Option A mandates
     removal; a shim would preserve the dual surface the user declined.
-  - *Separate workspace module for git-wire*: rejected — module boundaries
+  - _Separate workspace module for git-wire_: rejected — module boundaries
     exist for dependency/ownership splits (cf. `internal/git`); both CLIs
     share root deps (`cobra`, `gud/internal/wire`), so a new module buys
     versioning friction with no isolation gain. YAGNI.
@@ -345,15 +345,15 @@ follows the required format.
   scope creep); explicit-path-over-cwd in every function keeps tests
   hermetic.
 - **Alternatives considered**:
-  - *Per-checkout sidecar beside the target*: rejected — clutters the
+  - _Per-checkout sidecar beside the target_: rejected — clutters the
     parent directory per checkout and shares the rename-orphan downside
     with none of the single-inspection-point benefit.
-  - *Registry in the shared cache dir (`~/.config/gud/wire/`)*: rejected —
+  - _Registry in the shared cache dir (`~/.config/gud/wire/`)_: rejected —
     the spec mandates run-level placement; a global registry also breaks
     project portability (clone the project, lose the tracking).
-  - *Absolute-path keys*: rejected — brittle across checkouts/moves of the
+  - _Absolute-path keys_: rejected — brittle across checkouts/moves of the
     whole tree; relative keys degrade gracefully (orphan, reported).
-  - *`update` with no path syncs ALL entries*: rejected — batch semantics
+  - _`update` with no path syncs ALL entries_: rejected — batch semantics
     with partial failure (half-synced tree) is a new feature with new
     failure modes, not a default-target rule. Usage error instead.
 - **Preserved details**: record-exclusion in hashing stays (a fetch with

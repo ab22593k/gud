@@ -63,14 +63,28 @@ Set `GUD_LOG_LEVEL=debug` (also `info`, `warn`, `error`) to see diagnostics on s
 
 ## Repository instructions
 
-`git message` reads `AGENTS.md` from the directory it was invoked in, falling
-back to the repository root, and mounts it into the agent's environment as its
-instructions. Repository conventions therefore apply to the generated commit
+`git message` reads `AGENTS.md` and mounts it into the agent's environment as
+its instructions, so repository conventions apply to the generated commit
 message without being pasted into the prompt.
 
+In a monorepo, place an `AGENTS.md` inside each subproject. The file closest to
+the directory `git message` was invoked in takes precedence and becomes the
+agent's system instructions; the rest are mounted at their repository-relative
+paths so the agent can consult the one matching whatever it is reading.
+
 ```bash
-git message
+# repo/
+#   AGENTS.md                     <- applies everywhere
+#   services/AGENTS.md            <- applies under services/
+#   services/payments/AGENTS.md
+git message                           # uses the nearest file upward
+cd services/payments && git message   # uses services/payments/AGENTS.md
 ```
+
+Ignored and vendored trees (`node_modules`, `vendor`, `target`, `.gitignore`d
+directories) are not scanned. At most 32 files and 256 KiB total are mounted,
+and a single file over 64 KiB is skipped rather than truncated — set
+`GUD_LOG_LEVEL=debug` to see which files were found.
 
 ## License
 

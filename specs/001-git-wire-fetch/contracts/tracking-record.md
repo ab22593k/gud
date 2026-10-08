@@ -50,8 +50,8 @@ Entry field rules:
 
 ## Versioning rules
 
-- Readers ignore unknown *fields* (forward-tolerant) but reject unknown
-  *envelope versions* (explicit, never guess).
+- Readers ignore unknown _fields_ (forward-tolerant) but reject unknown
+  _envelope versions_ (explicit, never guess).
 - `version` increments only with a spec amendment that documents migration:
   readers of version N MUST state the minimum tool version that writes N+1
   in the invalid-record message.

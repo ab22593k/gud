@@ -83,7 +83,7 @@ func TestGenerateCommitMessageWithContent_RespectsCallerDeadline(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
-	_, err := c.GenerateCommitMessageWithContent(ctx, "diff", "", DetailLevel("standard"), "", "", 72)
+	_, err := c.GenerateCommitMessageWithContent(ctx, "diff", "", DetailLevel("standard"), "", nil, 72)
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("err = %v, want context.DeadlineExceeded", err)
 	}
@@ -165,8 +165,10 @@ func TestNewClientWithGenerator(t *testing.T) {
 		t.Errorf("model = %q, want %q", client.model, "test-model")
 	}
 
-	if client.modelImpl != mock {
-		t.Errorf("modelImpl should be the mock")
+	// Wrapped, not stored raw: a model.LLM has no mount-aware entry point, so
+	// the client adapts one.
+	if got, ok := client.modelImpl.(plainGenerator); !ok || got.LLM != mock {
+		t.Errorf("modelImpl should wrap the mock, got %T", client.modelImpl)
 	}
 }
 

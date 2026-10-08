@@ -3,6 +3,7 @@
 ## Core Principles
 
 ### I. Gated Code Quality
+
 - Every changed Go file MUST pass `gofmt` and `goimports`; formatting is a build
   artifact, never a review comment.
 - Every changed package MUST pass `golangci-lint run` with the repository
@@ -21,6 +22,7 @@
   become gates. Reviewer attention is then spent on design, not formatting.
 
 ### II. Test-First (NON-NEGOTIABLE)
+
 - Behavioral changes MUST be expressed as a failing test first, then made to
   pass, then refactored with the suite green at each step.
 - Behavioral changes MUST land with focused tests in the same change. A behavior
@@ -39,6 +41,7 @@
   rather than reviewed by eye.
 
 ### III. Scoped, Minimal Change
+
 - A change MUST be limited to the stated request. Unrelated refactors,
   opportunistic cleanups, and speculative compatibility code are out of scope.
 - Code MUST be added only to satisfy a concrete requirement. YAGNI governs:
@@ -55,6 +58,7 @@
   and breadth of each diff is what keeps future change cheap.
 
 ### IV. Degrade, Never Block the Commit
+
 - Optional subsystems (HelixDB memory, profile catalogs, remote enrichment)
   MUST degrade to a documented no-op when unavailable. A failed enhancement
   MUST NOT prevent the user's commit from being generated.
@@ -72,6 +76,7 @@
   explicit reduced mode.
 
 ### V. Evidence Before Reporting
+
 - Completion is a claim about executed checks. Every completion report MUST name
   the files changed, the commands actually run, and the checks deliberately
   skipped.
