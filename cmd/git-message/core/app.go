@@ -45,6 +45,13 @@ type AppContext struct {
 	// operationFn is the operation lookup used by Operation. It is swappable
 	// in tests to avoid subprocess spawns; nil means git.DetectOperation.
 	operationFn func(context.Context) git.Operation
+
+	// agentsFiles is memoised from the first AGENTS.md discovery. The review
+	// loop regenerates on demand and would otherwise rescan the tree — a
+	// filesystem walk — on every pass, for a result that cannot change within
+	// one invocation.
+	agentsFiles   []request.AgentFile
+	agentsFilesOK bool
 }
 
 // NewAppContext loads and merges configuration from all sources (CLI flags,
@@ -93,6 +100,20 @@ func (a *AppContext) InitClient(ctx context.Context) error {
 	a.client = client
 
 	return nil
+}
+
+// AgentFiles returns the AGENTS.md files to mount, memoised per invocation.
+//
+// Discovery walks the tree, so it is cached the way RepoRoot, Branch, and
+// Operation are: the review loop regenerates on demand and must not rescan for
+// a result that cannot change mid-run.
+func (a *AppContext) AgentFiles(ctx context.Context) []request.AgentFile {
+	if !a.agentsFilesOK {
+		a.agentsFiles = resolveAgentFiles(ctx, a)
+		a.agentsFilesOK = true
+	}
+
+	return a.agentsFiles
 }
 
 // RepoRoot returns the absolute path to the git repository root, caching the

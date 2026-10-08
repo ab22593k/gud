@@ -190,7 +190,7 @@ func generateAndWriteMsg(ctx context.Context, app *AppContext, diff, msgFile str
 	}
 
 	cfg := app.Config()
-	mounts := resolveAgentFiles(ctx, app)
+	mounts := app.AgentFiles(ctx)
 
 	msg, err := app.Client().GenerateCommitMessageWithContent(
 		ctx, diff, "", cfg.DetailLevel,

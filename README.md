@@ -86,6 +86,24 @@ directories) are not scanned. At most 32 files and 256 KiB total are mounted,
 and a single file over 64 KiB is skipped rather than truncated — set
 `GUD_LOG_LEVEL=debug` to see which files were found.
 
+Discovery is memoised per invocation, so regenerating inside the review loop
+does not rescan the tree. The traversal is bounded (`maxAgentDirs`); raise it
+only if a monorepo legitimately nests instruction files deeper than the budget.
+
+## Measuring local cost
+
+Everything before the model request is benchmarkable without an API key:
+
+```bash
+go test ./cmd/git-message/core/ -run XXX -bench . -benchtime 100x
+```
+
+`BenchmarkResolveAgentFiles` covers AGENTS.md discovery, `BenchmarkContextBuild`
+the prompt-context assembly, `BenchmarkRepoStats` the extension-count walk, and
+`BenchmarkRegenerateLoop` the memoisation. Timings on a loaded workstation vary
+several-fold, so treat allocation counts as the regression signal and use
+`BenchmarkGitOps` for the subprocess floor the rest sits on.
+
 ## License
 
 MIT

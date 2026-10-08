@@ -120,8 +120,23 @@ func agentFilesFrom(ctx context.Context, start, root string) []request.AgentFile
 
 	var total int
 
-	for _, dir := range discoveredDirs(ctx, start, anchor) {
-		content, ok := readAgentsFile(dir)
+	// Candidates, nearest first: the ancestor chain (the invocation directory
+	// and every directory above it up to the anchor), then the files the
+	// downward walk reported. A directory that holds the file already has its
+	// path from the walk, so the chain is deduplicated against it.
+	candidates := ancestorAgentsPaths(start, anchor)
+	candidates = append(candidates, walkDown(ctx, start, root)...)
+
+	seen := make(map[string]bool, len(candidates))
+
+	for _, path := range candidates {
+		if seen[path] {
+			continue
+		}
+
+		seen[path] = true
+
+		content, ok := readAgentsPath(path)
 		if !ok {
 			continue
 		}
@@ -134,7 +149,7 @@ func agentFilesFrom(ctx context.Context, start, root string) []request.AgentFile
 			break
 		}
 
-		at, ok := mountPath(anchor, dir, len(files) == 0)
+		at, ok := mountPath(anchor, filepath.Dir(path), len(files) == 0)
 		if !ok {
 			continue
 		}
@@ -146,6 +161,25 @@ func agentFilesFrom(ctx context.Context, start, root string) []request.AgentFile
 	slog.Debug("AGENTS.md files resolved", "files", len(files), "bytes", total, "anchor", anchor)
 
 	return files
+}
+
+// ancestorAgentsPaths lists the AGENTS.md candidates on the chain from start up
+// to anchor, nearest first. This is the precedence order, and it is short — one
+// entry per level of the path — so it is cheap to stat.
+func ancestorAgentsPaths(start, anchor string) []string {
+	if anchor == "" {
+		return []string{filepath.Join(start, agentsFileName)}
+	}
+
+	var paths []string
+
+	for dir := start; ; dir = filepath.Dir(dir) {
+		paths = append(paths, filepath.Join(dir, agentsFileName))
+
+		if dir == anchor || filepath.Dir(dir) == dir {
+			return paths
+		}
+	}
 }
 
 // upRoot resolves the anchor the upward walk stops at and mount paths are
@@ -213,49 +247,23 @@ func mountPath(root, dir string, primary bool) (string, bool) {
 	return path.Join(rel, agentsFileName), true
 }
 
-// discoveredDirs returns the directories to look in, nearest first: the walk
-// from start up to root, followed by the bounded walk down from start.
-func discoveredDirs(ctx context.Context, start, root string) []string {
-	var dirs []string
-
-	seen := make(map[string]bool)
-
-	add := func(dir string) {
-		dir = filepath.Clean(dir)
-		if seen[dir] {
-			return
-		}
-
-		seen[dir] = true
-		dirs = append(dirs, dir)
-	}
-
-	if root != "" && isWithin(root, start) {
-		// Ancestors, nearest first. This chain is the precedence order.
-		for dir := start; ; dir = filepath.Dir(dir) {
-			add(dir)
-
-			if dir == root || filepath.Dir(dir) == dir {
-				break
-			}
-		}
-	} else {
-		// Nothing to walk up to: the invocation directory is all there is.
-		add(start)
-	}
-
-	walkDown(ctx, start, root, add)
-
-	return dirs
-}
-
-// walkDown collects directories below start, pruning .gitignore'd trees and
-// known dependency directories so the scan stays cheap on a large monorepo.
-func walkDown(ctx context.Context, start, root string, add func(string)) {
+// walkDown collects the AGENTS.md paths below start, pruning .gitignore'd trees
+// and known dependency directories so the scan stays cheap on a large monorepo.
+//
+// Recording the paths rather than stat-ing each directory for one matters: the
+// walk already enumerates every entry, so a separate stat per directory is a
+// syscall spent on information it has. Only the ancestor chain — a handful of
+// directories — still pays the stat.
+//
+// WalkDir visits a directory before its contents, so a parent's AGENTS.md is
+// recorded before a child's: the returned order already runs nearest-first.
+func walkDown(ctx context.Context, start, root string) []string {
 	var matcher *detect.GitignoreMatcher
 	if root != "" {
 		matcher = detect.LoadGitignore(root)
 	}
+
+	var found []string
 
 	visited := 0
 
@@ -271,6 +279,10 @@ func walkDown(ctx context.Context, start, root string, add func(string)) {
 		}
 
 		if !d.IsDir() {
+			if d.Name() == agentsFileName {
+				found = append(found, p)
+			}
+
 			return nil
 		}
 
@@ -280,20 +292,24 @@ func walkDown(ctx context.Context, start, root string, add func(string)) {
 
 		visited++
 
-		if p != start {
-			if agentSkipDirs[d.Name()] {
-				return filepath.SkipDir
-			}
-
-			if matcher != nil && matcher.Ignored(relToRoot(root, p)) {
-				return filepath.SkipDir
-			}
+		// The scan root is descended into unconditionally; pruning applies to
+		// what is below it.
+		if p == start {
+			return nil
 		}
 
-		add(p)
+		if agentSkipDirs[d.Name()] {
+			return filepath.SkipDir
+		}
+
+		if matcher != nil && matcher.Ignored(relToRoot(root, p)) {
+			return filepath.SkipDir
+		}
 
 		return nil
 	})
+
+	return found
 }
 
 // relToRoot is the slash-separated path of p relative to root, or "" when it
@@ -319,13 +335,8 @@ func isWithin(root, p string) bool {
 	return rel != "" && rel != ".." && !strings.HasPrefix(rel, "../")
 }
 
-// readAgentsFile reads dir/AGENTS.md and reports whether it yielded usable
-// instructions.
-//
-// Every failure mode is non-fatal and logged, never returned: the caller has no
-// way to act on it, and an unreadable instruction file must not block a commit.
-// A missing file is the common case and stays at debug level so a repository
-// without one produces no noise.
+// readAgentsFile reads and validates dir/AGENTS.md for the ancestor chain,
+// where the file's existence is not yet known.
 func readAgentsFile(dir string) (string, bool) {
 	p := filepath.Join(dir, agentsFileName)
 
@@ -346,7 +357,16 @@ func readAgentsFile(dir string) (string, bool) {
 		return "", false
 	}
 
-	data, err := os.ReadFile(p) //nolint:gosec // G304: path is dir + a fixed filename
+	return readAgentsPath(p)
+}
+
+// readAgentsPath reads an AGENTS.md whose existence is already known — the
+// downward walk reported it — so it skips the stat entirely.
+//
+// Every failure mode is non-fatal and logged, never returned: the caller has no
+// way to act on it, and an unreadable instruction file must not block a commit.
+func readAgentsPath(p string) (string, bool) {
+	data, err := os.ReadFile(p) //nolint:gosec // G304: path comes from a bounded walk of the invocation tree
 	if err != nil {
 		// The stat succeeded, so this is a race (unlinked between the two
 		// calls), a permission failure on the file itself, or an I/O error.

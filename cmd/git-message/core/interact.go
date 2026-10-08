@@ -122,7 +122,7 @@ func generateCommitMessage(ctx context.Context, app *AppContext, diff, promptCon
 	}
 
 	cfg := app.Config()
-	mounts := resolveAgentFiles(ctx, app)
+	mounts := app.AgentFiles(ctx)
 
 	msg, err := showProgress(ctx, "Rolling in, obscuring the landscape of the codebase...", func() (string, error) {
 		return app.Client().GenerateCommitMessageWithContent(ctx, diff, promptContext, cfg.DetailLevel,
