@@ -77,6 +77,10 @@ func (p promptTemplate) build(
 ) string {
 	var sb strings.Builder
 
+	// The diff dominates the prompt, so size the buffer for it once instead
+	// of regrowing through geometrically larger copies as it is written.
+	sb.Grow(len(system) + len(hint) + len(context) + len(diff) + 512)
+
 	if system != "" {
 		sb.WriteString(system)
 		sb.WriteString("\n")

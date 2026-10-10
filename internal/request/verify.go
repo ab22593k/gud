@@ -49,12 +49,26 @@ func VerifyMessage(msg, diff string, wrapLine int) []Finding {
 		out = append(out, Finding{Check: "fence-remnant", Detail: "message contains backtick"})
 	}
 
+	return append(out, groundingFindings(msg, diff)...)
+}
+
+// groundingFindings reports one Finding per path-like token in msg that
+// names no file in the diff. A message without tokens skips the diff scan
+// entirely: with nothing to ground, no finding is possible, so scanning the
+// whole diff would be pure waste. The existence probe stops at the first
+// match, keeping the token-free path to one cheap pass over the message.
+func groundingFindings(msg, diff string) []Finding {
+	if !pathToken.MatchString(msg) {
+		return nil
+	}
+
 	allowed := map[string]bool{}
 	for _, p := range git.ExtractChangedPaths(diff) {
 		allowed[p] = true
 	}
 
 	seen := map[string]bool{}
+
 	var ungrounded []string
 
 	for _, tok := range pathToken.FindAllString(msg, -1) {
@@ -70,6 +84,8 @@ func VerifyMessage(msg, diff string, wrapLine int) []Finding {
 	}
 
 	sort.Strings(ungrounded)
+
+	out := make([]Finding, 0, len(ungrounded))
 
 	for _, tok := range ungrounded {
 		out = append(out, Finding{Check: "file-grounding", Detail: "mentions " + tok + ", not present in diff"})
