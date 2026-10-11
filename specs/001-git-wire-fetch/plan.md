@@ -61,7 +61,7 @@ stays under that module's ownership.
 
 ## Technical Context
 
-**Language/Version**: Go 1.26.8, Go workspace (`go.work`): root module `gud`
+**Language/Version**: go 1.27.2, Go workspace (`go.work`): root module `gud`
 plus member modules `gud/internal/git` and `gud/internal/request`.
 
 **Primary Dependencies**: `spf13/cobra` (CLI, already used) + Go stdlib only

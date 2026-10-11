@@ -95,7 +95,7 @@
 
 ## Additional Constraints
 
-- **Toolchain**: Go workspace on Go 1.26.8, built from the repository root so
+- **Toolchain**: Go workspace on go 1.27.2, built from the repository root so
   `go.work` includes the root module and `internal/git`, `internal/mem`, and
   `internal/request`.
 - **Product vocabulary**: `git message` is the canonical command; `gud` is the

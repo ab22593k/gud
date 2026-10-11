@@ -10,7 +10,7 @@ entity rules: [data-model.md](data-model.md).
 
 ## Prerequisites
 
-- Go 1.26.8, repository root as cwd (so `go.work` resolves all modules).
+- go 1.27.2, repository root as cwd (so `go.work` resolves all modules).
 - A `git` binary on PATH (already required by `gud`).
 - Network access only for the live scenarios (marked LIVE); everything else
   runs offline and deterministically.
