@@ -27,7 +27,9 @@ The folder is tracked for future updates (see 'git wire update').
 Run 'git wire list' to see tracked folders.`,
 	Example: `  git wire https://github.com/OCA/server-tools/tree/19.0/auto_backup -t ./auto_backup`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		initWireBackend()
+		if err := initWireBackend(); err != nil {
+			return wireError(err)
+		}
 
 		return fetchWith(cmd, args, wireBackend)
 	},

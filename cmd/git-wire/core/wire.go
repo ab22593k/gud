@@ -19,17 +19,34 @@ import (
 var wireBackend wire.Fetcher
 
 // initWireBackend builds the real backend once from the default store.
-func initWireBackend() {
+// Store creation can fail on ordinary user machines (unreadable $HOME,
+// full disk), so failures are returned for RunE to report as a CLI error —
+// never a panic.
+func initWireBackend() error {
+	return initWireBackendWith(wire.NewStore)
+}
+
+// initWireBackendWith is the test seam behind initWireBackend: newStore
+// stands in for wire.NewStore so store-creation failures from the user
+// environment are exercisable without mutating the process environment.
+func initWireBackendWith(newStore func() (*wire.Store, error)) error {
 	if wireBackend != nil {
-		return
+		return nil
 	}
 
-	store, err := wire.NewStore()
+	store, err := newStore()
 	if err != nil {
-		panic(fmt.Sprintf("init wire store: %v", err))
+		return fmt.Errorf("init wire store: %w", err)
 	}
 
-	wireBackend = wire.NewFetcher(store)
+	fetcher, err := wire.NewFetcher(store)
+	if err != nil {
+		return err
+	}
+
+	wireBackend = fetcher
+
+	return nil
 }
 
 // addWireTargetFlags registers the target selection flags shared by
@@ -174,7 +191,9 @@ refuses with the conflicting paths when they do (use --force to discard
 local modifications).`,
 	Example: `  git wire update ./auto_backup`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		initWireBackend()
+		if err := initWireBackend(); err != nil {
+			return wireError(err)
+		}
 
 		return updateWith(cmd, args, wireBackend)
 	},
@@ -260,7 +279,9 @@ each came from and whether it is current, behind, diverged, or unreachable.
 Unreachable sources are reported as rows, not failures.`,
 	Example: `  git wire list ./modules`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		initWireBackend()
+		if err := initWireBackend(); err != nil {
+			return wireError(err)
+		}
 
 		return listWith(cmd, args, wireBackend)
 	},

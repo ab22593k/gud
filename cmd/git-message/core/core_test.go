@@ -179,6 +179,28 @@ func TestMustGet(t *testing.T) {
 	})
 }
 
+// TestMustGetFlagsRegistered pins the programming-error invariant behind
+// mustGet's panic: every flag name passed to mustGet must be registered on
+// its command (persistent flags for configFromCmd, the local "global" flag
+// for the hook install/uninstall commands). While this holds, mustGet can
+// only panic on a programming mistake — renaming a flag without updating its
+// call site — never on user input or environment.
+func TestMustGetFlagsRegistered(t *testing.T) {
+	t.Parallel()
+
+	for _, name := range []string{"detail-level", "hint", "history", "model", "wrapline", "issue"} {
+		if rootCmd.PersistentFlags().Lookup(name) == nil {
+			t.Errorf("persistent flag %q missing: mustGet would panic", name)
+		}
+	}
+
+	for _, cmd := range []*cobra.Command{hookInstallCmd, hookUninstallCmd} {
+		if cmd.Flags().Lookup("global") == nil {
+			t.Errorf("%s: flag %q missing: mustGet would panic", cmd.Use, "global")
+		}
+	}
+}
+
 // discardWriter is an io.Writer that discards all writes.
 type discardWriter struct{}
 

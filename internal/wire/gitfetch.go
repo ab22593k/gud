@@ -34,12 +34,15 @@ type gitFetcher struct {
 }
 
 // NewFetcher returns the real git-backed Fetcher rooted at store.
-func NewFetcher(store *Store) Fetcher {
+// A nil store is a programming error; it is reported as an ErrInternal
+// error, never a panic, so miswiring surfaces as a test failure or a
+// returned error instead of crashing the CLI.
+func NewFetcher(store *Store) (Fetcher, error) {
 	if store == nil {
-		panic("wire: nil store")
+		return nil, fmt.Errorf("wire: nil store: %w", ErrInternal)
 	}
 
-	return &gitFetcher{store: store, fetched: make(map[string]bool)}
+	return &gitFetcher{store: store, fetched: make(map[string]bool)}, nil
 }
 
 func (f *gitFetcher) Resolve(ctx context.Context, source SourceRef) (Resolution, error) {

@@ -12,6 +12,35 @@ import (
 	"testing"
 )
 
+// mustFetcher builds the real Fetcher for tests. NewFetcher only fails on a
+// nil store (programming error), so failure here is a test bug.
+func mustFetcher(t *testing.T, store *Store) Fetcher {
+	t.Helper()
+
+	fetcher, err := NewFetcher(store)
+	if err != nil {
+		t.Fatalf("NewFetcher: %v", err)
+	}
+
+	return fetcher
+}
+
+// TestNewFetcherNilStoreIsErrInternal pins the no-panic contract: a nil
+// store is a programming error reported as an ErrInternal error, never a
+// panic that would crash the CLI with a Go trace.
+func TestNewFetcherNilStoreIsErrInternal(t *testing.T) {
+	t.Parallel()
+
+	fetcher, err := NewFetcher(nil)
+	if fetcher != nil {
+		t.Errorf("NewFetcher(nil) = %v, want nil fetcher", fetcher)
+	}
+
+	if !errors.Is(err, ErrInternal) {
+		t.Fatalf("NewFetcher(nil) err = %v, want ErrInternal", err)
+	}
+}
+
 // seedWireMirror builds a local remote with auto_backup/a.txt, seeds the
 // store mirror from it without network, and returns the store and HEAD.
 func seedWireMirror(t *testing.T) (*Store, string) {
@@ -37,7 +66,7 @@ func TestGitFetcherResolveFileSubpath(t *testing.T) {
 
 	ctx := context.Background()
 	store, head := seedWireMirror(t)
-	fetcher := NewFetcher(store)
+	fetcher := mustFetcher(t, store)
 
 	fileSource := func(ref string) SourceRef {
 		return SourceRef{Host: "example.com", Owner: "o", Repo: "r", Ref: ref, Subpath: "auto_backup/a.txt"}
@@ -70,7 +99,7 @@ func TestGitFetcherMaterializeFileSubpath(t *testing.T) {
 
 	ctx := context.Background()
 	store, head := seedWireMirror(t)
-	fetcher := NewFetcher(store)
+	fetcher := mustFetcher(t, store)
 
 	source := SourceRef{Host: "example.com", Owner: "o", Repo: "r", Ref: head, Subpath: "auto_backup/a.txt"}
 	target := t.TempDir() + "/out"
@@ -132,7 +161,7 @@ func TestGitFetcherMaterializeFromFixture(t *testing.T) {
 	}
 
 	head := localHead(t, remote)
-	fetcher := NewFetcher(store)
+	fetcher := mustFetcher(t, store)
 
 	source := SourceRef{Host: "example.com", Owner: "o", Repo: "r", Ref: "main", Subpath: "auto_backup"}
 	target := t.TempDir() + "/out"

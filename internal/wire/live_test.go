@@ -26,7 +26,7 @@ func TestLiveFetchOCAExample(t *testing.T) {
 	liveEnabled(t)
 
 	store := NewStoreWithDir(t.TempDir())
-	fetcher := NewFetcher(store)
+	fetcher := mustFetcher(t, store)
 
 	source, err := ParseSourceURL("https://github.com/OCA/server-tools/tree/19.0/auto_backup")
 	if err != nil {
@@ -72,7 +72,7 @@ func TestLiveUpdateNoOp(t *testing.T) {
 	liveEnabled(t)
 
 	store := NewStoreWithDir(t.TempDir())
-	fetcher := NewFetcher(store)
+	fetcher := mustFetcher(t, store)
 
 	source, err := ParseSourceURL("https://github.com/OCA/server-tools/tree/19.0/auto_backup")
 	if err != nil {
@@ -103,7 +103,7 @@ func TestLiveListCurrent(t *testing.T) {
 	liveEnabled(t)
 
 	store := NewStoreWithDir(t.TempDir())
-	fetcher := NewFetcher(store)
+	fetcher := mustFetcher(t, store)
 
 	source, err := ParseSourceURL("https://github.com/OCA/server-tools/tree/19.0/auto_backup")
 	if err != nil {
@@ -145,7 +145,7 @@ func TestLiveMergeLocalAdd(t *testing.T) {
 	liveEnabled(t)
 
 	store := NewStoreWithDir(t.TempDir())
-	fetcher := NewFetcher(store)
+	fetcher := mustFetcher(t, store)
 
 	source, err := ParseSourceURL("https://github.com/OCA/server-tools/tree/19.0/auto_backup")
 	if err != nil {

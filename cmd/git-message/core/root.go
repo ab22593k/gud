@@ -93,7 +93,9 @@ func setupLogLevel() {
 }
 
 // mustGet panics if the flag name is not registered. Only use for flags
-// defined in init() — a missing flag is a programming error.
+// defined in init() — a missing flag is a programming error, never user
+// input: every call site passes a flag registered by addPersistentFlags or
+// the hook install/uninstall commands, pinned by TestMustGetFlagsRegistered.
 func mustGet[T any](_ *cobra.Command, name string, fn func(string) (T, error)) T {
 	v, err := fn(name)
 	if err != nil {

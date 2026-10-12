@@ -340,6 +340,45 @@ func TestUpdateWithMultipleEntries(t *testing.T) {
 	}
 }
 
+// TestInitWireBackendStoreFailureIsError pins the no-panic contract: a store
+// failure from the user environment (bad $HOME, full disk) must surface as a
+// CLI error, never a Go panic trace, and must leave the backend unset.
+func TestInitWireBackendStoreFailureIsError(t *testing.T) {
+	old := wireBackend
+	wireBackend = nil
+
+	t.Cleanup(func() { wireBackend = old })
+
+	err := initWireBackendWith(func() (*wire.Store, error) {
+		return nil, errors.New("home dir: no such user")
+	})
+	if err == nil || !strings.Contains(err.Error(), "init wire store") {
+		t.Fatalf("err = %v, want init wire store error", err)
+	}
+
+	if wireBackend != nil {
+		t.Error("backend must stay nil after init failure")
+	}
+}
+
+// TestInitWireBackendKeepsExistingBackend guards the once-only wiring: a set
+// backend is reused without touching the filesystem.
+func TestInitWireBackendKeepsExistingBackend(t *testing.T) {
+	fake := coreSuccessFake()
+	old := wireBackend
+	wireBackend = fake
+
+	t.Cleanup(func() { wireBackend = old })
+
+	if err := initWireBackend(); err != nil {
+		t.Fatalf("initWireBackend: %v", err)
+	}
+
+	if wireBackend != fake {
+		t.Error("initWireBackend replaced an existing backend")
+	}
+}
+
 // testListCmd builds a list command wired to a fake backend.
 func testListCmd(t *testing.T, fetcher wire.Fetcher, args ...string) (*cobra.Command, *bytes.Buffer) {
 	t.Helper()

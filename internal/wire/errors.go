@@ -23,6 +23,9 @@ var (
 	ErrDiverged = errors.New("wire: local modifications present")
 	// ErrUpstream marks network, auth, and rate-limit failures.
 	ErrUpstream = errors.New("wire: upstream unreachable")
+	// ErrInternal marks programming errors (nil dependencies, violated
+	// invariants). It is never caused by user input or environment.
+	ErrInternal = errors.New("wire: internal error")
 )
 
 // NextAction returns the user-facing next step for a wire failure class.
