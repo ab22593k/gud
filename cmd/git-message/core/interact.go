@@ -135,12 +135,12 @@ func generateCommitMessage(ctx context.Context, app *AppContext, diff, promptCon
 	return assembleTrailers(ctx, msg, cfg.Issues, app.Client().ModelName())
 }
 
-// reviewMessage runs the commit-message review: the TUI in a terminal, the
-// plain-text prompt otherwise. It returns the chosen action and any inline
-// edit the TUI produced.
+// reviewMessage runs the commit-message review: the TUI when both stdin and
+// stdout are terminals, the plain-text prompt otherwise. It returns the
+// chosen action and any inline edit the TUI produced.
 func reviewMessage(cmd *cobra.Command, scanner *bufio.Scanner, out io.Writer,
 	msg string, wrapLine int) (action, edited string) {
-	if file, ok := cmd.InOrStdin().(*os.File); ok && isTerminal(file) {
+	if isInteractive(cmd.InOrStdin(), out) {
 		var err error
 
 		action, edited, err = tui.RunCommitReview(msg, wrapLine)
