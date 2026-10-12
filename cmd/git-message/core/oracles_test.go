@@ -229,8 +229,8 @@ func TestOracle_World_HookExecutableBit(t *testing.T) {
 
 // H: version constant is semantically formatted.
 func TestOracle_History_VersionFormat(t *testing.T) {
-	if !strings.Contains(version, ".") {
-		t.Errorf("[H] version %q should be semver‑formatted (X.Y.Z)", version)
+	if !strings.Contains(effectiveVersion(), ".") {
+		t.Errorf("[H] version %q should be semver‑formatted (X.Y.Z)", effectiveVersion())
 	}
 }
 
@@ -547,8 +547,8 @@ func TestOracle_Purpose_VersionReportsVersion(t *testing.T) {
 	}
 
 	got := strings.TrimSpace(buf.String())
-	if !strings.Contains(got, version) {
-		t.Errorf("[P] version output %q should contain version constant %q", got, version)
+	if want := effectiveVersion(); !strings.Contains(got, want) {
+		t.Errorf("[P] version output %q should contain version %q", got, want)
 	}
 }
 
