@@ -159,7 +159,7 @@ func amendReviewLoop(ctx context.Context, cmd *cobra.Command, app *AppContext,
 	scanner *bufio.Scanner, out io.Writer, job amendJob, promptContext string,
 ) error {
 	for {
-		msg, _, err := loopMessage(ctx, app, job.diff, promptContext, "")
+		msg, _, err := loopMessage(ctx, cmd.ErrOrStderr(), app, job.diff, promptContext, "")
 		if err != nil {
 			return err
 		}

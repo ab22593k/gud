@@ -1,9 +1,9 @@
 package core
 
 import (
+	"bytes"
 	"errors"
 	"io"
-	"os"
 	"strings"
 	"testing"
 )
@@ -14,7 +14,7 @@ func TestShowProgress_ReturnsValue(t *testing.T) {
 	msg := "Loading..."
 	expected := "hello world"
 
-	got, err := showProgress(t.Context(), msg, func() (string, error) {
+	got, err := showProgress(t.Context(), io.Discard, msg, func() (string, error) {
 		return expected, nil
 	})
 	if err != nil {
@@ -31,7 +31,7 @@ func TestShowProgress_ReturnsError(t *testing.T) {
 
 	expectedErr := errors.New("something went wrong")
 
-	_, err := showProgress(t.Context(), "Working...", func() (string, error) {
+	_, err := showProgress(t.Context(), io.Discard, "Working...", func() (string, error) {
 		return "", expectedErr
 	})
 	if err == nil {
@@ -46,7 +46,7 @@ func TestShowProgress_ReturnsError(t *testing.T) {
 func TestShowProgress_WithIntType(t *testing.T) {
 	t.Parallel()
 
-	got, err := showProgress(t.Context(), "Counting...", func() (int, error) {
+	got, err := showProgress(t.Context(), io.Discard, "Counting...", func() (int, error) {
 		return 42, nil
 	})
 	if err != nil {
@@ -61,7 +61,7 @@ func TestShowProgress_WithIntType(t *testing.T) {
 func TestShowProgress_CompletesImmediately(t *testing.T) {
 	t.Parallel()
 
-	got, err := showProgress(t.Context(), "Fast...", func() (string, error) {
+	got, err := showProgress(t.Context(), io.Discard, "Fast...", func() (string, error) {
 		return testDoneStr, nil
 	})
 	if err != nil {
@@ -73,44 +73,23 @@ func TestShowProgress_CompletesImmediately(t *testing.T) {
 	}
 }
 
-func TestShowProgress_WritesToStderr(t *testing.T) {
-	// Capture stderr by redirecting os.Stderr to a pipe.
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("failed to create pipe: %v", err)
-	}
+func TestShowProgress_WritesToCommandStderr(t *testing.T) {
+	t.Parallel()
 
-	savedStderr := os.Stderr
-	os.Stderr = w
-
-	done := make(chan struct{})
-
-	var captured string
-
-	go func() {
-		data, _ := io.ReadAll(r)
-		captured = string(data)
-
-		close(done)
-	}()
+	var buf bytes.Buffer
 
 	msg := "test message"
-	_, fnErr := showProgress(t.Context(), msg, func() (string, error) {
+
+	_, err := showProgress(t.Context(), &buf, msg, func() (string, error) {
 		return "ok", nil
 	})
-
-	_ = w.Close()
-
-	<-done
-
-	os.Stderr = savedStderr
-
-	if fnErr != nil {
-		t.Errorf("showProgress() returned error: %v", fnErr)
+	if err != nil {
+		t.Errorf("showProgress() returned error: %v", err)
 	}
 
+	captured := buf.String()
 	if captured == "" {
-		t.Error("showProgress() did not write anything to stderr")
+		t.Error("showProgress() did not write anything to the command stderr writer")
 	}
 
 	if !strings.Contains(captured, msg) {
@@ -119,5 +98,22 @@ func TestShowProgress_WritesToStderr(t *testing.T) {
 
 	if !strings.Contains(captured, "✓") {
 		t.Errorf("showProgress() stderr output = %q, want it to contain checkmark", captured)
+	}
+}
+
+// TestShowProgress_QuietDiscardWritesNothing guards the --quiet path: a
+// caller passing io.Discard must silence the spinner without errors.
+func TestShowProgress_QuietDiscardWritesNothing(t *testing.T) {
+	t.Parallel()
+
+	got, err := showProgress(t.Context(), io.Discard, "quiet...", func() (string, error) {
+		return "ok", nil
+	})
+	if err != nil {
+		t.Errorf("showProgress() returned error: %v", err)
+	}
+
+	if got != "ok" {
+		t.Errorf("showProgress() = %q, want %q", got, "ok")
 	}
 }

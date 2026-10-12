@@ -40,7 +40,7 @@ func interactiveCommit(ctx context.Context, cmd *cobra.Command, app *AppContext,
 		cfg := app.Config()
 		client := app.Client()
 
-		msg, preserved, err := loopMessage(ctx, app, diff, promptContext, prepared)
+		msg, preserved, err := loopMessage(ctx, cmd.ErrOrStderr(), app, diff, promptContext, prepared)
 		if err != nil {
 			return err
 		}
@@ -98,11 +98,11 @@ func interactiveCommit(ctx context.Context, cmd *cobra.Command, app *AppContext,
 // marks the message as git's own (not AI-generated) so the edit path skips
 // the Assisted-by trailer for it.
 func loopMessage(
-	ctx context.Context, app *AppContext, diff, promptContext, prepared string,
+	ctx context.Context, errW io.Writer, app *AppContext, diff, promptContext, prepared string,
 ) (msg string, preserved bool, err error) {
 	preserved = prepared != ""
 	if !preserved {
-		msg, err = generateCommitMessage(ctx, app, diff, promptContext)
+		msg, err = generateCommitMessage(ctx, errW, app, diff, promptContext)
 
 		return msg, false, err
 	}
@@ -116,7 +116,9 @@ func loopMessage(
 // Assisted-by and issue trailers applied. It errors when no request client is
 // available (no API key configured) so a preserved git message can be used
 // without one.
-func generateCommitMessage(ctx context.Context, app *AppContext, diff, promptContext string) (string, error) {
+func generateCommitMessage(
+	ctx context.Context, errW io.Writer, app *AppContext, diff, promptContext string,
+) (string, error) {
 	if app.Client() == nil {
 		return "", errors.New("failed to generate commit message: request client is unavailable (set GOOGLE_API_KEY)")
 	}
@@ -124,7 +126,7 @@ func generateCommitMessage(ctx context.Context, app *AppContext, diff, promptCon
 	cfg := app.Config()
 	mounts := app.AgentFiles(ctx)
 
-	msg, err := showProgress(ctx, "Rolling in, obscuring the landscape of the codebase...", func() (string, error) {
+	msg, err := showProgress(ctx, errW, "Rolling in, obscuring the landscape of the codebase...", func() (string, error) {
 		return app.Client().GenerateCommitMessageWithContent(ctx, diff, promptContext, cfg.DetailLevel,
 			cfg.Hint, mounts, cfg.WrapLine)
 	})
