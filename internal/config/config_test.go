@@ -17,6 +17,10 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.WrapLine != 72 {
 		t.Errorf("DefaultConfig().WrapLine = %d, want 72", cfg.WrapLine)
 	}
+
+	if cfg.HistoryValue() != DefaultHistory {
+		t.Errorf("DefaultConfig().History = %d, want default %d", cfg.HistoryValue(), DefaultHistory)
+	}
 }
 
 func TestValidateDetailLevel(t *testing.T) {

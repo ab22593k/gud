@@ -43,7 +43,9 @@ func Ptr[T any](v T) *T {
 }
 
 // HistoryValue returns the effective History value, treating an unset History
-// as 0 (disabled). It is a nil-safe accessor for consumers.
+// as 0 (disabled). A nil History only occurs in override layers or zero-value
+// Configs; the merged effective config carries DefaultHistory unless a layer
+// explicitly sets it. It is a nil-safe accessor for consumers.
 func (c Config) HistoryValue() int {
 	if c.History == nil {
 		return 0
@@ -61,6 +63,14 @@ const (
 // DefaultWrapLine is the canonical default for wrapping commit-message lines.
 // request.defaultWrapLine aliases this so the 72-char default has one source.
 const DefaultWrapLine = 72
+
+// DefaultHistory is the canonical default for the number of recent commits
+// included as prompt context. The --history flag default in root.go aliases
+// this so the advertised default and the effective default cannot drift:
+// configFromCmd only applies the flag when explicitly Changed, so an unset
+// flag leaves the base layer's DefaultHistory intact, while --history 0
+// still disables history via an explicit Ptr(0) override.
+const DefaultHistory = 5
 
 // Validate returns a copy of the config with normalized and clamped values.
 // Invalid or out-of-range values are replaced with sensible defaults.
@@ -154,9 +164,13 @@ func (c Config) Merge(override Config) Config {
 }
 
 // DefaultConfig returns a Config populated with sensible defaults.
+// History defaults to DefaultHistory (not nil): a nil History in an override
+// layer means "not set", but the merged effective config always carries the
+// default unless a layer explicitly sets it (including Ptr(0) to disable).
 func DefaultConfig() Config {
 	return Config{
 		DetailLevel: DetailStandard,
 		WrapLine:    DefaultWrapLine,
+		History:     Ptr(DefaultHistory),
 	}
 }

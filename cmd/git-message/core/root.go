@@ -112,7 +112,8 @@ func mustGet[T any](_ *cobra.Command, name string, fn func(string) (T, error)) T
 func addPersistentFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().String("detail-level", "standard", "Set the detail level (minimal, standard, detailed)")
 	cmd.PersistentFlags().String("hint", "", "Focus boundaries for the AI")
-	cmd.PersistentFlags().Int("history", 5, "Number of topic commits since diverging from upstream (0 to disable)")
+	cmd.PersistentFlags().Int("history", config.DefaultHistory,
+		"Number of topic commits since diverging from upstream (0 to disable)")
 	cmd.PersistentFlags().String("model", "", "Gemini model for the Antigravity agent (or use GEMINI_MODEL env)")
 	cmd.PersistentFlags().StringSlice("issue", nil,
 		"Issue numbers this commit fixes (comma-separated, e.g. 123,456; adds a 'Fixes: #N' trailer per issue)")

@@ -230,6 +230,29 @@ func TestMediatorCLIHistoryZeroDisablesEnv(t *testing.T) {
 	}
 }
 
+// TestMediatorDefaultsHistoryToFive pins the effective default: with no
+// file, env, or CLI history set, Load must yield DefaultHistory (matching the
+// --history flag help), not silently disabled history.
+func TestMediatorDefaultsHistoryToFive(t *testing.T) {
+	xdgDir := t.TempDir()
+	m := &Mediator{
+		XDGProvider: provider.NewFileProvider(filepath.Join(xdgDir, "missing.json")),
+		CWDProvider: provider.NewFileProvider(filepath.Join(xdgDir, "also-missing.json")),
+	}
+
+	t.Setenv("GUD_HISTORY", "")
+	t.Setenv("GOOGLE_API_KEY", "")
+
+	cfg, err := m.Load(config.Config{})
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if cfg.HistoryValue() != config.DefaultHistory {
+		t.Errorf("History = %d, want default %d", cfg.HistoryValue(), config.DefaultHistory)
+	}
+}
+
 func TestValidateStrictUnresolvedPlaceholder(t *testing.T) {
 	tests := []struct {
 		name    string
