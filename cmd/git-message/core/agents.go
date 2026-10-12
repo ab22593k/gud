@@ -255,6 +255,12 @@ func mountPath(root, dir string, primary bool) (string, bool) {
 // syscall spent on information it has. Only the ancestor chain — a handful of
 // directories — still pays the stat.
 //
+// Security: AGENTS.md content is mounted inline and sent to the remote agent,
+// so symlinks are never collected here. A malicious clone could otherwise ship
+// docs/AGENTS.md -> ~/.ssh/id_rsa and exfiltrate arbitrary local files.
+// readAgentsPath re-checks with Lstat before every read to close the
+// walk→read window.
+//
 // WalkDir visits a directory before its contents, so a parent's AGENTS.md is
 // recorded before a child's: the returned order already runs nearest-first.
 func walkDown(ctx context.Context, start, root string) []string {
@@ -278,38 +284,69 @@ func walkDown(ctx context.Context, start, root string) []string {
 			return nil //nolint:nilerr // documented: unreadable paths are skipped
 		}
 
-		if !d.IsDir() {
-			if d.Name() == agentsFileName {
-				found = append(found, p)
+		if d.IsDir() {
+			if visited >= maxAgentDirs {
+				return filepath.SkipAll
+			}
+
+			visited++
+
+			// The scan root is descended into unconditionally; pruning applies to
+			// what is below it.
+			if p == start {
+				return nil
+			}
+
+			if agentSkipDirs[d.Name()] {
+				return filepath.SkipDir
+			}
+
+			if matcher != nil && matcher.Ignored(relToRoot(root, p)) {
+				return filepath.SkipDir
 			}
 
 			return nil
 		}
 
-		if visited >= maxAgentDirs {
-			return filepath.SkipAll
-		}
-
-		visited++
-
-		// The scan root is descended into unconditionally; pruning applies to
-		// what is below it.
-		if p == start {
+		if d.Name() != agentsFileName {
 			return nil
 		}
 
-		if agentSkipDirs[d.Name()] {
-			return filepath.SkipDir
-		}
-
-		if matcher != nil && matcher.Ignored(relToRoot(root, p)) {
-			return filepath.SkipDir
+		if isMountableAgentsFile(p) {
+			found = append(found, p)
 		}
 
 		return nil
 	})
 
 	return found
+}
+
+// isMountableAgentsFile reports whether p is safe to mount: a regular file,
+// not a symlink. Lstat does not follow symlinks, so a shipped
+// docs/AGENTS.md -> ~/.ssh/id_rsa is rejected here instead of exfiltrating
+// its target. readAgentsPath enforces the same check again before every read.
+func isMountableAgentsFile(p string) bool {
+	info, err := os.Lstat(p)
+	if err != nil {
+		slog.Debug("AGENTS.md not readable", "path", p, "error", err)
+
+		return false
+	}
+
+	if info.Mode()&os.ModeSymlink != 0 {
+		slog.Warn("AGENTS.md is a symlink; skipping to avoid exfiltrating link target", "path", p)
+
+		return false
+	}
+
+	if !info.Mode().IsRegular() {
+		slog.Warn("AGENTS.md is not a regular file; skipping", "path", p)
+
+		return false
+	}
+
+	return true
 }
 
 // relToRoot is the slash-separated path of p relative to root, or "" when it
@@ -340,7 +377,7 @@ func isWithin(root, p string) bool {
 func readAgentsFile(dir string) (string, bool) {
 	p := filepath.Join(dir, agentsFileName)
 
-	info, err := os.Stat(p)
+	info, err := os.Lstat(p)
 	if err != nil {
 		// Covers a plain miss, a broken symlink, and a permission failure on
 		// the parent directory: none of them is worth more than a debug line.
@@ -349,10 +386,20 @@ func readAgentsFile(dir string) (string, bool) {
 		return "", false
 	}
 
-	// A directory named AGENTS.md is a collision, not instructions. os.ReadFile
-	// would reject it too, but this states the reason.
-	if info.IsDir() {
-		slog.Debug("AGENTS.md is a directory; ignoring", "path", p)
+	// Never follow symlinks: content is mounted inline and sent to the remote
+	// agent, so a shipped docs/AGENTS.md -> ~/.ssh/id_rsa would otherwise
+	// exfiltrate arbitrary local files.
+	if info.Mode()&os.ModeSymlink != 0 {
+		slog.Warn("AGENTS.md is a symlink; skipping to avoid exfiltrating link target", "path", p)
+
+		return "", false
+	}
+
+	// A directory (or FIFO, device, socket) named AGENTS.md is a collision,
+	// not instructions. os.ReadFile would reject some of these too, but this
+	// states the reason without touching the target.
+	if !info.Mode().IsRegular() {
+		slog.Debug("AGENTS.md is not a regular file; ignoring", "path", p)
 
 		return "", false
 	}
@@ -361,14 +408,44 @@ func readAgentsFile(dir string) (string, bool) {
 }
 
 // readAgentsPath reads an AGENTS.md whose existence is already known — the
-// downward walk reported it — so it skips the stat entirely.
+// downward walk reported it — so the walk-time Lstat already passed. It
+// re-validates with Lstat anyway: the walk→read window is enough for a
+// symlink swap, and ancestor-chain callers never walked at all.
 //
 // Every failure mode is non-fatal and logged, never returned: the caller has no
 // way to act on it, and an unreadable instruction file must not block a commit.
+// Symlink and non-regular skips log at Warn because they signal a repo that is
+// either malicious (link to ~/.ssh/id_rsa, /etc/passwd) or broken.
 func readAgentsPath(p string) (string, bool) {
+	info, err := os.Lstat(p)
+	if err != nil {
+		slog.Warn("AGENTS.md unreadable; proceeding without it", "path", p, "error", err)
+
+		return "", false
+	}
+
+	if info.Mode()&os.ModeSymlink != 0 {
+		slog.Warn("AGENTS.md is a symlink; skipping to avoid exfiltrating link target", "path", p)
+
+		return "", false
+	}
+
+	if !info.Mode().IsRegular() {
+		slog.Warn("AGENTS.md is not a regular file; skipping", "path", p)
+
+		return "", false
+	}
+
+	if info.Size() > maxAgentsFileBytes {
+		slog.Warn("AGENTS.md is too large to mount; proceeding without it",
+			"path", p, "bytes", info.Size(), "max_bytes", maxAgentsFileBytes)
+
+		return "", false
+	}
+
 	data, err := os.ReadFile(p) //nolint:gosec // G304: path comes from a bounded walk of the invocation tree
 	if err != nil {
-		// The stat succeeded, so this is a race (unlinked between the two
+		// The Lstat succeeded, so this is a race (unlinked between the two
 		// calls), a permission failure on the file itself, or an I/O error.
 		slog.Warn("AGENTS.md unreadable; proceeding without it", "path", p, "error", err)
 

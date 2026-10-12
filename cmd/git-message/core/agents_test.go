@@ -105,9 +105,11 @@ func TestReadAgentsFile(t *testing.T) {
 		}
 	})
 
-	// A symlink is followed, so an AGENTS.md that lives elsewhere and is linked
-	// in still works — but a broken one is treated as absent, not as a failure.
-	t.Run("symlink to a file", func(t *testing.T) {
+	// Symlinks are never followed: content is mounted inline and sent to the
+	// remote agent, so a shipped docs/AGENTS.md -> ~/.ssh/id_rsa would
+	// otherwise exfiltrate arbitrary local files. Even an intra-repo link is
+	// rejected — least privilege, no EvalSymlinks/isWithin re-validation needed.
+	t.Run("symlink to a file is rejected", func(t *testing.T) {
 		t.Parallel()
 
 		dir := t.TempDir()
@@ -117,9 +119,30 @@ func TestReadAgentsFile(t *testing.T) {
 			t.Skipf("symlinks unavailable: %v", err)
 		}
 
-		got, ok := readAgentsFile(dir)
-		if !ok || got != content {
-			t.Errorf("readAgentsFile() = %q, %v; want %q, true", got, ok, content)
+		if got, ok := readAgentsFile(dir); ok || got != "" {
+			t.Errorf("readAgentsFile() = %q, %v; want %q, false (symlinks must not be followed)", got, ok, "")
+		}
+	})
+
+	t.Run("symlink to outside secret is rejected", func(t *testing.T) {
+		t.Parallel()
+
+		secretDir := t.TempDir()
+		secret := filepath.Join(secretDir, "id_rsa")
+		writeFile(t, secret, "SUPER-SECRET-SSH-KEY-MATERIAL")
+
+		dir := t.TempDir()
+
+		if err := os.Symlink(secret, filepath.Join(dir, agentsFileName)); err != nil {
+			t.Skipf("symlinks unavailable: %v", err)
+		}
+
+		if got, ok := readAgentsFile(dir); ok || got != "" {
+			t.Errorf("readAgentsFile() = %q, %v; want rejection (exfiltration blocked)", got, ok)
+		}
+
+		if got, ok := readAgentsPath(filepath.Join(dir, agentsFileName)); ok || got != "" {
+			t.Errorf("readAgentsPath() = %q, %v; want rejection (exfiltration blocked)", got, ok)
 		}
 	})
 
@@ -508,6 +531,57 @@ func TestResolveAgentFiles_SkipsIgnoredAndVendorTrees(t *testing.T) {
 
 	if byPath["real/"+agentsFileName] != "real instructions" {
 		t.Errorf("real file missing, got %v", order)
+	}
+}
+
+// A shipped symlink must never exfiltrate its target: docs/AGENTS.md ->
+// ~/.ssh/id_rsa (or /etc/passwd) is mounted inline and sent to the remote
+// agent, so walkDown must not collect it and readAgentsPath must not follow
+// it. Covers both the downward walk and the ancestor chain via agentFilesFrom.
+func TestResolveAgentFiles_RejectsSymlinkExfiltration(t *testing.T) {
+	t.Parallel()
+
+	const secret = "SUPER-SECRET-SSH-KEY-MATERIAL"
+
+	secretFile := filepath.Join(t.TempDir(), "id_rsa")
+	writeFile(t, secretFile, secret)
+
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, agentsFileName), "root instructions")
+
+	docs := filepath.Join(root, "docs")
+	if err := os.MkdirAll(docs, 0750); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	if err := os.Symlink(secretFile, filepath.Join(docs, agentsFileName)); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	// Downward walk: the symlink must not be collected.
+	for _, p := range walkDown(t.Context(), root, root) {
+		if p == filepath.Join(docs, agentsFileName) {
+			t.Errorf("walkDown collected symlink %q", p)
+		}
+	}
+
+	// End-to-end: secret content must never appear in mounts.
+	for _, f := range agentFilesFrom(t.Context(), root, root) {
+		if f.Content == secret {
+			t.Errorf("exfiltrated symlink target mounted at %q", f.Path)
+		}
+	}
+
+	// Ancestor chain: start inside docs, symlink is on the chain.
+	nested := filepath.Join(docs, "nested")
+	if err := os.MkdirAll(nested, 0750); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	for _, f := range agentFilesFrom(t.Context(), nested, root) {
+		if f.Content == secret {
+			t.Errorf("exfiltrated ancestor symlink target mounted at %q", f.Path)
+		}
 	}
 }
 
