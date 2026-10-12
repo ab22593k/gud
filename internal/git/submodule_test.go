@@ -96,6 +96,100 @@ func TestExtractSubmoduleChanges(t *testing.T) {
 	}
 }
 
+// TestSubmoduleContext_PathEscapeSkipsSubjects is the regression lock for a
+// crafted diff path: ch.Path derives from +++ b/<path>, which a malicious
+// filename can shape with .. segments. git -C must never operate outside the
+// repo root, so escaping paths keep the SHA-only summary with no subjects
+// from outside the repository.
+func TestSubmoduleContext_PathEscapeSkipsSubjects(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping temp-repo test in short mode")
+	}
+
+	tmp := t.TempDir()
+	root := filepath.Join(tmp, "root")
+	sib := filepath.Join(tmp, "sibling")
+
+	runIn := func(workDir string, args ...string) string {
+		t.Helper()
+
+		cmd := exec.CommandContext(context.Background(), "git", args...)
+		cmd.Dir = workDir
+
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v failed: %v\n%s", args, err, out)
+		}
+
+		return strings.TrimSpace(string(out))
+	}
+
+	for _, d := range []string{root, sib} {
+		if err := os.MkdirAll(d, 0755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+
+		runIn(d, "init", "-q", "-b", "main")
+		runIn(d, "config", "user.name", "Test")
+		runIn(d, "config", "user.email", "test@example.com")
+	}
+
+	// Sibling repo holds a commit reachable only outside root.
+	if err := os.WriteFile(filepath.Join(sib, "secret.txt"), []byte("s3cret\n"), 0600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	runIn(sib, "add", ".")
+	runIn(sib, "commit", "-q", "-m", "SECRET-OUTSIDE-ROOT")
+	sha := runIn(sib, "rev-parse", "HEAD")
+
+	const zero = "0000000000000000000000000000000000000000"
+
+	for _, path := range []string{"../sibling", "sub/../../sibling", ".."} {
+		ch := SubmoduleChange{Path: path, OldCommit: zero, NewCommit: sha}
+
+		got := SubmoduleContext(context.Background(), root, []SubmoduleChange{ch})
+		if strings.Contains(got, "SECRET-OUTSIDE-ROOT") {
+			t.Errorf("path %q: subjects leaked from outside repo root:\n%s", path, got)
+		}
+
+		if !strings.Contains(got, shortSHA(sha)) {
+			t.Errorf("path %q: SHA-only summary lost, got:\n%s", path, got)
+		}
+	}
+}
+
+func TestIsWithinDir(t *testing.T) {
+	t.Parallel()
+
+	root := filepath.FromSlash("/repo")
+
+	cases := []struct {
+		name string
+		dir  string
+		want bool
+	}{
+		{name: "root itself", dir: filepath.FromSlash("/repo"), want: true},
+		{name: "child", dir: filepath.FromSlash("/repo/sub"), want: true},
+		{name: "nested child", dir: filepath.FromSlash("/repo/a/b"), want: true},
+		{name: "parent", dir: filepath.FromSlash("/"), want: false},
+		{name: "dotdot", dir: filepath.FromSlash("/repo/.."), want: false},
+		{name: "sibling via dotdot", dir: filepath.FromSlash("/repo/../sibling"), want: false},
+		{name: "nested escape", dir: filepath.FromSlash("/repo/sub/../../sibling"), want: false},
+		{name: "sibling", dir: filepath.FromSlash("/sibling"), want: false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := isWithinDir(root, tc.dir); got != tc.want {
+				t.Errorf("isWithinDir(%q, %q) = %v, want %v", root, tc.dir, got, tc.want)
+			}
+		})
+	}
+}
+
 // TestSubmoduleContext verifies end-to-end enrichment: a staged gitlink update
 // yields the submodule name, URL, range, and locally available commit subjects;
 // an uninitialized submodule degrades to a SHA-only summary.

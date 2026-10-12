@@ -2,6 +2,7 @@ package git
 
 import (
 	"context"
+	"log/slog"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -220,6 +221,16 @@ func submoduleSubjects(ctx context.Context, root string, ch SubmoduleChange) []s
 
 	dir := filepath.Join(root, ch.Path)
 
+	// ch.Path derives from the staged diff (+++ b/<path>), which a crafted
+	// filename in a cloned repo can shape with .. segments. Never let git -C
+	// operate outside the repository: skip enrichment and keep the SHA-only
+	// summary, the same degradation as a missing checkout.
+	if !isWithinDir(root, dir) {
+		slog.Debug("submodule path escapes repo root; skipping subjects", "root", root, "path", ch.Path)
+
+		return nil
+	}
+
 	var args []string
 	if isZeroSHA(ch.OldCommit) {
 		// Added gitlink: log the new commit's own history.
@@ -237,6 +248,20 @@ func submoduleSubjects(ctx context.Context, root string, ch SubmoduleChange) []s
 	}
 
 	return strings.Split(out, "\n")
+}
+
+// isWithinDir reports whether dir is root itself or somewhere below it.
+// It contains submodule git -C targets derived from diff paths, mirroring
+// the agents.go isWithin contract: lexical, slash-normalised, ".."-proof.
+func isWithinDir(root, dir string) bool {
+	rel, err := filepath.Rel(root, dir)
+	if err != nil {
+		return false
+	}
+
+	rel = filepath.ToSlash(rel)
+
+	return rel != "" && rel != ".." && !strings.HasPrefix(rel, "../")
 }
 
 // readGitmodules returns maps from submodule path → name and path → url,
