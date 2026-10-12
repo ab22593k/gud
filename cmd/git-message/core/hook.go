@@ -60,7 +60,7 @@ This is used internally by the git hook and should not be called directly.`,
 }
 
 func runHookInstall(ctx context.Context, global bool) error {
-	hookDir, err := git.GetHookDir(global)
+	hookDir, err := git.GetHookDir(ctx, global)
 	if err != nil {
 		return fmt.Errorf("failed to get hook directory: %w", err)
 	}
@@ -120,7 +120,7 @@ func ensureGlobalHooksPath(ctx context.Context, hookDir string) error {
 }
 
 func runHookUninstall(ctx context.Context, global bool) error {
-	hookDir, err := git.GetHookDir(global)
+	hookDir, err := git.GetHookDir(ctx, global)
 	if err != nil {
 		return fmt.Errorf("failed to get hook directory: %w", err)
 	}

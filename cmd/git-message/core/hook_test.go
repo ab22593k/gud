@@ -61,7 +61,7 @@ func TestHookInstallUninstallGlobalHooksPath(t *testing.T) {
 		t.Fatalf("runHookInstall(global): %v", err)
 	}
 
-	hookDir, err := git.GetHookDir(true)
+	hookDir, err := git.GetHookDir(ctx, true)
 	if err != nil {
 		t.Fatalf("GetHookDir: %v", err)
 	}

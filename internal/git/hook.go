@@ -68,8 +68,13 @@ func UninstallHook(hookDir string, hookType HookType) error {
 
 // GetHookDir returns the appropriate hooks directory.
 // If global is true, returns ~/.config/gud/hooks/ (gud's XDG config home,
-// matching the global config location), otherwise .git/hooks/.
-func GetHookDir(global bool) (string, error) {
+// matching the global config location). Otherwise it resolves the current
+// repository's git dir via git rev-parse --absolute-git-dir (worktree aware:
+// in a worktree .git is a file, so a relative .git/hooks would miss) and
+// returns its hooks subdirectory. Invoked from repo/sub/dir this yields the
+// repo's hooks, not a stray ./.git/hooks under cwd. Outside a repository it
+// returns an error instead of creating one.
+func GetHookDir(ctx context.Context, global bool) (string, error) {
 	if global {
 		home, err := os.UserHomeDir()
 		if err != nil {
@@ -79,7 +84,12 @@ func GetHookDir(global bool) (string, error) {
 		return filepath.Join(home, ".config", "gud", "hooks"), nil
 	}
 
-	return filepath.Join(".git", "hooks"), nil
+	gitDir, err := gitDir(ctx)
+	if err != nil {
+		return "", fmt.Errorf("resolve git dir for hooks: %w", err)
+	}
+
+	return filepath.Join(gitDir, "hooks"), nil
 }
 
 // GetGlobalHooksPath returns the global core.hooksPath configuration value,
