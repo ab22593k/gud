@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/clipperhouse/displaywidth"
 	"gud/internal/git"
 )
 
@@ -36,10 +37,10 @@ func VerifyMessage(msg, diff string, wrapLine int) []Finding {
 		limit = defaultWrapLine
 	}
 
-	if subject, _, _ := strings.Cut(msg, "\n"); len(subject) > limit {
+	if subject, _, _ := strings.Cut(msg, "\n"); displaywidth.String(subject) > limit {
 		out = append(out, Finding{
 			Check:  "subject-length",
-			Detail: fmt.Sprintf("subject is %d chars, limit is %d", len(subject), limit),
+			Detail: fmt.Sprintf("subject is %d cols, limit is %d", displaywidth.String(subject), limit),
 		})
 	}
 

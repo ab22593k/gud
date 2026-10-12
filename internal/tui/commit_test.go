@@ -7,7 +7,14 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/clipperhouse/displaywidth"
 )
+
+// displayWidthOf measures a wrapped line in terminal cells for assertions;
+// len would count bytes and misjudge CJK/emoji widths.
+func displayWidthOf(s string) int {
+	return displaywidth.String(s)
+}
 
 func TestNewCommitReview(t *testing.T) {
 	msg := "feat: add super cool feature"
@@ -148,6 +155,42 @@ func TestWrapText(t *testing.T) {
 	}
 }
 
+// TestWrapTextMeasuresCells guards CJK/emoji wrapping: limits are terminal
+// cells, not bytes. Eight 3-CJK-char words are 79 bytes but 55 cells, so a
+// 72-col limit must keep them on one line; byte counting wrapped them.
+func TestWrapTextMeasuresCells(t *testing.T) {
+	t.Parallel()
+
+	cjk := strings.TrimSpace(strings.Repeat("漢漢漢 ", 8))
+
+	if got := wrapText(cjk, 72); len(strings.Split(got, "\n")) != 1 {
+		t.Errorf("CJK line of 55 cells wrapped at 72 cols:\n%q", got)
+	}
+
+	// Emoji words behave the same way: eight 3-crab words are 103 bytes but
+	// 55 cells, so they stay on one line; twelve are 83 cells and must wrap
+	// with every line within limit. Cell width comes from displaywidth, so
+	// assert with it rather than len. Words stay atomic (long URLs are never
+	// split mid-token), matching the pre-existing wrapping contract.
+	emojiFit := strings.TrimSpace(strings.Repeat("🦀🦀🦀 ", 8))
+	if got := wrapText(emojiFit, 72); len(strings.Split(got, "\n")) != 1 {
+		t.Errorf("55-cell emoji line wrapped at 72 cols:\n%q", got)
+	}
+
+	emojiWide := strings.TrimSpace(strings.Repeat("🦀🦀🦀 ", 12))
+	lines := strings.Split(wrapText(emojiWide, 72), "\n")
+
+	if len(lines) < 2 {
+		t.Fatalf("83-cell emoji line was not wrapped")
+	}
+
+	for _, line := range lines {
+		if w := displayWidthOf(line); w > 72 {
+			t.Errorf("wrapped line is %d cells, want <= 72: %q", w, line)
+		}
+	}
+}
+
 func TestCommitReviewRespectsWrapLine(t *testing.T) {
 	longMsg := "This is a very long commit message line that exceeds fifty characters and should be wrapped in the TUI."
 	model := NewCommitReview(longMsg, 50)
@@ -172,6 +215,32 @@ func TestCommitReviewRespectsWrapLine(t *testing.T) {
 
 	if m.viewport.Width > 50 {
 		t.Errorf("expected viewport width <= 50, got %d", m.viewport.Width)
+	}
+}
+
+// TestCommitReviewTinyTerminalClamps guards degenerate window sizes: a
+// Width<6 terminal once yielded zero/negative viewport and editor dimensions.
+func TestCommitReviewTinyTerminalClamps(t *testing.T) {
+	t.Parallel()
+
+	model := NewCommitReview("fix: x")
+	updated, _ := model.Update(tea.WindowSizeMsg{Width: 4, Height: 3})
+
+	m, ok := updated.(CommitReviewModel)
+	if !ok {
+		t.Fatalf("updated model type = %T, want CommitReviewModel", updated)
+	}
+
+	if m.viewport.Width < 1 {
+		t.Errorf("viewport.Width = %d, want >= 1", m.viewport.Width)
+	}
+
+	if m.viewport.Height < 1 {
+		t.Errorf("viewport.Height = %d, want >= 1", m.viewport.Height)
+	}
+
+	if m.textarea.Width() < 1 {
+		t.Errorf("textarea width = %d, want >= 1", m.textarea.Width())
 	}
 }
 

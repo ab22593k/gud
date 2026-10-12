@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/clipperhouse/displaywidth"
 )
 
 // Action constants returned by RunCommitReview.
@@ -150,15 +151,19 @@ func (m CommitReviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		vpHeight := max(msg.Height-listHeight-6, 3)
 
-		vpWidth := msg.Width - 6
+		// Tiny terminals (Width<6) would otherwise yield zero or negative
+		// viewport and editor dimensions.
+		vpWidth := max(msg.Width-6, 1)
 		if m.wrapLine > 0 && m.wrapLine < vpWidth {
 			vpWidth = m.wrapLine
 		}
 
-		taWidth := msg.Width - 4
+		taWidth := max(msg.Width-4, 1)
 		if m.wrapLine > 0 && m.wrapLine+4 < taWidth {
 			taWidth = m.wrapLine + 4
 		}
+
+		taHeight := max(msg.Height-6, 1)
 
 		if !m.ready {
 			m.viewport = viewport.New(vpWidth, vpHeight)
@@ -168,14 +173,14 @@ func (m CommitReviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.list.SetSize(msg.Width, listHeight)
 
 			m.textarea.SetWidth(taWidth)
-			m.textarea.SetHeight(msg.Height - 6)
+			m.textarea.SetHeight(taHeight)
 			m.ready = true
 		} else {
 			m.viewport.Width = vpWidth
 			m.viewport.Height = vpHeight
 			m.list.SetSize(msg.Width, listHeight)
 			m.textarea.SetWidth(taWidth)
-			m.textarea.SetHeight(msg.Height - 6)
+			m.textarea.SetHeight(taHeight)
 		}
 
 		return m, nil
@@ -318,8 +323,11 @@ func (m CommitReviewModel) editView() string {
 	return fmt.Sprintf("%s\n%s\n%s\n%s", header, sep, m.textarea.View(), help)
 }
 
-// wrapText wraps lines in text to max character width `limit`.
-// Lines that are already shorter than `limit` are left unchanged.
+// wrapText wraps lines in text to max display width `limit`, measured in
+// terminal cells rather than bytes: CJK characters occupy two cells and
+// emoji grapheme clusters vary, so byte counting would wrap CJK/emoji text
+// far too early (a 72-col limit becomes ~24 CJK chars). Lines already within
+// `limit` cells are left unchanged.
 func wrapText(text string, limit int) string {
 	if limit <= 0 {
 		return text
@@ -330,7 +338,7 @@ func wrapText(text string, limit int) string {
 	var result []string
 
 	for _, line := range lines {
-		if len(line) <= limit {
+		if displaywidth.String(line) <= limit {
 			result = append(result, line)
 
 			continue
@@ -338,6 +346,7 @@ func wrapText(text string, limit int) string {
 
 		// Preserve leading indentation (spaces or tabs)
 		indent := line[:len(line)-len(strings.TrimLeft(line, " \t"))]
+		indentWidth := displaywidth.String(indent)
 
 		words := strings.Fields(line)
 		if len(words) == 0 {
@@ -347,18 +356,26 @@ func wrapText(text string, limit int) string {
 		}
 
 		var currentLine strings.Builder
+
 		currentLine.WriteString(indent)
 		currentLine.WriteString(words[0])
 
+		currentWidth := indentWidth + displaywidth.String(words[0])
+
 		for _, word := range words[1:] {
-			if currentLine.Len()+1+len(word) > limit {
+			wordWidth := displaywidth.String(word)
+			if currentWidth+1+wordWidth > limit {
 				result = append(result, currentLine.String())
 				currentLine.Reset()
 				currentLine.WriteString(indent)
 				currentLine.WriteString(word)
+
+				currentWidth = indentWidth + wordWidth
 			} else {
 				currentLine.WriteString(" ")
 				currentLine.WriteString(word)
+
+				currentWidth += 1 + wordWidth
 			}
 		}
 
