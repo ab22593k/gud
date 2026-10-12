@@ -276,6 +276,12 @@ func TestValidateStrictUnresolvedPlaceholder(t *testing.T) {
 			wantErr: "hint contains unresolved placeholder",
 		},
 		{
+			name: "bare dollar placeholder in API key",
+			//nolint:gosec // Test verifies placeholder detection; value is not a real credential.
+			cfg:     config.Config{APIKey: "$GOOGLE_API_KEY"},
+			wantErr: "api_key contains unresolved placeholder",
+		},
+		{
 			name:    "no placeholders passes",
 			cfg:     config.Config{APIKey: "real-key", Model: "gemini-flash-latest"},
 			wantErr: "",
@@ -338,8 +344,13 @@ func TestHasPlaceholder(t *testing.T) {
 		{"${VARIABLE}", true},
 		{"{{VARIABLE}}", true},
 		{"$(VARIABLE)", true},
+		{"$VARIABLE", true},
 		{"plain-text", false},
 		{"mixed-${VAR}-text", true},
+		{"mixed-$VAR-text", true},
+		{"price $5", false},
+		{"$$ESCAPED", false},
+		{"cost $ USD", false},
 		{"", false},
 	}
 

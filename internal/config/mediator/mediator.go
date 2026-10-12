@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"gud/internal/config"
@@ -145,10 +146,22 @@ func validateStrict(cfg config.Config) error {
 	return nil
 }
 
+// bareVar matches an unbraced shell variable ($VAR): a dollar sign
+// immediately followed by a letter or underscore and word characters.
+// $$ (Make-style escape), $5 (prices), and "$ " never match, so ordinary
+// prose with dollars is not flagged.
+var bareVar = regexp.MustCompile(`\$[A-Za-z_][A-Za-z0-9_]*`)
+
 // hasPlaceholder returns true if the string contains any unresolved
-// template variable syntax: ${...}, {{...}}, or $(...).
+// template variable syntax: ${...}, {{...}}, $(...), or bare $VAR.
+// Make-style $$ escapes are stripped before the bare-var scan, so a literal
+// "$$ESCAPED" is not flagged (nor are "$5" prices or "$ " prose).
 func hasPlaceholder(s string) bool {
-	return strings.Contains(s, "${") || strings.Contains(s, "{{") || strings.Contains(s, "$(")
+	if strings.Contains(s, "${") || strings.Contains(s, "{{") || strings.Contains(s, "$(") {
+		return true
+	}
+
+	return bareVar.MatchString(strings.ReplaceAll(s, "$$", ""))
 }
 
 // isKnownPlaceholder checks if a string matches a known sentinel value
