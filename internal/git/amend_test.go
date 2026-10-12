@@ -292,3 +292,85 @@ func TestIsCleanTree(t *testing.T) {
 		t.Errorf("IsCleanTree(untracked only)=(%v,%v), want (true,nil)", ok, err)
 	}
 }
+
+func TestOverrideEnvReplacesExistingKeys(t *testing.T) {
+	t.Parallel()
+
+	base := []string{
+		"PATH=/bin",
+		"GIT_SEQUENCE_EDITOR=false",
+		"GIT_EDITOR=false",
+		"OTHER=1",
+		"NOEQUALS",
+	}
+
+	got := overrideEnv(base,
+		"GIT_SEQUENCE_EDITOR=sh /x",
+		"GIT_EDITOR=sh /y",
+		"GUD_NEWMSG=/z")
+
+	count := func(key string) int {
+		n := 0
+
+		for _, e := range got {
+			if k, _, ok := strings.Cut(e, "="); ok && k == key {
+				n++
+			}
+		}
+
+		return n
+	}
+
+	for _, key := range []string{"GIT_SEQUENCE_EDITOR", "GIT_EDITOR", "GUD_NEWMSG"} {
+		if n := count(key); n != 1 {
+			t.Errorf("%s entries = %d, want exactly 1", key, n)
+		}
+	}
+
+	if got[len(got)-3] != "GIT_SEQUENCE_EDITOR=sh /x" ||
+		got[len(got)-2] != "GIT_EDITOR=sh /y" ||
+		got[len(got)-1] != "GUD_NEWMSG=/z" {
+		t.Errorf("overrides not appended last: %q", got)
+	}
+
+	// Untouched entries (including keyless ones) survive in order.
+	joined := strings.Join(got, "\n")
+	for _, want := range []string{"PATH=/bin", "OTHER=1", "NOEQUALS"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("overrideEnv dropped %q: %q", want, got)
+		}
+	}
+}
+
+// TestRewordCommitIgnoresUserEditors is the end-to-end lock for duplicate env
+// keys: a user with GIT_SEQUENCE_EDITOR/GIT_EDITOR set must still get gud's
+// scripted rebase. Before filtering, libc getenv in the git grandchild
+// returned the FIRST match (the user's "false"), failing the rebase.
+func TestRewordCommitIgnoresUserEditors(t *testing.T) {
+	dir := initAmendRepo(t)
+
+	chdirAmend(t, dir)
+
+	t.Setenv("GIT_SEQUENCE_EDITOR", "false")
+	t.Setenv("GIT_EDITOR", "false")
+
+	ctx := context.Background()
+
+	first, err := ResolveRevision(ctx, "HEAD~1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := RewordCommit(ctx, first, "second rewritten hostile-env"); err != nil {
+		t.Fatalf("RewordCommit with hostile editors: %v", err)
+	}
+
+	msg, err := GetCommitMessage(ctx, "HEAD~1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if msg != "second rewritten hostile-env" {
+		t.Errorf("HEAD~1 message=%q, want rewritten message", msg)
+	}
+}

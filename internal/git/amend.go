@@ -123,7 +123,7 @@ func RewordCommit(ctx context.Context, sha, message string) error {
 
 	cmd := newGitCmd(ctx, "rebase", "-i", sha+"^")
 
-	cmd.Env = append(os.Environ(),
+	cmd.Env = overrideEnv(os.Environ(),
 		"GIT_SEQUENCE_EDITOR=sh "+seqPath,
 		"GIT_EDITOR=sh "+edPath,
 		"GUD_NEWMSG="+msgPath,
@@ -134,6 +134,33 @@ func RewordCommit(ctx context.Context, sha, message string) error {
 	}
 
 	return nil
+}
+
+// overrideEnv returns base with the keys in overrides replaced: existing
+// entries for those keys are dropped before appending. Without filtering,
+// append(os.Environ(), ...) duplicates a key the user already has set (e.g.
+// GIT_SEQUENCE_EDITOR), and libc getenv in the git grandchild returns the
+// FIRST match — the user's value would win over ours. Entries without "="
+// carry no key and are always kept.
+func overrideEnv(base []string, overrides ...string) []string {
+	keys := make(map[string]bool, len(overrides))
+	for _, o := range overrides {
+		if k, _, ok := strings.Cut(o, "="); ok {
+			keys[k] = true
+		}
+	}
+
+	out := make([]string, 0, len(base)+len(overrides))
+
+	for _, e := range base {
+		if k, _, ok := strings.Cut(e, "="); ok && keys[k] {
+			continue
+		}
+
+		out = append(out, e)
+	}
+
+	return append(out, overrides...)
 }
 
 // runRebase runs the interactive rebase and, on failure, aborts it before
