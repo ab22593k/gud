@@ -11,7 +11,7 @@ const (
 	// defaultVersion is the fallback when neither an -X injected version nor
 	// module build info provides one (e.g. `go run` from a checkout whose
 	// build embeds no VCS info).
-	defaultVersion = "0.3.1"
+	defaultVersion = "0.3.2"
 
 	versionCmdName = "version"
 )

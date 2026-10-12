@@ -2,6 +2,7 @@ package git
 
 import (
 	"context"
+	"strconv"
 	"testing"
 )
 
@@ -64,6 +65,34 @@ func TestAppendTrailers(t *testing.T) {
 
 			if got != tt.want {
 				t.Errorf("AppendTrailers:\n  got:  %q\n  want: %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestAppendTrailersRejectsInvalidKey pins the key gate: keys travel inside
+// --trailer arguments, so a newline would forge extra trailer lines in the
+// message (verified pre-fix: "Evil\nInjected" produced a second trailer).
+// Anything outside ^[A-Za-z-]+$ fails before git runs.
+func TestAppendTrailersRejectsInvalidKey(t *testing.T) {
+	t.Parallel()
+
+	for _, key := range []string{
+		"",
+		"Evil\nInjected",
+		"Evil\nInjected: yes",
+		"Fix es",
+		"Fixes:",
+		"Fix_es",
+		"Fixes;rm",
+		"Fixes\tTab",
+	} {
+		t.Run("key "+strconv.Quote(key), func(t *testing.T) {
+			t.Parallel()
+
+			if _, err := AppendTrailers(context.Background(), "fix: x",
+				[]Trailer{{Key: key, Value: "yes"}}); err == nil {
+				t.Errorf("AppendTrailers(key %q) = nil error, want invalid-key rejection", key)
 			}
 		})
 	}
