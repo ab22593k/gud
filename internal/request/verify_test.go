@@ -58,6 +58,114 @@ func TestVerifyMessage(t *testing.T) {
 	}
 }
 
+// TestVerifyGroundingBasenameMention guards a behavior the substring scan
+// provided for free: a bare basename ("fix a.txt") is grounded by diff path
+// "sub/a.txt". The token-set index keeps this via basename entries.
+func TestVerifyGroundingBasenameMention(t *testing.T) {
+	t.Parallel()
+
+	diff := "diff --git a/sub/a.txt b/sub/a.txt\n" +
+		"index 1111111..2222222 100644\n--- a/sub/a.txt\n+++ b/sub/a.txt\n"
+
+	if got := findingCodesForTest(VerifyMessage("fix: leak in a.txt", diff, 72)); len(got) != 0 {
+		t.Errorf("VerifyMessage codes = %v, want none (basename grounded)", got)
+	}
+}
+
+// TestVerifyGroundingSubstringBoundary pins the intentional tightening:
+// "domain.go" merely containing "main.go" as a substring no longer grounds
+// a mention of main.go, which names a different file.
+func TestVerifyGroundingSubstringBoundary(t *testing.T) {
+	t.Parallel()
+
+	diff := "diff --git a/domain.go b/domain.go\n" +
+		"index 1111111..2222222 100644\n--- a/domain.go\n+++ b/domain.go\n"
+
+	got := findingCodesForTest(VerifyMessage("fix: leak in main.go", diff, 72))
+	if len(got) != 1 || got[0] != "file-grounding" {
+		t.Errorf("VerifyMessage codes = %v, want [file-grounding]", got)
+	}
+}
+
+// TestVerifyGroundingLargeDiff exercises the scale path deterministically: a
+// ~150KB diff with 200 ungrounded tokens plus one grounded control. No timing
+// assertion (load variance); linearity is by construction — one diff pass
+// plus map lookups — and allocation counts are covered by the benchmarks.
+func TestVerifyGroundingLargeDiff(t *testing.T) {
+	t.Parallel()
+
+	diff := benchDiff(50, 30)
+
+	var sb strings.Builder
+
+	sb.WriteString("Refactor\n\nTouch pkg/module00/file000.go and ")
+
+	for f := range 200 {
+		sb.WriteString("ghost" + itoa3(f) + ".go ")
+	}
+
+	got := findingCodesForTest(VerifyMessage(sb.String(), diff, 72))
+
+	grounded := 0
+
+	for _, f := range got {
+		if f != "file-grounding" {
+			t.Fatalf("VerifyMessage codes = %v, want only file-grounding", got)
+		}
+
+		grounded++
+	}
+
+	if grounded != 200 {
+		t.Errorf("findings = %d, want 200 (ghosts only; the real path stays grounded)", grounded)
+	}
+}
+
+// TestIndexDiffTokensMatchesPathToken locks the linear scanner to the regex
+// it replaces: over crafted shapes and a real diff, both must report the
+// same token set. Inputs stay small so the regex side is cheap.
+func TestIndexDiffTokensMatchesPathToken(t *testing.T) {
+	t.Parallel()
+
+	shapes := []string{
+		"a.b", "a.b/c", ".foo", "a.b/-c", "Xmain.go main.go", "a.b/c.d",
+		`"b/my file.go"`, "héllo.go", "a...b", "--- a/old.txt", "+++ b/new.go",
+		"v1.2.3", "$VAR", "a/b/c/d/e.go trace.go,",
+		benchDiff(2, 3),
+	}
+
+	for _, s := range shapes {
+		want := map[string]bool{}
+		for _, tok := range pathToken.FindAllString(s, -1) {
+			want[tok] = true
+		}
+
+		got := map[string]bool{}
+		indexDiffTokens(got, s)
+
+		// indexDiffTokens also adds basenames; strip those before comparing.
+		for tok := range got {
+			if !want[tok] {
+				delete(got, tok)
+			}
+		}
+
+		if len(got) != len(want) {
+			t.Errorf("tokens(%q): index=%v want=%v", s, got, want)
+		}
+	}
+}
+
+func itoa3(n int) string {
+	s := ""
+	for range 3 {
+		s = string(rune('0'+n%10)) + s
+		n /= 10
+	}
+
+	return s
+}
+
 // scriptLLM yields canned responses in order, recording call count.
 type scriptLLM struct {
 	name      string
