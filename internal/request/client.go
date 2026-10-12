@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math/rand/v2"
 	"strings"
 	"time"
 
@@ -246,7 +247,8 @@ func isTransientErr(err error) bool {
 }
 
 // generateWithRetry calls generateContent with up to 2 retries on transient
-// errors (200ms then 500ms backoff). It respects ctx cancellation.
+// errors (200ms then 500ms base backoff, each with equal jitter). It respects
+// ctx cancellation.
 func generateWithRetry(
 	ctx context.Context, c *Client, req *model.LLMRequest, mounts []AgentFile,
 ) (string, error) {
@@ -262,13 +264,28 @@ func generateWithRetry(
 			return result, err
 		}
 
+		sleep := backoffWithJitter(backoffs[attempt])
+
 		select {
 		case <-ctx.Done():
 			return "", ctx.Err()
-		case <-time.After(backoffs[attempt]):
-			slog.Debug("retrying model call", "attempt", attempt+1, "error", err)
+		case <-time.After(sleep):
+			slog.Debug("retrying model call", "attempt", attempt+1, "backoff", sleep, "error", err)
 		}
 	}
+}
+
+// backoffWithJitter returns a sleep around base with equal jitter: uniform in
+// [base/2, base]. Fixed backoffs synchronize retries across clients after a
+// shared outage (thundering herd); jitter decorrelates them while the floor
+// keeps retries from firing immediately.
+func backoffWithJitter(base time.Duration) time.Duration {
+	half := int64(base / 2)
+	if half <= 0 {
+		return base
+	}
+
+	return time.Duration(half + rand.Int64N(half))
 }
 
 func generateContent(

@@ -1,11 +1,15 @@
 package request
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"iter"
 	"strings"
 	"testing"
+	"time"
 
+	"google.golang.org/adk/model"
 	"google.golang.org/genai"
 	"google.golang.org/genai/interactions/models/apierrors"
 )
@@ -143,5 +147,126 @@ func TestIsTransientErr_InteractionsStatusCodeReachesTheMatcher(t *testing.T) {
 	if got := apiErr.Error(); !strings.Contains(got, "429") {
 		t.Errorf("apierrors.APIError.Error() = %q, expected it to carry the HTTP status "+
 			"code; isTransientErr matches on substrings and retries would stop firing", got)
+	}
+}
+
+// TestBackoffWithJitter_BoundedAndVaries pins the decorrelation contract:
+// every sleep stays within [base/2, base] (never immediate, never over the
+// base), and repeated draws vary so concurrent clients desynchronize.
+func TestBackoffWithJitter_BoundedAndVaries(t *testing.T) {
+	t.Parallel()
+
+	const base = 200 * time.Millisecond
+
+	seen := map[time.Duration]bool{}
+
+	for range 200 {
+		got := backoffWithJitter(base)
+		if got < base/2 || got > base {
+			t.Fatalf("backoffWithJitter(%v) = %v, want within [%v, %v]", base, got, base/2, base)
+		}
+
+		seen[got] = true
+	}
+
+	if len(seen) < 2 {
+		t.Error("backoffWithJitter never varied across 200 samples; jitter is not applied")
+	}
+}
+
+// flakyGenerator fails the first failures calls with a transient 503, then
+// serves text. It exercises the retry loop without network or timing mocks.
+type flakyGenerator struct {
+	failures int
+	calls    int
+	text     string
+}
+
+func (f *flakyGenerator) Name() string { return "flaky" }
+
+func (f *flakyGenerator) GenerateContent(
+	ctx context.Context, req *model.LLMRequest, _ bool,
+) iter.Seq2[*model.LLMResponse, error] {
+	return f.GenerateWithMounts(ctx, req, nil)
+}
+
+func (f *flakyGenerator) GenerateWithMounts(
+	_ context.Context, _ *model.LLMRequest, _ []AgentFile,
+) iter.Seq2[*model.LLMResponse, error] {
+	return func(yield func(*model.LLMResponse, error) bool) {
+		f.calls++
+
+		if f.failures > 0 {
+			f.failures--
+
+			yield(nil, errors.New("model error: 503 Service Unavailable"))
+
+			return
+		}
+
+		yield(&model.LLMResponse{Content: genai.NewContentFromText(f.text, "model")}, nil)
+	}
+}
+
+// TestGenerateWithRetry_RetriesTransientThenServes proves two transient
+// failures are retried (both backoffs, jittered) and the recovery served.
+func TestGenerateWithRetry_RetriesTransientThenServes(t *testing.T) {
+	t.Parallel()
+
+	fake := &flakyGenerator{failures: 2, text: "fix: ok"}
+	client := &Client{modelImpl: fake, model: "m"}
+
+	got, err := generateWithRetry(context.Background(), client, &model.LLMRequest{}, nil)
+	if err != nil {
+		t.Fatalf("generateWithRetry: %v", err)
+	}
+
+	if got != "fix: ok" {
+		t.Errorf("generateWithRetry = %q, want %q", got, "fix: ok")
+	}
+
+	if fake.calls != 3 {
+		t.Errorf("calls = %d, want 3 (initial + 2 retries)", fake.calls)
+	}
+}
+
+// TestGenerateWithRetry_NonTransientDoesNotRetry proves auth failures return
+// immediately without sleeping through backoffs.
+func TestGenerateWithRetry_NonTransientDoesNotRetry(t *testing.T) {
+	t.Parallel()
+
+	fake := &flakyGenerator{failures: 0, text: "fix: ok"}
+	client := &Client{modelImpl: &authFailGenerator{wrapped: fake}, model: "m"}
+
+	_, err := generateWithRetry(context.Background(), client, &model.LLMRequest{}, nil)
+	if err == nil {
+		t.Fatal("generateWithRetry = nil error, want auth failure")
+	}
+
+	if fake.calls != 1 {
+		t.Errorf("inner calls = %d, want 1 (no retry attempted)", fake.calls)
+	}
+}
+
+// authFailGenerator always fails with a non-transient 401.
+type authFailGenerator struct {
+	wrapped *flakyGenerator
+}
+
+func (f *authFailGenerator) Name() string { return "auth-fail" }
+
+func (f *authFailGenerator) GenerateContent(
+	ctx context.Context, req *model.LLMRequest, _ bool,
+) iter.Seq2[*model.LLMResponse, error] {
+	return f.GenerateWithMounts(ctx, req, nil)
+}
+
+func (f *authFailGenerator) GenerateWithMounts(
+	_ context.Context, _ *model.LLMRequest, _ []AgentFile,
+) iter.Seq2[*model.LLMResponse, error] {
+	return func(yield func(*model.LLMResponse, error) bool) {
+		f.wrapped.calls++
+
+		yield(nil, errors.New("model error code: 401"))
 	}
 }
