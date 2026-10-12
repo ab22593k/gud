@@ -10,7 +10,6 @@ The repository is a Go workspace using go 1.27.2:
 - `internal/config`: configuration types, providers, and precedence handling.
 - `internal/detect`: change detection and suggestions.
 - `internal/git`: Git operations; separate workspace module.
-- `internal/pipeline`: commit-message generation pipeline.
 - `internal/request`: model requests; separate workspace module.
 - `internal/tui`: terminal interfaces.
 
