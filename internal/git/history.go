@@ -19,7 +19,12 @@ func GetUpstreamBranch(ctx context.Context) string {
 // touching those files, so the history mirrors the staged scope instead of the
 // whole repository. It returns an error when the upstream cannot be resolved
 // or has no merge base with HEAD.
-func GetTopicHistory(ctx context.Context, upstream string, n int, paths []string) (string, error) {
+func GetTopicHistory(
+	ctx context.Context,
+	upstream string,
+	n int,
+	paths []string,
+) (string, error) {
 	if n <= 0 || upstream == "" {
 		return "", nil
 	}

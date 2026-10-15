@@ -287,7 +287,13 @@ func checkTarget(target string, force bool) error {
 
 // recordCheckout hashes the extracted target and upserts its registry
 // entry under the already-validated key, persisting the registry atomically.
-func recordCheckout(registryPath, key, target string, resolved SourceRef, commit string) error {
+func recordCheckout(
+	registryPath string,
+	key string,
+	target string,
+	resolved SourceRef,
+	commit string,
+) error {
 	hash, err := HashDir(target)
 	if err != nil {
 		return fmt.Errorf("hash checkout: %w", err)

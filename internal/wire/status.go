@@ -22,7 +22,12 @@ const (
 // the checkout, and a freshly resolved remote SHA. Local divergence
 // dominates: edits must never be silently clobbered even when upstream
 // also moved. An empty remote SHA counts as unreachable.
-func deriveState(entry RegistryEntry, localHash, remoteSHA string, resolveErr error) SyncState {
+func deriveState(
+	entry RegistryEntry,
+	localHash string,
+	remoteSHA string,
+	resolveErr error,
+) SyncState {
 	if localHash != entry.ExportHash {
 		return StateDiverged
 	}

@@ -112,7 +112,13 @@ func CommitExists(ctx context.Context, dir, rev string) bool {
 // only the requested subset ever materializes (a final checkout applies the
 // patterns). Both operands are safe by construction — path is a caller-minted
 // temp dir, commit a resolved hex SHA — and subpath passes behind --.
-func AddSparseWorktree(ctx context.Context, mirror, path, commit, subpath string) error {
+func AddSparseWorktree(
+	ctx context.Context,
+	mirror string,
+	path string,
+	commit string,
+	subpath string,
+) error {
 	if strings.HasPrefix(commit, "-") {
 		return fmt.Errorf("refusing suspicious commit %q", commit)
 	}

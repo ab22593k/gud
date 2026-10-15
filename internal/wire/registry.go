@@ -52,7 +52,12 @@ type Registry struct {
 }
 
 // EntryFor builds the initial entry for a fresh fetch.
-func EntryFor(source SourceRef, commit, exportHash string, now time.Time) RegistryEntry {
+func EntryFor(
+	source SourceRef,
+	commit string,
+	exportHash string,
+	now time.Time,
+) RegistryEntry {
 	stamp := now.UTC().Format(time.RFC3339)
 
 	return RegistryEntry{

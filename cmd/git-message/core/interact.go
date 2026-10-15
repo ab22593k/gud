@@ -30,8 +30,15 @@ const (
 // interactiveCommit runs the generate → review → commit loop. When prepared is
 // non-empty (a git operation is in progress and git already drafted a message)
 // the first pass presents it instead of generating a fresh standalone message.
-func interactiveCommit(ctx context.Context, cmd *cobra.Command, app *AppContext,
-	diff, promptContext string, op git.Operation, prepared string) error {
+func interactiveCommit(
+	ctx context.Context,
+	cmd *cobra.Command,
+	app *AppContext,
+	diff string,
+	promptContext string,
+	op git.Operation,
+	prepared string,
+) error {
 	scanner := bufio.NewScanner(cmd.InOrStdin())
 	out := cmd.OutOrStdout()
 
@@ -107,7 +114,12 @@ func interactiveCommit(ctx context.Context, cmd *cobra.Command, app *AppContext,
 // still failing after the bounded regeneration (nil when clean or when the
 // message is git's own); the caller presents them next to the result.
 func loopMessage(
-	ctx context.Context, errW io.Writer, app *AppContext, diff, promptContext, prepared string,
+	ctx context.Context,
+	errW io.Writer,
+	app *AppContext,
+	diff string,
+	promptContext string,
+	prepared string,
 ) (msg string, preserved bool, findings []request.Finding, err error) {
 	preserved = prepared != ""
 	if !preserved {
