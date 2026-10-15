@@ -8,6 +8,7 @@
 package mediator
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -34,6 +35,9 @@ func (e *UnresolvedPlaceholderError) Error() string {
 const (
 	fieldAPIKey = "api_key"
 )
+
+// ErrPlaceholderAPIKey marks a known sentinel/placeholder API key value.
+var ErrPlaceholderAPIKey = errors.New("config: api key placeholder")
 
 // Mediator is the infrastructure-level orchestrator that collects
 // configuration from all sources (files, environment, CLI),
@@ -146,8 +150,8 @@ func validateStrict(cfg config.Config) error {
 
 	if isKnownPlaceholder(cfg.APIKey) {
 		return fmt.Errorf(
-			"config: %s contains placeholder value %q; replace with a real API key or set via GOOGLE_API_KEY",
-			fieldAPIKey, cfg.APIKey,
+			"config: %s contains placeholder value %q; replace with a real API key or set via GOOGLE_API_KEY: %w",
+			fieldAPIKey, cfg.APIKey, ErrPlaceholderAPIKey,
 		)
 	}
 
