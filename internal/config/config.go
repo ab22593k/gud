@@ -32,6 +32,16 @@ type Config struct {
 	// Issues are the issue-tracker numbers this commit fixes. nil means "not
 	// set"; each number adds a "Fixes: #N" git trailer before "Assisted-by:".
 	Issues []int
+	// NoAssistedBy explicitly suppresses the "Assisted-by" trailer, even for
+	// generated messages. nil means "not set"; a non-nil value wins during
+	// Merge. The effective default is false, leaving the trailer on.
+	NoAssistedBy *bool
+}
+
+// AssistedByTrailerSuppressed reports whether the "Assisted-by" footer should
+// be omitted as configured by the user.
+func (c Config) AssistedByTrailerSuppressed() bool {
+	return c.NoAssistedBy != nil && *c.NoAssistedBy
 }
 
 // Ptr returns a pointer to a copy of v, expressing "explicitly set to v" —
@@ -162,6 +172,10 @@ func (c Config) Merge(override Config) Config {
 		merged.Issues = slices.Clone(override.Issues)
 	}
 
+	if override.NoAssistedBy != nil {
+		merged.NoAssistedBy = override.NoAssistedBy
+	}
+
 	return merged
 }
 
@@ -171,8 +185,9 @@ func (c Config) Merge(override Config) Config {
 // default unless a layer explicitly sets it (including Ptr(0) to disable).
 func DefaultConfig() Config {
 	return Config{
-		DetailLevel: DetailStandard,
-		WrapLine:    DefaultWrapLine,
-		History:     Ptr(DefaultHistory),
+		DetailLevel:  DetailStandard,
+		WrapLine:     DefaultWrapLine,
+		History:      Ptr(DefaultHistory),
+		NoAssistedBy: Ptr(false),
 	}
 }

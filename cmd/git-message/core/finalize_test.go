@@ -1,6 +1,8 @@
 package core
 
 import (
+	"bytes"
+	"log/slog"
 	"strings"
 	"testing"
 
@@ -89,5 +91,81 @@ func TestFinalizeMessageSupportedBounds(t *testing.T) {
 				t.Errorf("wrapline=%d: line is %d cells: %q", wl, w, line)
 			}
 		}
+	}
+}
+
+// TestFinalizeMessageAssistedBySuppression pins FR-037: an explicit opt-out
+// removes only the Assisted-by trailer. Issue trailers and body content are
+// unchanged, while the default configuration keeps the footer.
+func TestFinalizeMessageAssistedBySuppression(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		suppressed   bool
+		wantAssisted bool
+	}{
+		{name: "explicit opt-out omits footer", suppressed: true, wantAssisted: false},
+		{name: "default keeps footer", suppressed: false, wantAssisted: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			body := "Explain why the change is necessary without repeating the diff."
+			cfg := config.Config{
+				WrapLine:     60,
+				Issues:       []int{7},
+				NoAssistedBy: config.Ptr(tt.suppressed),
+			}
+
+			got, err := finalizeMessage(t.Context(), "fix: resolve leak\n\n"+body, cfg, "test-model")
+			if err != nil {
+				t.Fatalf("finalizeMessage: %v", err)
+			}
+
+			if !strings.Contains(got, "Fixes: #7") {
+				t.Errorf("finalized message lost the Fixes trailer:\n%q", got)
+			}
+
+			if hasAssisted := strings.Contains(got, "Assisted-by: test-model"); hasAssisted != tt.wantAssisted {
+				t.Errorf("Assisted-by present = %v, want %v:\n%q", hasAssisted, tt.wantAssisted, got)
+			}
+
+			joined := strings.Join(strings.Fields(got), " ")
+			for word := range strings.FieldsSeq(body) {
+				if !strings.Contains(joined, word) {
+					t.Errorf("finalized message lost body word %q:\n%q", word, got)
+				}
+			}
+		})
+	}
+}
+
+// TestFinalizeMessageSuppressedRecordsServingModel pins the second half of
+// FR-037: suppression removes the trailer from the message, not the serving
+// model from diagnostics.
+func TestFinalizeMessageSuppressedRecordsServingModel(t *testing.T) {
+	var buf bytes.Buffer
+
+	previous := slog.Default()
+
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+
+	cfg := config.Config{WrapLine: 60, NoAssistedBy: config.Ptr(true)}
+
+	if _, err := finalizeMessage(t.Context(), "fix: resolve leak\n\nExplain why.", cfg, "test-model"); err != nil {
+		t.Fatalf("finalizeMessage: %v", err)
+	}
+
+	diagnostics := buf.String()
+	if !strings.Contains(diagnostics, "assisted-by trailer suppressed") {
+		t.Errorf("diagnostics did not record suppression:\n%q", diagnostics)
+	}
+
+	if !strings.Contains(diagnostics, "test-model") {
+		t.Errorf("diagnostics did not record the serving model:\n%q", diagnostics)
 	}
 }

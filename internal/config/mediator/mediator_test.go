@@ -80,6 +80,46 @@ func TestConfigFromEnvUnset(t *testing.T) {
 	}
 }
 
+// TestConfigFromEnvNoAssistedBy pins the FR-037 environment contract: only
+// GUD_NO_ASSISTED_BY controls the setting, and both an explicit opt-out and
+// an explicit opt-in survive as distinct from unset.
+func TestConfigFromEnvNoAssistedBy(t *testing.T) {
+	tests := []struct {
+		name    string
+		env     string
+		wantSet bool
+		want    bool
+	}{
+		{name: "truthy opts out", env: "true", wantSet: true, want: true},
+		{name: "falsy opts back in", env: "false", wantSet: true, want: false},
+		{name: "unset leaves unset", env: "", wantSet: false},
+		{name: "invalid leaves unset", env: "maybe", wantSet: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("GUD_NO_ASSISTED_BY", tt.env)
+
+			got := configFromEnv().NoAssistedBy
+			if !tt.wantSet {
+				if got != nil {
+					t.Errorf("GUD_NO_ASSISTED_BY=%q set %v, want unset", tt.env, *got)
+				}
+
+				return
+			}
+
+			if got == nil {
+				t.Fatalf("GUD_NO_ASSISTED_BY=%q left suppression unset", tt.env)
+			}
+
+			if *got != tt.want {
+				t.Errorf("GUD_NO_ASSISTED_BY=%q = %v, want %v", tt.env, *got, tt.want)
+			}
+		})
+	}
+}
+
 func TestMediatorLoad(t *testing.T) {
 	xdgDir := t.TempDir()
 	xdgPath := filepath.Join(xdgDir, "config.json")
@@ -227,6 +267,37 @@ func TestMediatorCLIHistoryZeroDisablesEnv(t *testing.T) {
 
 	if cfg.HistoryValue() != 0 {
 		t.Errorf("History = %d, want 0 (CLI --history 0 must win over env GUD_HISTORY)", cfg.HistoryValue())
+	}
+}
+
+// TestMediatorExplicitNoAssistedByFalseOverridesEnvAndFile pins the FR-037
+// negative-override path: an explicit CLI false re-enables the trailer even
+// when both the environment and gud.json suppressed it.
+func TestMediatorExplicitNoAssistedByFalseOverridesEnvAndFile(t *testing.T) {
+	xdgDir := t.TempDir()
+	m := &Mediator{
+		XDGProvider: provider.NewFileProvider(filepath.Join(xdgDir, "missing.json")),
+		CWDProvider: provider.NewFileProvider(filepath.Join(xdgDir, "also-missing.json")),
+	}
+
+	if err := m.CWDProvider.Save(config.Config{NoAssistedBy: config.Ptr(true)}); err != nil {
+		t.Fatalf("save gud.json: %v", err)
+	}
+
+	t.Setenv("GUD_NO_ASSISTED_BY", "true")
+	t.Setenv("GOOGLE_API_KEY", "")
+
+	cfg, err := m.Load(config.Config{NoAssistedBy: config.Ptr(false)})
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if cfg.NoAssistedBy == nil {
+		t.Fatal("Load lost explicit NoAssistedBy=false (treated as not set)")
+	}
+
+	if *cfg.NoAssistedBy {
+		t.Error("NoAssistedBy = true, want false (explicit CLI false must win over env and gud.json)")
 	}
 }
 

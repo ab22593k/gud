@@ -7,25 +7,26 @@ import "gud/internal/config"
 // History is a *int so an explicit "history": 0 (disable) survives JSON
 // round-trips; nil means the key is absent and is omitted from output.
 type Config struct {
-	DetailLevel string `json:"detail_level,omitempty"`
-	Model       string `json:"model,omitempty"`
-	Hint        string `json:"hint,omitempty"`
-	History     *int   `json:"history,omitempty"`
-	APIKey      string `json:"api_key,omitempty"`
-	WrapLine    int    `json:"wrapline,omitempty"`
+	DetailLevel  string `json:"detail_level,omitempty"`
+	Model        string `json:"model,omitempty"`
+	Hint         string `json:"hint,omitempty"`
+	History      *int   `json:"history,omitempty"`
+	APIKey       string `json:"api_key,omitempty"`
+	WrapLine     int    `json:"wrapline,omitempty"`
+	NoAssistedBy *bool  `json:"no_assisted_by,omitempty"`
 }
 
 // ToEntity converts the DTO to a domain Config entity.
 // History is cloned so DTO and entity never share the pointed-to int.
 func (d Config) ToEntity() config.Config {
 	return config.Config{
-		DetailLevel: config.DetailLevel(d.DetailLevel),
-		Model:       d.Model,
-
-		Hint:     d.Hint,
-		History:  cloneInt(d.History),
-		APIKey:   d.APIKey,
-		WrapLine: d.WrapLine,
+		DetailLevel:  config.DetailLevel(d.DetailLevel),
+		Model:        d.Model,
+		Hint:         d.Hint,
+		History:      cloneInt(d.History),
+		APIKey:       d.APIKey,
+		WrapLine:     d.WrapLine,
+		NoAssistedBy: d.NoAssistedBy,
 	}
 }
 
@@ -33,13 +34,13 @@ func (d Config) ToEntity() config.Config {
 // History is cloned so entity and DTO never share the pointed-to int.
 func FromEntity(c config.Config) Config {
 	return Config{
-		DetailLevel: string(c.DetailLevel),
-		Model:       c.Model,
-
-		Hint:     c.Hint,
-		History:  cloneInt(c.History),
-		APIKey:   c.APIKey,
-		WrapLine: c.WrapLine,
+		DetailLevel:  string(c.DetailLevel),
+		Model:        c.Model,
+		Hint:         c.Hint,
+		History:      cloneInt(c.History),
+		APIKey:       c.APIKey,
+		WrapLine:     c.WrapLine,
+		NoAssistedBy: c.NoAssistedBy,
 	}
 }
 

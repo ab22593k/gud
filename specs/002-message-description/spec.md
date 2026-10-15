@@ -8,6 +8,12 @@
 
 **Input**: User description: "--slug=message-description create specs from existing git-message code"
 
+## Clarifications
+
+### Session 2026-10-15
+
+- Q: What should the footer-suppression flag be called, and how should it behave by default? → A: Use `--no-assisted-by` as a boolean flag with no value; the `Assisted-by` footer remains on by default and is omitted only when the flag is passed.
+
 ## User Scenarios & Testing _(mandatory)_
 
 ### User Story 1 - Get a description of the staged change (Priority: P1)
@@ -303,6 +309,13 @@ configuration value at a low-precedence source only and confirm it survives.
 - **FR-016**: The finalized description MUST record the model identity that
   actually served the request in a trailer, unless the message was authored by
   git rather than generated.
+
+- **FR-037**: The system MUST accept a boolean option, `--no-assisted-by`,
+  that takes no value and is false by default (so the `Assisted-by` footer is on
+  by default), suppressing the `Assisted-by` trailer even for generated messages.
+  When it is set, the `Fixes: #N` issue trailers remain unaffected and the
+  command MUST still record which model served the request in diagnostics.
+  Adding or removing this option MUST NOT change the generated message body.
 
 **Quality verification**
 

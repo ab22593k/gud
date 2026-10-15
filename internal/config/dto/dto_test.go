@@ -18,20 +18,22 @@ func TestToEntity(t *testing.T) {
 		{
 			name: "all fields set",
 			dto: ConfigDTO{
-				DetailLevel: "detailed",
-				Model:       "gemini-flash-latest",
-				Hint:        "focus on security",
-				History:     config.Ptr(10),
-				APIKey:      "sk-test",
-				WrapLine:    100,
+				DetailLevel:  "detailed",
+				Model:        "gemini-flash-latest",
+				Hint:         "focus on security",
+				History:      config.Ptr(10),
+				APIKey:       "sk-test",
+				WrapLine:     100,
+				NoAssistedBy: config.Ptr(true),
 			},
 			want: config.Config{
-				DetailLevel: config.DetailDetailed,
-				Model:       "gemini-flash-latest",
-				Hint:        "focus on security",
-				History:     config.Ptr(10),
-				APIKey:      "sk-test",
-				WrapLine:    100,
+				DetailLevel:  config.DetailDetailed,
+				Model:        "gemini-flash-latest",
+				Hint:         "focus on security",
+				History:      config.Ptr(10),
+				APIKey:       "sk-test",
+				WrapLine:     100,
+				NoAssistedBy: config.Ptr(true),
 			},
 		},
 		{
@@ -71,20 +73,22 @@ func TestFromEntity(t *testing.T) {
 		{
 			name: "all fields set",
 			entity: config.Config{
-				DetailLevel: config.DetailDetailed,
-				Model:       "gemini-flash-lite-latest",
-				Hint:        "explain physics",
-				History:     config.Ptr(3),
-				APIKey:      "sk-123",
-				WrapLine:    72,
+				DetailLevel:  config.DetailDetailed,
+				Model:        "gemini-flash-lite-latest",
+				Hint:         "explain physics",
+				History:      config.Ptr(3),
+				APIKey:       "sk-123",
+				WrapLine:     72,
+				NoAssistedBy: config.Ptr(true),
 			},
 			want: ConfigDTO{
-				DetailLevel: "detailed",
-				Model:       "gemini-flash-lite-latest",
-				Hint:        "explain physics",
-				History:     config.Ptr(3),
-				APIKey:      "sk-123",
-				WrapLine:    72,
+				DetailLevel:  "detailed",
+				Model:        "gemini-flash-lite-latest",
+				Hint:         "explain physics",
+				History:      config.Ptr(3),
+				APIKey:       "sk-123",
+				WrapLine:     72,
+				NoAssistedBy: config.Ptr(true),
 			},
 		},
 		{
@@ -106,12 +110,13 @@ func TestFromEntity(t *testing.T) {
 
 func TestRoundTrip(t *testing.T) {
 	original := config.Config{
-		DetailLevel: config.DetailStandard,
-		Model:       "gemini-flash-latest",
-		Hint:        "mention reaction mechanisms",
-		History:     config.Ptr(8),
-		APIKey:      "sk-roundtrip",
-		WrapLine:    80,
+		DetailLevel:  config.DetailStandard,
+		Model:        "gemini-flash-latest",
+		Hint:         "mention reaction mechanisms",
+		History:      config.Ptr(8),
+		APIKey:       "sk-roundtrip",
+		WrapLine:     80,
+		NoAssistedBy: config.Ptr(true),
 	}
 
 	dto := FromEntity(original)
@@ -190,6 +195,40 @@ func TestJSONRoundTripHistoryZero(t *testing.T) {
 
 	if restored.History == nil || *restored.History != 0 {
 		t.Errorf("round-tripped History = %v, want pointer to 0", restored.History)
+	}
+}
+
+// TestJSONRoundTripNoAssistedByFalse is the DTO-level regression for FR-037:
+// an explicit false must serialize (not be omitted by omitempty) and survive
+// a JSON round-trip, so file config can re-enable the trailer over a layer
+// that suppressed it.
+func TestJSONRoundTripNoAssistedByFalse(t *testing.T) {
+	original := ConfigDTO{NoAssistedBy: config.Ptr(false)}
+
+	//nolint:gosec // Test data, not real credentials.
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("json.Unmarshal to map failed: %v", err)
+	}
+
+	if v, exists := raw["no_assisted_by"]; !exists {
+		t.Errorf("no_assisted_by should be serialized when explicitly false, got %v", raw)
+	} else if v != false {
+		t.Errorf("no_assisted_by = %v, want false", v)
+	}
+
+	var restored ConfigDTO
+	if err := json.Unmarshal(data, &restored); err != nil {
+		t.Fatalf("json.Unmarshal failed: %v", err)
+	}
+
+	if restored.NoAssistedBy == nil || *restored.NoAssistedBy {
+		t.Errorf("round-tripped NoAssistedBy = %v, want pointer to false", restored.NoAssistedBy)
 	}
 }
 

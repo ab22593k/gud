@@ -35,12 +35,13 @@ func TestSaveAndLoad(t *testing.T) {
 	p := NewFileProvider(path)
 
 	original := config.Config{
-		DetailLevel: config.DetailDetailed,
-		Model:       "gemini-flash-latest",
-		Hint:        "focus on catalysis",
-		History:     config.Ptr(10),
-		APIKey:      "sk-test-key",
-		WrapLine:    80,
+		DetailLevel:  config.DetailDetailed,
+		Model:        "gemini-flash-latest",
+		Hint:         "focus on catalysis",
+		History:      config.Ptr(10),
+		APIKey:       "sk-test-key",
+		WrapLine:     80,
+		NoAssistedBy: config.Ptr(true),
 	}
 
 	if err := p.Save(original); err != nil {

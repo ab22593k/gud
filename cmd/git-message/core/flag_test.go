@@ -290,6 +290,33 @@ func TestConfigFromCmdChangedFlags(t *testing.T) {
 	}
 }
 
+// TestConfigFromCmdNoAssistedBy pins the FR-037 CLI contract: the canonical
+// flag accepts no value, while an explicit false remains expressible for
+// overriding a lower-precedence opt-out.
+func TestConfigFromCmdNoAssistedBy(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want bool
+	}{
+		{name: "bare flag opts out", args: []string{"--no-assisted-by"}, want: true},
+		{name: "explicit false opts back in", args: []string{"--no-assisted-by=false"}, want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := configFromCmd(flagCommand(t, tt.args...)).NoAssistedBy
+			if got == nil {
+				t.Fatalf("configFromCmd(%q) left suppression unset", tt.args)
+			}
+
+			if *got != tt.want {
+				t.Errorf("configFromCmd(%q) = %v, want %v", tt.args, *got, tt.want)
+			}
+		})
+	}
+}
+
 // TestConfigFromCmdHistoryZero is the CLI-layer regression: --history 0 must
 // produce an explicit History=0 (pointer set), not a zero-value History that
 // Merge would interpret as "not set".

@@ -119,6 +119,7 @@ func addPersistentFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringSlice("issue", nil,
 		"Issue numbers this commit fixes (comma-separated, e.g. 123,456; adds a 'Fixes: #N' trailer per issue)")
 	cmd.PersistentFlags().Int("wrapline", 72, "Wrap all lines at this character width")
+	cmd.PersistentFlags().Bool("no-assisted-by", false, "Omit the Assisted-by trailer (the trailer is on by default)")
 	cmd.PersistentFlags().String("amend", "", "Regenerate one commit message (e.g. --amend HEAD~2)")
 	cmd.PersistentFlags().Lookup("amend").NoOptDefVal = amendHeadRev
 }
@@ -165,6 +166,10 @@ func configFromCmd(cmd *cobra.Command) config.Config {
 
 	if flags.Changed("issue") {
 		cfg.Issues = parseIssueList(mustGet(cmd, "issue", flags.GetStringSlice))
+	}
+
+	if flags.Changed("no-assisted-by") {
+		cfg.NoAssistedBy = config.Ptr(mustGet(cmd, "no-assisted-by", flags.GetBool))
 	}
 
 	return cfg

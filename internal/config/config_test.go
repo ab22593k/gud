@@ -4,6 +4,7 @@
 package config
 
 import (
+	"reflect"
 	"testing"
 )
 
@@ -204,5 +205,69 @@ func TestMergeOverrideEmptyBase(t *testing.T) {
 
 	if merged.WrapLine != 80 {
 		t.Errorf("Merge from zero value: WrapLine = %d", merged.WrapLine)
+	}
+}
+
+// TestDefaultConfigKeepsAssistedByTrailer pins FR-037's default: suppression
+// is explicitly off, so the footer remains on unless a layer opts out.
+func TestDefaultConfigKeepsAssistedByTrailer(t *testing.T) {
+	cfg := DefaultConfig()
+
+	if cfg.NoAssistedBy == nil {
+		t.Fatal("DefaultConfig().NoAssistedBy is nil, want explicit false")
+	}
+
+	if *cfg.NoAssistedBy {
+		t.Error("DefaultConfig().NoAssistedBy = true, want false")
+	}
+
+	if cfg.AssistedByTrailerSuppressed() {
+		t.Error("DefaultConfig suppresses Assisted-by, want the trailer on by default")
+	}
+}
+
+// TestMergeNoAssistedByPrecedence pins the FR-037 configuration contract:
+// nil means unset, while an explicit true or false in the override layer wins.
+func TestMergeNoAssistedByPrecedence(t *testing.T) {
+	tests := []struct {
+		name     string
+		base     Config
+		override Config
+		want     *bool
+	}{
+		{
+			name:     "unset override preserves enabled suppression",
+			base:     Config{NoAssistedBy: Ptr(true)},
+			override: Config{},
+			want:     Ptr(true),
+		},
+		{
+			name:     "unset override preserves explicit disabled suppression",
+			base:     Config{NoAssistedBy: Ptr(false)},
+			override: Config{},
+			want:     Ptr(false),
+		},
+		{
+			name:     "explicit enable wins over unset",
+			base:     Config{},
+			override: Config{NoAssistedBy: Ptr(true)},
+			want:     Ptr(true),
+		},
+		{
+			name:     "explicit disable wins over enabled",
+			base:     Config{NoAssistedBy: Ptr(true)},
+			override: Config{NoAssistedBy: Ptr(false)},
+			want:     Ptr(false),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.base.Merge(tt.override)
+
+			if !reflect.DeepEqual(got.NoAssistedBy, tt.want) {
+				t.Errorf("Merge NoAssistedBy = %v, want %v", got.NoAssistedBy, tt.want)
+			}
+		})
 	}
 }

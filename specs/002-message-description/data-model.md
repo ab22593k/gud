@@ -20,7 +20,7 @@ trailer block.
 | `Subject`        | string (single line)| Non-empty; imperative summary of intent; does not end with a period; within the configured width in display cells | FR-001, FR-002, FR-013, FR-017 |
 | `Separator`      | string (`""` line)  | Exactly one blank line between subject and body | FR-001 |
 | `Body`           | string (multi-line) | **Non-empty** — at least one non-empty line after the separator | FR-001 (**CHANGED**: now checked) |
-| `TrailerBlock`   | `[]Trailer`         | Placed by git; `Fixes:` per distinct issue; one `Assisted-by` naming the serving model | FR-015, FR-016 |
+| `TrailerBlock`   | `[]Trailer`         | Placed by git; `Fixes:` per distinct issue; one `Assisted-by` naming the serving model unless FR-037 suppresses it | FR-015, FR-016, FR-037 |
 | Plain text       | —                   | No markdown, no code fences, no backticks, no preamble, no trailing sign-off | FR-004 |
 
 **Validation rules**

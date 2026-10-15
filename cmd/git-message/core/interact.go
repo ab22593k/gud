@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -270,8 +271,18 @@ func assembleTrailers(ctx context.Context, msg string, issues []int, model strin
 // rules, then every line — subject, body, and trailers — is normalized to
 // the configured width in display cells. Wrapping folds; it never truncates
 // content or fails. An empty model omits the Assisted-by trailer (FR-016),
-// e.g. for a git-authored message.
+// e.g. for a git-authored message. An explicit --no-assisted-by setting also
+// omits it for a generated message while retaining the model in a debug
+// diagnostic (FR-037).
 func finalizeMessage(ctx context.Context, msg string, cfg config.Config, model string) (string, error) {
+	if cfg.AssistedByTrailerSuppressed() {
+		if model != "" {
+			slog.Debug("assisted-by trailer suppressed by user request", "model", model)
+		}
+
+		model = ""
+	}
+
 	withTrailers, err := assembleTrailers(ctx, msg, cfg.Issues, model)
 	if err != nil {
 		return "", err

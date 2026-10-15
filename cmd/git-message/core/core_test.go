@@ -194,7 +194,7 @@ func TestMustGet(t *testing.T) {
 func TestMustGetFlagsRegistered(t *testing.T) {
 	t.Parallel()
 
-	for _, name := range []string{"detail-level", "hint", "history", "model", "wrapline", "issue"} {
+	for _, name := range []string{"detail-level", "hint", "history", "model", "wrapline", "issue", "no-assisted-by"} {
 		if rootCmd.PersistentFlags().Lookup(name) == nil {
 			t.Errorf("persistent flag %q missing: mustGet would panic", name)
 		}

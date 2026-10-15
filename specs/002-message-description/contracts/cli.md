@@ -42,6 +42,7 @@ treat a file containing only git's comment template as empty.
 | `--history` | int | `5` | Recent/topic commits of context; clamped to `0…50`; `0` disables | FR-014 |
 | `--issue` | string slice | — | Issue numbers; one `Fixes: #N` trailer per **distinct** issue, in the order given, deduplicated | FR-015 |
 | `--model` | string | built-in default | Model identity recorded in the `Assisted-by` trailer | FR-016 |
+| `--no-assisted-by` | bool | `false` | Suppress the `Assisted-by` trailer; accepted with no value | FR-037 |
 | `--wrapline` | int | `72` | Target line width in display cells; clamped to the supported range, never failing | FR-013 |
 | `--amend [rev]` | string | `HEAD` | Regenerate one existing commit from its own change only | FR-029 |
 
