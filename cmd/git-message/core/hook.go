@@ -192,6 +192,18 @@ func runHookModeInternal(ctx context.Context, msgFile string, app *AppContext) e
 func generateAndWriteMsg(ctx context.Context, app *AppContext, diff, msgFile string) error {
 	msgFile = filepath.Clean(msgFile)
 
+	if fi, err := os.Lstat(msgFile); err == nil {
+		if fi.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("refusing to write message file %q: symlink", msgFile)
+		}
+
+		if !fi.Mode().IsRegular() {
+			return fmt.Errorf("refusing to write message file %q: not a regular file", msgFile)
+		}
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("stat message file: %w", err)
+	}
+
 	existing, err := os.ReadFile(msgFile)
 	if err == nil && hasMeaningfulContent(string(existing)) {
 		return nil
