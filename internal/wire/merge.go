@@ -183,6 +183,10 @@ func applyMerge(staging, newDir string, take, del []string) error {
 			return fmt.Errorf("create parent for %s: %w", p, err)
 		}
 
+		if fi, err := os.Lstat(filepath.Dir(dst)); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("take %s: parent is a symlink", p)
+		}
+
 		if err := copyOneFile(src, dst); err != nil {
 			return fmt.Errorf("take %s: %w", p, err)
 		}
