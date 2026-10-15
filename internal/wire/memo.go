@@ -45,6 +45,10 @@ type memoFetcher struct {
 
 // Memoize wraps f with per-run resolution memoization.
 func Memoize(f Fetcher, m *memo) Fetcher {
+	if f == nil {
+		return nil
+	}
+
 	if m == nil {
 		m = newMemo()
 	}
