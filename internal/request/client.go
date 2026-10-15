@@ -57,7 +57,7 @@ const (
 // and cancellation.
 func NewClient(ctx context.Context, cfg ClientConfig) (*Client, error) {
 	if cfg.APIKey == "" {
-		return nil, errors.New("API key is required")
+		return nil, errors.New("api key is required")
 	}
 
 	// The agent serves a fixed model set, so the configured name is resolved to
