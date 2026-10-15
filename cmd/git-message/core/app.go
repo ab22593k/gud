@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 
 	"gud/internal/config"
@@ -137,7 +138,7 @@ func (a *AppContext) AgentFiles(ctx context.Context) []request.AgentFile {
 	a.mu.RLock()
 
 	if a.agentsFilesOK {
-		files := a.agentsFiles
+		files := slices.Clone(a.agentsFiles)
 		a.mu.RUnlock()
 
 		return files
@@ -149,10 +150,10 @@ func (a *AppContext) AgentFiles(ctx context.Context) []request.AgentFile {
 
 	a.mu.Lock()
 	if !a.agentsFilesOK {
-		a.agentsFiles = files
+		a.agentsFiles = slices.Clone(files)
 		a.agentsFilesOK = true
 	} else {
-		files = a.agentsFiles
+		files = slices.Clone(a.agentsFiles)
 	}
 	a.mu.Unlock()
 

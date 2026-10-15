@@ -3,6 +3,8 @@
 // concerns. Use the dto sub-package for JSON interchange.
 package config
 
+import "slices"
+
 // DetailLevel controls the verbosity of generated commit messages.
 type DetailLevel string
 
@@ -157,7 +159,7 @@ func (c Config) Merge(override Config) Config {
 	}
 
 	if override.Issues != nil {
-		merged.Issues = override.Issues
+		merged.Issues = slices.Clone(override.Issues)
 	}
 
 	return merged
