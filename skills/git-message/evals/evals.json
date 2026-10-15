@@ -1,0 +1,40 @@
+{
+  "skill_name": "git-message",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Set up gud so that commits in this repo get AI-generated messages automatically. I already have GOOGLE_API_KEY set in my environment. Don't make any commits yet — just install it, verify it, and tell me anything I should know about how it behaves.",
+      "expected_output": "Repo-local gud hook installed and verified; report explains that plain `git commit` gets a generated message, `git commit -m` messages are left untouched, and a usable GOOGLE_API_KEY is required or commits with staged changes fail.",
+      "expectations": [
+        "The repo-local prepare-commit-msg hook is installed and invokes the gud binary (the hook file exists in the repository's git dir and calls `git-message hook run`).",
+        "The agent verifies the installation before reporting (e.g., inspects the hook file or otherwise confirms it is active).",
+        "The agent explains that plain `git commit` gets a generated message while a `git commit -m` message is left untouched.",
+        "The agent flags the credential requirement: without a usable GOOGLE_API_KEY, commits with staged changes fail.",
+        "No commit is created by the agent (the user asked not to commit).",
+        "No global git configuration is changed — in particular no global core.hooksPath is set."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Every commit in this repo now fails with: `Error: failed to create request client: api key is required`. I don't have a gud API key and I don't want one — I just need to be able to commit normally again. Fix it.",
+      "expected_output": "Agent identifies the installed gud prepare-commit-msg hook as the cause, uninstalls/disables it, verifies that committing works again, and explains the key requirement.",
+      "expectations": [
+        "The agent identifies the installed gud prepare-commit-msg hook as the cause of the failing commits.",
+        "The gud hook is no longer active in the repository (uninstalled, removed, or disabled).",
+        "Committing works again after the fix — either a successful commit is demonstrated or the repo is left in a state where `git commit -m` succeeds.",
+        "The agent explains the root cause: the hook initializes the model client on every commit and needs an API key, even for `-m` commits."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "I want gud to generate my commit messages in this repo. Important: my prepare-commit-msg hook appends 'Refs: AREA-123' to every commit message and I can't lose it. Set it up so both happen — or tell me if that's not possible.",
+      "expected_output": "Agent detects the pre-existing hook, does not clobber it, and either wraps it with gud (gud first, ticket append second) or flags the conflict for the user; the ticket logic survives.",
+      "expectations": [
+        "The agent detects the pre-existing prepare-commit-msg hook before installing anything.",
+        "The existing ticket logic is preserved: the active hook still appends 'Refs: AREA-123' (original file or a wrapper), or the agent left it untouched after flagging the conflict.",
+        "The agent does not silently overwrite the existing hook with gud's.",
+        "The agent explains how the two coexist (git runs one script per hook name; gud runs before the ticket append) or clearly asks the user how to proceed."
+      ]
+    }
+  ]
+}
