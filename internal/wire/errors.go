@@ -23,6 +23,8 @@ var (
 	ErrDiverged = errors.New("wire: local modifications present")
 	// ErrUpstream marks network, auth, and rate-limit failures.
 	ErrUpstream = errors.New("wire: upstream unreachable")
+	// ErrBudgetExceeded marks copy/merge inputs that exceed the byte budget.
+	ErrBudgetExceeded = errors.New("wire: copy exceeds budget")
 	// ErrInternal marks programming errors (nil dependencies, violated
 	// invariants). It is never caused by user input or environment.
 	ErrInternal = errors.New("wire: internal error")

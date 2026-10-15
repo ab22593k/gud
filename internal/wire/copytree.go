@@ -1,7 +1,6 @@
 package wire
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -144,7 +143,7 @@ type budgetWriter struct {
 
 func (b *budgetWriter) Write(p []byte) (int, error) {
 	if *b.budget <= 0 {
-		return 0, errors.New("copy exceeds budget")
+		return 0, ErrBudgetExceeded
 	}
 
 	if int64(len(p)) > *b.budget {
