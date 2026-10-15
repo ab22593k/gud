@@ -69,8 +69,10 @@ func showProgress[T any](ctx context.Context, errW io.Writer, msg string, fn fun
 		case r := <-resCh:
 			if r.panicVal != nil {
 				_, _ = fmt.Fprintf(errW, "\r%s ✗\n", msg)
-				// Re-panic in the main goroutine so the caller sees it.
-				panic(r.panicVal)
+
+				var zero T
+
+				return zero, fmt.Errorf("progress worker panicked: %v", r.panicVal)
 			}
 
 			_, _ = fmt.Fprintf(errW, "\r%s ✓\n", msg)
