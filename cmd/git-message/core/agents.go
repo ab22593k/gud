@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"errors"
 	"io/fs"
 	"log/slog"
 	"os"
@@ -273,7 +274,7 @@ func walkDown(ctx context.Context, start, root string) []string {
 
 	visited := 0
 
-	_ = filepath.WalkDir(start, func(p string, d fs.DirEntry, err error) error {
+	if err := filepath.WalkDir(start, func(p string, d fs.DirEntry, err error) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -317,7 +318,9 @@ func walkDown(ctx context.Context, start, root string) []string {
 		}
 
 		return nil
-	})
+	}); err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+		slog.Debug("agents walk failed", "start", start, "err", err)
+	}
 
 	return found
 }
