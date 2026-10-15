@@ -179,7 +179,7 @@ func applyMerge(staging, newDir string, take, del []string) error {
 		src := filepath.Join(newDir, filepath.FromSlash(p))
 		dst := filepath.Join(staging, filepath.FromSlash(p))
 
-		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(dst), 0o750); err != nil {
 			return fmt.Errorf("create parent for %s: %w", p, err)
 		}
 
@@ -215,7 +215,7 @@ func copyOneFile(src, dst string) error {
 
 	defer func() { _ = in.Close() }()
 
-	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode().Perm())
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode().Perm()&0o755)
 	if err != nil {
 		return fmt.Errorf("create file: %w", err)
 	}
@@ -258,7 +258,7 @@ func cloneCheckout(target, staging string) error {
 		dst := filepath.Join(staging, rel)
 
 		if d.IsDir() {
-			return os.MkdirAll(dst, 0o755)
+			return os.MkdirAll(dst, 0o750)
 		}
 
 		if d.Type()&fs.ModeSymlink != 0 {

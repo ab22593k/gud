@@ -69,7 +69,7 @@ func (c *treeCopier) visit(path string, d fs.DirEntry, err error) error {
 	}
 
 	if d.IsDir() {
-		return os.MkdirAll(filepath.Join(c.dst, rel), 0o755)
+		return os.MkdirAll(filepath.Join(c.dst, rel), 0o750)
 	}
 
 	if !entryRegular(d, path) {
@@ -103,7 +103,7 @@ func (c *treeCopier) copyFile(src, dst string) error {
 
 	defer func() { _ = in.Close() }()
 
-	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode().Perm())
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode().Perm()&0o755)
 	if err != nil {
 		return fmt.Errorf("create file: %w", err)
 	}
