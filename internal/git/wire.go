@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -133,7 +134,9 @@ func AddSparseWorktree(ctx context.Context, mirror, path, commit, subpath string
 	// is not fetchable either). Clean up before reporting.
 	st, err := os.Stat(filepath.Join(path, filepath.FromSlash(subpath)))
 	if err != nil || !st.IsDir() {
-		_ = RemoveWorktree(ctx, mirror, path)
+		if cerr := RemoveWorktree(ctx, mirror, path); cerr != nil {
+			slog.Debug("wire worktree cleanup failed", "path", path, "err", cerr)
+		}
 
 		return fmt.Errorf("subpath %q not in %s as a directory: %w", subpath, commit, ErrSubpathNotDir)
 	}
