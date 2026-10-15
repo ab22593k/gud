@@ -54,7 +54,7 @@ func (p *FileProvider) Load() (config.Config, error) {
 		return config.Config{}, err
 	}
 
-	var cfgDTO dto.ConfigDTO
+	var cfgDTO dto.Config
 	if err := json.Unmarshal(data, &cfgDTO); err != nil {
 		return config.Config{}, fmt.Errorf("parse config: %w", err)
 	}
