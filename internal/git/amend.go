@@ -17,6 +17,10 @@ func ResolveRevision(ctx context.Context, rev string) (string, error) {
 		return "", errors.New("resolve revision: empty revision")
 	}
 
+	if strings.HasPrefix(rev, "-") {
+		return "", errors.New("resolve revision: revision must not start with -")
+	}
+
 	return runGitTrimmed(ctx, "rev-parse", "--verify", rev+"^{commit}")
 }
 
