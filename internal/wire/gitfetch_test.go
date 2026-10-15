@@ -49,7 +49,10 @@ func seedWireMirror(t *testing.T) (*Store, string) {
 	remote := t.TempDir() + "/remote"
 	mustInitFixture(t, remote)
 
-	store := NewStoreWithDir(t.TempDir())
+	store, err := NewStoreWithDir(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStoreWithDir: %v", err)
+	}
 	mirror := store.MirrorDir("example.com", "o", "r")
 
 	if err := localClone(t, remote, mirror); err != nil {
@@ -153,7 +156,10 @@ func TestGitFetcherMaterializeFromFixture(t *testing.T) {
 	remote := t.TempDir() + "/remote"
 	mustInitFixture(t, remote)
 
-	store := NewStoreWithDir(t.TempDir())
+	store, err := NewStoreWithDir(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStoreWithDir: %v", err)
+	}
 	mirror := store.MirrorDir("example.com", "o", "r")
 
 	if err := localClone(t, remote, mirror); err != nil {

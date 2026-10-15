@@ -23,15 +23,17 @@ func NewStore() (*Store, error) {
 		return nil, fmt.Errorf("home dir: %w", err)
 	}
 
-	return NewStoreWithDir(filepath.Join(home, ".config", "gud", "wire")), nil
+	return NewStoreWithDir(filepath.Join(home, ".config", "gud", "wire"))
 }
 
 // NewStoreWithDir returns a Store rooted at dir, creating it when absent.
 // It is the test hook for hermetic filesystem isolation.
-func NewStoreWithDir(dir string) *Store {
-	_ = os.MkdirAll(dir, 0o750)
+func NewStoreWithDir(dir string) (*Store, error) {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		return nil, fmt.Errorf("create wire store %s: %w", dir, err)
+	}
 
-	return &Store{root: dir}
+	return &Store{root: dir}, nil
 }
 
 // Root reports the cache directory the store was created with.

@@ -40,7 +40,10 @@ func TestSafeSegment(t *testing.T) {
 func TestMirrorDirStaysUnderRoot(t *testing.T) {
 	t.Parallel()
 
-	s := NewStoreWithDir(t.TempDir())
+	s, err := NewStoreWithDir(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStoreWithDir: %v", err)
+	}
 
 	dir := s.MirrorDir("github.com", "../../evil", "x")
 
@@ -65,7 +68,10 @@ func TestRegistryPathInStore(t *testing.T) {
 func TestWorktreeDirUnique(t *testing.T) {
 	t.Parallel()
 
-	s := NewStoreWithDir(t.TempDir())
+	s, err := NewStoreWithDir(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStoreWithDir: %v", err)
+	}
 
 	first, err := s.WorktreeDir()
 	if err != nil {
