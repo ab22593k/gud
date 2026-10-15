@@ -56,12 +56,12 @@ type treeCopier struct {
 // anything else skipped with a debug record.
 func (c *treeCopier) visit(path string, d fs.DirEntry, err error) error {
 	if err != nil {
-		return err
+		return fmt.Errorf("walk %s: %w", path, err)
 	}
 
 	rel, err := filepath.Rel(c.src, path)
 	if err != nil {
-		return err
+		return fmt.Errorf("walk %s: %w", path, err)
 	}
 
 	if rel == "." {

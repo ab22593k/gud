@@ -59,12 +59,12 @@ func snapshotDir(dir string) (map[string]snapFile, error) {
 
 	walk := func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return err
+			return fmt.Errorf("walk %s: %w", path, err)
 		}
 
 		rel, err := filepath.Rel(dir, path)
 		if err != nil {
-			return err
+			return fmt.Errorf("walk %s: %w", path, err)
 		}
 
 		if rel == "." {
