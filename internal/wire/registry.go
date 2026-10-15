@@ -287,7 +287,24 @@ func KeyFor(registryPath, target string) (string, error) {
 		return "", fmt.Errorf("resolve %s: %w", registryPath, err)
 	}
 
-	rel, err := filepath.Rel(filepath.Dir(absReg), target)
+	regDir := filepath.Dir(absReg)
+	if resolved, err := filepath.EvalSymlinks(regDir); err == nil {
+		regDir = resolved
+	}
+
+	resolvedTarget := target
+	if abs, err := filepath.Abs(target); err == nil {
+		resolvedTarget = abs
+		if resolved, err := filepath.EvalSymlinks(resolvedTarget); err == nil {
+			resolvedTarget = resolved
+		} else if parent := filepath.Dir(resolvedTarget); parent != resolvedTarget {
+			if resolved, err := filepath.EvalSymlinks(parent); err == nil {
+				resolvedTarget = filepath.Join(resolved, filepath.Base(abs))
+			}
+		}
+	}
+
+	rel, err := filepath.Rel(regDir, resolvedTarget)
 	if err != nil {
 		return "", fmt.Errorf("relate %s: %w", target, err)
 	}
