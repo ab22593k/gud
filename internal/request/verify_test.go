@@ -101,7 +101,9 @@ func TestVerifyGroundingLargeDiff(t *testing.T) {
 	sb.WriteString("Refactor\n\nTouch pkg/module00/file000.go and ")
 
 	for f := range 200 {
-		sb.WriteString("ghost" + itoa3(f) + ".go ")
+		sb.WriteString("ghost")
+		sb.WriteString(itoa3(f))
+		sb.WriteString(".go ")
 	}
 
 	got := findingCodesForTest(VerifyMessage(sb.String(), diff, 72))
