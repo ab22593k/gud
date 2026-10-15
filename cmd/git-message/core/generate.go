@@ -250,7 +250,7 @@ func buildRepoContext(ctx context.Context, app *AppContext) string {
 	if st, ok := repoStatsCache.Get(repoRoot); ok {
 		slog.Debug("repo stats cache hit", "root", repoRoot, "hits", repoStatsCache.Hits())
 
-		return detect.FormatRepoContext(st)
+		return detect.FormatRepoContext(cloneStats(st))
 	}
 
 	stats, err := detect.ComputeStatsWithContext(ctx, repoRoot)
@@ -260,10 +260,27 @@ func buildRepoContext(ctx context.Context, app *AppContext) string {
 		return ""
 	}
 
-	repoStatsCache.Set(repoRoot, stats)
+	repoStatsCache.Set(repoRoot, cloneStats(stats))
 	slog.Debug("repo stats cache miss", "root", repoRoot, "misses", repoStatsCache.Misses())
 
 	return detect.FormatRepoContext(stats)
+}
+
+func cloneStats(st *detect.RepoStats) *detect.RepoStats {
+	if st == nil {
+		return nil
+	}
+
+	out := &detect.RepoStats{
+		FilesByExtension: make(map[string]int, len(st.FilesByExtension)),
+		TotalFiles:       st.TotalFiles,
+	}
+
+	for k, v := range st.FilesByExtension {
+		out.FilesByExtension[k] = v
+	}
+
+	return out
 }
 
 // joinContexts joins two non-empty context strings with a blank line separator.
