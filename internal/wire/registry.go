@@ -3,6 +3,7 @@ package wire
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"os"
 	"path"
@@ -222,20 +223,29 @@ func installFile(path string, data []byte) error {
 	tmpName := tmp.Name()
 
 	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		_ = os.Remove(tmpName)
+		if cerr := tmp.Close(); cerr != nil {
+			slog.Debug("wire registry cleanup failed", "file", tmpName, "err", cerr)
+		}
+
+		if rerr := os.Remove(tmpName); rerr != nil {
+			slog.Debug("wire registry cleanup failed", "file", tmpName, "err", rerr)
+		}
 
 		return fmt.Errorf("write registry: %w", err)
 	}
 
 	if err := tmp.Close(); err != nil {
-		_ = os.Remove(tmpName)
+		if rerr := os.Remove(tmpName); rerr != nil {
+			slog.Debug("wire registry cleanup failed", "file", tmpName, "err", rerr)
+		}
 
 		return fmt.Errorf("close registry: %w", err)
 	}
 
 	if err := os.Rename(tmpName, path); err != nil {
-		_ = os.Remove(tmpName)
+		if rerr := os.Remove(tmpName); rerr != nil {
+			slog.Debug("wire registry cleanup failed", "file", tmpName, "err", rerr)
+		}
 
 		return fmt.Errorf("install registry: %w", err)
 	}

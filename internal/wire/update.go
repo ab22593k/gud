@@ -205,14 +205,21 @@ func stageMergeSnaps(
 
 	newDir, err := os.MkdirTemp(filepath.Dir(target), ".wire-new-*")
 	if err != nil {
-		_ = os.RemoveAll(baseDir)
+		if cerr := os.RemoveAll(baseDir); cerr != nil {
+			slog.Debug("wire cleanup failed", "dir", baseDir, "err", cerr)
+		}
 
 		return fail(fmt.Errorf("stage new: %w", err))
 	}
 
 	cleanup := func() {
-		_ = os.RemoveAll(baseDir)
-		_ = os.RemoveAll(newDir)
+		if cerr := os.RemoveAll(baseDir); cerr != nil {
+			slog.Debug("wire cleanup failed", "dir", baseDir, "err", cerr)
+		}
+
+		if cerr := os.RemoveAll(newDir); cerr != nil {
+			slog.Debug("wire cleanup failed", "dir", newDir, "err", cerr)
+		}
 	}
 
 	for _, job := range []struct {
@@ -306,7 +313,11 @@ func applyMerged(
 		return "", fmt.Errorf("stage merge: %w", err)
 	}
 
-	defer func() { _ = os.RemoveAll(staging) }()
+	defer func() {
+		if cerr := os.RemoveAll(staging); cerr != nil {
+			slog.Debug("wire cleanup failed", "dir", staging, "err", cerr)
+		}
+	}()
 
 	if err := cloneCheckout(target, staging); err != nil {
 		return "", err
@@ -351,7 +362,11 @@ func swapCheckout(
 		return 0, fmt.Errorf("stage checkout: %w", err)
 	}
 
-	defer func() { _ = os.RemoveAll(staging) }()
+	defer func() {
+		if cerr := os.RemoveAll(staging); cerr != nil {
+			slog.Debug("wire cleanup failed", "dir", staging, "err", cerr)
+		}
+	}()
 
 	files, err := fetcher.Materialize(ctx, source, res, staging)
 	if err != nil {
@@ -386,7 +401,11 @@ func replaceDir(target, staging string) error {
 		return fmt.Errorf("stage backup: %w", err)
 	}
 
-	defer func() { _ = os.RemoveAll(backup) }()
+	defer func() {
+		if cerr := os.RemoveAll(backup); cerr != nil {
+			slog.Debug("wire cleanup failed", "dir", backup, "err", cerr)
+		}
+	}()
 
 	// MkdirTemp created backup; rename target into its parent slot.
 	if err := os.Remove(backup); err != nil {
