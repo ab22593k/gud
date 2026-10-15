@@ -35,6 +35,38 @@ type Client struct {
 	model     string
 }
 
+// ModelError is a model-side failure (quota, auth, safety, overload).
+// Callers branch with errors.As: Retryable reports 429/5xx-style codes.
+type ModelError struct {
+	Code      string
+	Message   string
+	Retryable bool
+}
+
+func (e *ModelError) Error() string {
+	if e.Code != "" && e.Message != "" {
+		return "model error " + e.Code + ": " + e.Message
+	}
+
+	if e.Message != "" {
+		return "model error: " + e.Message
+	}
+
+	return "model error code: " + e.Code
+}
+
+func modelRetryable(code, msg string) bool {
+	s := strings.ToLower(code + " " + msg)
+
+	for _, sub := range []string{"429", "500", "502", "503", "504", "timeout", "unavailable", "overloaded"} {
+		if strings.Contains(s, sub) {
+			return true
+		}
+	}
+
+	return false
+}
+
 const (
 	// defaultModel is the Gemini model the Antigravity agent reasons with when
 	// none is configured: the agent's cheapest, lowest-latency option, which is
@@ -252,6 +284,11 @@ func isTransientErr(err error) bool {
 		return false
 	}
 
+	var merr *ModelError
+	if errors.As(err, &merr) {
+		return merr.Retryable
+	}
+
 	msg := strings.ToLower(err.Error())
 	for _, s := range []string{
 		"timeout", "deadline exceeded", "unavailable", "connection reset",
@@ -321,12 +358,8 @@ func generateContent(
 			return "", errors.New("model returned nil response")
 		}
 
-		if resp.ErrorMessage != "" {
-			return "", fmt.Errorf("model error: %s", resp.ErrorMessage)
-		}
-
-		if resp.ErrorCode != "" {
-			return "", fmt.Errorf("model error code: %s", resp.ErrorCode)
+		if resp.ErrorMessage != "" || resp.ErrorCode != "" {
+			return "", &ModelError{Code: resp.ErrorCode, Message: resp.ErrorMessage, Retryable: modelRetryable(resp.ErrorCode, resp.ErrorMessage)}
 		}
 
 		response = resp
