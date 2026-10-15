@@ -66,11 +66,28 @@ func AmendHead(ctx context.Context, message string) (string, error) {
 	return getHEADHash(ctx)
 }
 
+// IsRootCommit reports whether sha is the root commit: it has no parent to
+// anchor an interactive rebase or an amend interaction on. The revision is
+// expected to resolve (callers resolve first); a failed parent probe then
+// means the root commit rather than a bad revision.
+func IsRootCommit(ctx context.Context, sha string) (bool, error) {
+	if _, err := runGit(ctx, "rev-parse", "--verify", sha+"^"); err != nil {
+		return true, nil
+	}
+
+	return false, nil
+}
+
 // checkHasParent errors when sha is the root commit, which has no parent
 // to anchor an interactive rebase on.
 func checkHasParent(ctx context.Context, sha string) error {
-	if _, err := runGit(ctx, "rev-parse", "--verify", sha+"^"); err != nil {
-		return fmt.Errorf("reword %s: cannot reword the root commit: %w", sha, err)
+	root, err := IsRootCommit(ctx, sha)
+	if err != nil {
+		return err
+	}
+
+	if root {
+		return fmt.Errorf("reword %s: cannot reword the root commit", sha)
 	}
 
 	return nil

@@ -154,7 +154,7 @@ func TestOracle_Explainability_NoStagedDiff(t *testing.T) {
 
 	t.Chdir(td)
 
-	_, err := getStagedDiffOrError(t.Context())
+	_, _, err := getStagedDiffOrError(t.Context())
 	if err == nil {
 		t.Fatal("[E] freshly initialised repo should report no staged changes, got nil error")
 	}

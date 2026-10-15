@@ -1,9 +1,13 @@
 package core
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"gud/internal/request"
 )
 
 func TestEditMessage(t *testing.T) {
@@ -74,4 +78,46 @@ func writeEditorScript(t *testing.T, content string) string {
 	}
 
 	return path
+}
+
+// TestPresentFindings pins the FR-018 interactive notice contract: a clean
+// result (nil or empty findings) prints nothing, while surviving findings
+// print exactly one line naming the failing checks. The presenter cannot
+// fail — notices inform, they never error or change the exit status.
+func TestPresentFindings(t *testing.T) {
+	t.Parallel()
+
+	t.Run("clean prints nothing", func(t *testing.T) {
+		t.Parallel()
+
+		for _, findings := range [][]request.Finding{nil, {}} {
+			var out bytes.Buffer
+			presentFindings(&out, findings)
+
+			if out.String() != "" {
+				t.Errorf("presentFindings(%v) printed %q, want nothing", findings, out.String())
+			}
+		}
+	})
+
+	t.Run("surviving findings name their checks", func(t *testing.T) {
+		t.Parallel()
+
+		findings := []request.Finding{
+			{Check: "empty-body", Detail: "message has no body after the subject line"},
+			{Check: "subject-length", Detail: "subject is 90 cols, limit is 72"},
+		}
+
+		var out bytes.Buffer
+		presentFindings(&out, findings)
+
+		got := out.String()
+		if !strings.Contains(got, "empty-body") || !strings.Contains(got, "subject-length") {
+			t.Errorf("notice = %q, want one line naming both failing checks", got)
+		}
+
+		if strings.Count(strings.TrimSuffix(got, "\n"), "\n") != 0 {
+			t.Errorf("notice = %q, want exactly one line", got)
+		}
+	})
 }

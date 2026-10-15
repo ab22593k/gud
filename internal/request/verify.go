@@ -13,8 +13,8 @@ import (
 
 // Finding is one failed output-quality check on a generated message.
 type Finding struct {
-	// Check is the machine-readable code: empty, subject-length,
-	// fence-remnant, or file-grounding.
+	// Check is the machine-readable code: empty, empty-body,
+	// subject-length, fence-remnant, or file-grounding.
 	Check string
 	// Detail is the human-readable explanation.
 	Detail string
@@ -32,6 +32,15 @@ func VerifyMessage(msg, diff string, wrapLine int) []Finding {
 	}
 
 	var out []Finding
+
+	// A subject-only reply reads as a label, not documentation: FR-001
+	// requires a body after the subject line and its blank separator.
+	if !hasBody(msg) {
+		out = append(out, Finding{
+			Check:  "empty-body",
+			Detail: "message has no body after the subject line",
+		})
+	}
 
 	limit := wrapLine
 	if limit <= 0 {
@@ -103,6 +112,25 @@ func groundingFindings(msg, diff string) []Finding {
 	}
 
 	return out
+}
+
+// hasBody reports whether msg carries a non-empty body per FR-001: the
+// subject line, then a blank separator line, then at least one non-blank
+// line. It scans only the (small) message, never the diff, so the check
+// stays within the single-pass budget of FR-019.
+func hasBody(msg string) bool {
+	lines := strings.Split(msg, "\n")
+	if len(lines) < 3 || strings.TrimSpace(lines[1]) != "" {
+		return false
+	}
+
+	for _, line := range lines[2:] {
+		if strings.TrimSpace(line) != "" {
+			return true
+		}
+	}
+
+	return false
 }
 
 // findingCodes returns the check codes of findings for compact logging.

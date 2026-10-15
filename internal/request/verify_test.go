@@ -31,17 +31,20 @@ func TestVerifyMessage(t *testing.T) {
 	}{
 		{"clean", "fix: resolve leak\n\nFree buffers on error.", 72, nil},
 		{"empty", "  \n ", 72, []string{"empty"}},
-		{"long subject", strings.Repeat("x", 73), 72, []string{"subject-length"}},
-		{"subject exactly at limit", strings.Repeat("x", 72), 72, nil},
-		{"cjk subject within cell limit", strings.Repeat("漢", 25), 72, nil},
-		{"cjk subject over cell limit", strings.Repeat("漢", 37), 72, []string{"subject-length"}},
-		{"emoji subject within cell limit", strings.Repeat("🦀", 36), 72, nil},
+		{"subject only", "fix: resolve leak", 72, []string{"empty-body"}},
+		{"no blank separator", "fix: resolve leak\nFree buffers on error.", 72, []string{"empty-body"}},
+		{"blank-lines-only body", "fix: resolve leak\n\n   \n\t\n", 72, []string{"empty-body"}},
+		{"long subject", strings.Repeat("x", 73), 72, []string{"empty-body", "subject-length"}},
+		{"subject exactly at limit", strings.Repeat("x", 72), 72, []string{"empty-body"}},
+		{"cjk subject within cell limit", strings.Repeat("漢", 25), 72, []string{"empty-body"}},
+		{"cjk subject over cell limit", strings.Repeat("漢", 37), 72, []string{"empty-body", "subject-length"}},
+		{"emoji subject within cell limit", strings.Repeat("🦀", 36), 72, []string{"empty-body"}},
 		{"long body ok", "fix: ok\n\n" + strings.Repeat("y", 200), 72, nil},
-		{"zero wrap uses default", strings.Repeat("x", 73), 0, []string{"subject-length"}},
-		{"fence remnant", "fix: ok\n```\ncode\n```", 72, []string{"fence-remnant"}},
-		{"backtick remnant", "fix: touch " + "`main.go`" + " now", 72, []string{"fence-remnant"}},
-		{"grounded file", "fix: leak in main.go", 72, nil},
-		{"ungrounded file", "fix: leak in other.go", 72, []string{"file-grounding"}},
+		{"zero wrap uses default", strings.Repeat("x", 73), 0, []string{"empty-body", "subject-length"}},
+		{"fence remnant", "fix: ok\n```\ncode\n```", 72, []string{"empty-body", "fence-remnant"}},
+		{"backtick remnant", "fix: touch " + "`main.go`" + " now", 72, []string{"empty-body", "fence-remnant"}},
+		{"grounded file", "fix: leak in main.go", 72, []string{"empty-body"}},
+		{"ungrounded file", "fix: leak in other.go", 72, []string{"empty-body", "file-grounding"}},
 	}
 
 	for _, tc := range cases {
@@ -67,8 +70,8 @@ func TestVerifyGroundingBasenameMention(t *testing.T) {
 	diff := "diff --git a/sub/a.txt b/sub/a.txt\n" +
 		"index 1111111..2222222 100644\n--- a/sub/a.txt\n+++ b/sub/a.txt\n"
 
-	if got := findingCodesForTest(VerifyMessage("fix: leak in a.txt", diff, 72)); len(got) != 0 {
-		t.Errorf("VerifyMessage codes = %v, want none (basename grounded)", got)
+	if got := findingCodesForTest(VerifyMessage("fix: leak in a.txt\n\nExplain the fix.", diff, 72)); len(got) != 0 {
+		t.Errorf("VerifyMessage codes = %v, want none (basename grounded, body present)", got)
 	}
 }
 
@@ -82,8 +85,8 @@ func TestVerifyGroundingSubstringBoundary(t *testing.T) {
 		"index 1111111..2222222 100644\n--- a/domain.go\n+++ b/domain.go\n"
 
 	got := findingCodesForTest(VerifyMessage("fix: leak in main.go", diff, 72))
-	if len(got) != 1 || got[0] != "file-grounding" {
-		t.Errorf("VerifyMessage codes = %v, want [file-grounding]", got)
+	if len(got) != 2 || got[0] != "empty-body" || got[1] != "file-grounding" {
+		t.Errorf("VerifyMessage codes = %v, want [empty-body file-grounding]", got)
 	}
 }
 
@@ -168,19 +171,28 @@ func itoa3(n int) string {
 	return s
 }
 
-// scriptLLM yields canned responses in order, recording call count.
+// scriptLLM yields canned responses in order, recording call count and the
+// text of every request it receives (so tests can assert what the bounded
+// retry actually sent).
 type scriptLLM struct {
 	name      string
 	responses []string
 	calls     int
+	requests  []string
 }
 
 func (m *scriptLLM) Name() string { return m.name }
 
 func (m *scriptLLM) GenerateContent(
-	_ context.Context, _ *model.LLMRequest, _ bool,
+	_ context.Context, req *model.LLMRequest, _ bool,
 ) iter.Seq2[*model.LLMResponse, error] {
 	m.calls++
+
+	for _, c := range req.Contents {
+		if text, err := extractText(c); err == nil {
+			m.requests = append(m.requests, text)
+		}
+	}
 
 	text := m.responses[min(m.calls-1, len(m.responses)-1)]
 
@@ -199,7 +211,7 @@ func TestGenerate_RegeneratesOnFindings(t *testing.T) {
 	}}
 	client := NewClientWithGenerator(llm, "m")
 
-	got, err := client.GenerateCommitMessageWithContent(context.Background(), diff, "",
+	got, _, err := client.GenerateCommitMessageWithContent(context.Background(), diff, "",
 		DetailStandard, "", nil, defaultWrapLine)
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
@@ -219,7 +231,7 @@ func TestGenerate_ReturnsLastOnPersistentFindings(t *testing.T) {
 	llm := &scriptLLM{name: "s", responses: []string{"fix: leak in other.go"}}
 	client := NewClientWithGenerator(llm, "m")
 
-	got, err := client.GenerateCommitMessageWithContent(context.Background(), diff, "",
+	got, _, err := client.GenerateCommitMessageWithContent(context.Background(), diff, "",
 		DetailStandard, "", nil, defaultWrapLine)
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
@@ -229,5 +241,77 @@ func TestGenerate_ReturnsLastOnPersistentFindings(t *testing.T) {
 	}
 	if got == "" {
 		t.Error("result is empty, want last output served despite findings")
+	}
+}
+
+// TestGenerate_PersistsBodyLessFinding pins FR-001 through the generation
+// loop: a reply that is grounded, short, and fence-free but has no body must
+// still be regenerated up to the bound, and the surviving empty-body finding
+// must be returned so the caller can present it instead of a clean result.
+func TestGenerate_PersistsBodyLessFinding(t *testing.T) {
+	t.Parallel()
+
+	diff := "diff --git a/main.go b/main.go\n+++ b/main.go\n+package main\n"
+	llm := &scriptLLM{name: "s", responses: []string{"fix: leak in main.go"}}
+	client := NewClientWithGenerator(llm, "m")
+
+	got, findings, err := client.GenerateCommitMessageWithContent(context.Background(), diff, "",
+		DetailStandard, "", nil, defaultWrapLine)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	if llm.calls != maxVerifyAttempts {
+		t.Errorf("calls = %d, want %d (body-less retried to the bound)", llm.calls, maxVerifyAttempts)
+	}
+	if got == "" {
+		t.Error("result is empty, want last output served despite findings")
+	}
+	if codes := findingCodesForTest(findings); len(codes) != 1 || codes[0] != "empty-body" {
+		t.Errorf("residual findings = %v, want [empty-body]", codes)
+	}
+}
+
+// TestGenerate_FeedsFindingsBack pins FR-018 at the model boundary: when the
+// first reply fails a check, the bounded retry must not re-send the same
+// request — it carries a corrective block naming the failed check and its
+// detail, and instructs the model to output only the corrected message. A
+// retry that converges returns no residual findings.
+func TestGenerate_FeedsFindingsBack(t *testing.T) {
+	t.Parallel()
+
+	diff := "diff --git a/main.go b/main.go\n+++ b/main.go\n+package main\n"
+	llm := &scriptLLM{name: "s", responses: []string{
+		"fix: leak in other.go",
+		"fix: leak in main.go\n\nFree buffers on error.",
+	}}
+	client := NewClientWithGenerator(llm, "m")
+
+	got, findings, err := client.GenerateCommitMessageWithContent(context.Background(), diff, "",
+		DetailStandard, "", nil, defaultWrapLine)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	if llm.calls != 2 {
+		t.Fatalf("calls = %d, want 2 (initial + 1 corrective retry)", llm.calls)
+	}
+	if len(findings) != 0 {
+		t.Errorf("residual findings = %v, want none (retry converged)", findingCodesForTest(findings))
+	}
+	if !strings.Contains(got, "main.go") {
+		t.Errorf("result = %q, want the corrected grounded message", got)
+	}
+	if len(llm.requests) != 2 {
+		t.Fatalf("captured requests = %d, want 2", len(llm.requests))
+	}
+
+	retry := llm.requests[1]
+	if !strings.Contains(retry, "file-grounding") {
+		t.Errorf("retry request does not name the failed check:\n%q", retry)
+	}
+	if !strings.Contains(retry, "other.go") {
+		t.Errorf("retry request does not carry the finding detail:\n%q", retry)
+	}
+	if !strings.Contains(retry, "corrected message") {
+		t.Errorf("retry request does not instruct an output-only correction:\n%q", retry)
 	}
 }

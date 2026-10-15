@@ -43,6 +43,23 @@ var defaultTemplate = promptTemplate{
 
 const defaultWrapLine = config.DefaultWrapLine
 
+// correctiveBlock builds the regeneration suffix for failed checks (FR-018):
+// it names each failed check with its detail and instructs the model to
+// output only the corrected message, with no preamble or commentary.
+func correctiveBlock(findings []Finding) string {
+	var sb strings.Builder
+
+	sb.WriteString("\nThe previous message failed verification. Correct these problems:\n")
+
+	for _, f := range findings {
+		fmt.Fprintf(&sb, "- %s: %s\n", f.Check, f.Detail)
+	}
+
+	sb.WriteString("Output only the corrected message, with no preamble or commentary.")
+
+	return sb.String()
+}
+
 // BuildPrompt creates a full prompt for generating a commit message.
 func (p promptTemplate) BuildPrompt(detailLevel DetailLevel, hint, context, diff string) string {
 	return p.BuildPromptWithContent(detailLevel, hint, context, diff, p.System, defaultWrapLine)

@@ -83,7 +83,7 @@ func TestGenerateCommitMessageWithContent_RespectsCallerDeadline(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
-	_, err := c.GenerateCommitMessageWithContent(ctx, "diff", "", DetailLevel("standard"), "", nil, 72)
+	_, _, err := c.GenerateCommitMessageWithContent(ctx, "diff", "", DetailLevel("standard"), "", nil, 72)
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("err = %v, want context.DeadlineExceeded", err)
 	}
@@ -361,7 +361,7 @@ func TestOracle_Comparable_ModelInRequestMatchesClientModel(t *testing.T) {
 	capture := &captureRequestLLM{name: "fake-llm"}
 	client := NewClientWithGenerator(capture, "gemini-flash-latest")
 
-	_, err := client.GenerateCommitMessage(context.Background(),
+	_, _, err := client.GenerateCommitMessage(context.Background(),
 		"diff --git a/main.go b/main.go", "",
 		DetailStandard, "")
 	if err != nil {
@@ -387,7 +387,7 @@ func TestOracle_Comparable_ModelNameMatchesConfigured(t *testing.T) {
 	capture := &captureRequestLLM{name: "fake-llm"}
 	client := NewClientWithGenerator(capture, "gemini-flash-latest")
 
-	_, err := client.GenerateCommitMessage(context.Background(),
+	_, _, err := client.GenerateCommitMessage(context.Background(),
 		"diff --git a/main.go b/main.go", "",
 		DetailStandard, "")
 	if err != nil {
@@ -412,7 +412,7 @@ func TestOracle_Claims_NoDeprecatedSamplingParams(t *testing.T) {
 	capture := &captureRequestLLM{name: "fake-llm"}
 	client := NewClientWithGenerator(capture, "gemini-flash-latest")
 
-	_, err := client.GenerateCommitMessage(context.Background(),
+	_, _, err := client.GenerateCommitMessage(context.Background(),
 		"diff --git a/main.go b/main.go", "",
 		DetailStandard, "")
 	if err != nil {
@@ -445,7 +445,7 @@ func TestOracle_Claims_DefaultModelIsUsedWhenEmpty(t *testing.T) {
 	capture := &captureRequestLLM{name: "fake-llm"}
 	client := NewClientWithGenerator(capture, "")
 
-	_, err := client.GenerateCommitMessage(context.Background(),
+	_, _, err := client.GenerateCommitMessage(context.Background(),
 		"diff --git a/main.go b/main.go", "",
 		DetailStandard, "")
 	if err != nil {
@@ -575,7 +575,7 @@ func TestClient_GenerateCommitMessage(t *testing.T) {
 
 			client := NewClientWithGenerator(mock, "gemini-flash-lite-latest")
 
-			msg, err := client.GenerateCommitMessage(context.Background(),
+			msg, _, err := client.GenerateCommitMessage(context.Background(),
 				tt.diff, tt.context, tt.detailLevel, tt.hint)
 
 			if (err != nil) != tt.wantErr {

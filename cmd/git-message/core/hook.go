@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"gud/internal/git"
+	"gud/internal/request"
 
 	"github.com/spf13/cobra"
 )
@@ -159,9 +160,16 @@ func runHookMode(cmd *cobra.Command, msgFile string) error {
 
 // runHookModeInternal generates a commit message and writes it to the message file.
 func runHookModeInternal(ctx context.Context, msgFile string, app *AppContext) error {
-	diff, deleted, err := getStagedDiffAndDeleted(ctx)
+	diff, deleted, truncated, err := getStagedDiffAndDeleted(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get staged changes: %w", err)
+	}
+
+	// FR-007/FR-028: the message below may come from bounded evidence. The
+	// record informs the diagnostics channel; it never fails the hook.
+	if truncated {
+		slog.Info("staged diff truncated; message generated from partial change",
+			"max_bytes", git.MaxDiffBytes, "cause", "staged-change exceeds evidence bound")
 	}
 
 	if strings.TrimSpace(diff) == "" {
@@ -192,7 +200,7 @@ func generateAndWriteMsg(ctx context.Context, app *AppContext, diff, msgFile str
 	cfg := app.Config()
 	mounts := app.AgentFiles(ctx)
 
-	msg, err := app.Client().GenerateCommitMessageWithContent(
+	msg, findings, err := app.Client().GenerateCommitMessageWithContent(
 		ctx, diff, "", cfg.DetailLevel,
 		cfg.Hint, mounts, cfg.WrapLine,
 	)
@@ -200,7 +208,11 @@ func generateAndWriteMsg(ctx context.Context, app *AppContext, diff, msgFile str
 		return fmt.Errorf("failed to generate commit message: %w", err)
 	}
 
-	msg, err = assembleTrailers(ctx, msg, cfg.Issues, app.Client().ModelName())
+	// FR-018/FR-028: a result served with checks still failing is recorded
+	// with its check codes and cause. The record informs; it never fails.
+	logResidualFindings(slog.Default(), findings)
+
+	msg, err = finalizeMessage(ctx, msg, cfg, app.Client().ModelName())
 	if err != nil {
 		return fmt.Errorf("failed to apply trailers: %w", err)
 	}
@@ -210,6 +222,29 @@ func generateAndWriteMsg(ctx context.Context, app *AppContext, diff, msgFile str
 	}
 
 	return nil
+}
+
+// logResidualFindings records the FR-018 notice on the diagnostics channel:
+// the verification checks still failing, with their details and the cause.
+// A clean result logs nothing. It never fails the hook.
+func logResidualFindings(log *slog.Logger, findings []request.Finding) {
+	if len(findings) == 0 {
+		return
+	}
+
+	codes := make([]string, 0, len(findings))
+
+	details := make([]string, 0, len(findings))
+
+	for _, f := range findings {
+		codes = append(codes, f.Check)
+		details = append(details, f.Check+": "+f.Detail)
+	}
+
+	log.Info("message presented with verification still failing",
+		"findings", strings.Join(codes, ","),
+		"details", strings.Join(details, "; "),
+		"cause", "checks failed through the bounded regeneration")
 }
 
 // hasMeaningfulContent reports whether text contains any line that is not a

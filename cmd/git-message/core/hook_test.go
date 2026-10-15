@@ -1,12 +1,16 @@
 package core
 
 import (
+	"bytes"
 	"context"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"gud/internal/git"
+	"gud/internal/request"
 )
 
 func TestHasMeaningfulContent(t *testing.T) {
@@ -126,4 +130,46 @@ func TestHookInstallKeepsForeignHooksPath(t *testing.T) {
 	if got != foreign {
 		t.Errorf("core.hooksPath = %q, want foreign value %q preserved", got, foreign)
 	}
+}
+
+// TestLogResidualFindings pins the FR-018/FR-028 unattended contract:
+// surviving verification findings are surfaced through the diagnostics
+// channel as a structured record carrying the check codes and the cause.
+// A clean result logs nothing. The message-file write path is untouched.
+func TestLogResidualFindings(t *testing.T) {
+	t.Parallel()
+
+	t.Run("clean logs nothing", func(t *testing.T) {
+		t.Parallel()
+
+		var buf bytes.Buffer
+
+		log := slog.New(slog.NewTextHandler(&buf, nil))
+		logResidualFindings(log, nil)
+		logResidualFindings(log, []request.Finding{})
+
+		if buf.String() != "" {
+			t.Errorf("logResidualFindings(clean) logged %q, want nothing", buf.String())
+		}
+	})
+
+	t.Run("surviving findings log codes and cause", func(t *testing.T) {
+		t.Parallel()
+
+		var buf bytes.Buffer
+
+		log := slog.New(slog.NewTextHandler(&buf, nil))
+		logResidualFindings(log, []request.Finding{
+			{Check: "file-grounding", Detail: "mentions other.go, not present in diff"},
+		})
+
+		got := buf.String()
+		if !strings.Contains(got, "file-grounding") {
+			t.Errorf("record = %q, want the failing check code", got)
+		}
+
+		if !strings.Contains(got, "other.go") {
+			t.Errorf("record = %q, want the finding detail", got)
+		}
+	})
 }

@@ -129,9 +129,12 @@ func withDefaultTimeout(ctx context.Context, d time.Duration) (context.Context, 
 }
 
 // GenerateCommitMessage generates a commit message based on the provided diff.
+// It also returns the verification findings that survived the bounded
+// regeneration (empty when the served message is clean) so the caller can
+// present them next to the result.
 func (c *Client) GenerateCommitMessage(
 	ctx context.Context, diff, commitContext string, detailLevel DetailLevel, hint string,
-) (string, error) {
+) (string, []Finding, error) {
 	return c.GenerateCommitMessageWithContent(ctx, diff, commitContext, detailLevel, hint, nil, defaultWrapLine)
 }
 
@@ -139,12 +142,16 @@ func (c *Client) GenerateCommitMessage(
 // given AGENTS.md files into the agent's environment. The list is ordered
 // nearest first, so mounts[0] supplies the instruction set. An empty list
 // leaves the default system prompt inline in the task.
+//
+// Alongside the message it returns the residual verification findings: the
+// checks still failing after the bounded regeneration. A nil or empty slice
+// means the message passed every check.
 func (c *Client) GenerateCommitMessageWithContent(
 	ctx context.Context, diff, commitContext string, detailLevel DetailLevel, hint string,
 	mounts []AgentFile, wrapLine int,
-) (string, error) {
+) (string, []Finding, error) {
 	if diff == "" {
-		return "", errors.New("diff is required")
+		return "", nil, errors.New("diff is required")
 	}
 
 	// The nearest file becomes the mounted root AGENTS.md, so its content is the
@@ -171,15 +178,15 @@ func (c *Client) GenerateCommitMessageWithContent(
 
 	tm := obs.Start("model.generate")
 
-	result, err := generateVerified(ctx, c, req, diff, wrapLine, mounts)
+	result, findings, err := generateVerified(ctx, c, req, diff, task, wrapLine, mounts)
 
 	tm.Done("model", c.model, "ok", err == nil)
 
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 
-	return result, nil
+	return result, findings, nil
 }
 
 // maxVerifyAttempts bounds verify-then-regenerate: 1 initial generation plus
@@ -190,10 +197,14 @@ const maxVerifyAttempts = 2
 // generateVerified generates a message and checks it against the diff,
 // regenerating when verification fails. Transport errors and empty outputs
 // return immediately with the historical error messages; persistent heuristic
-// findings serve the last output.
+// findings serve the last output together with the surviving findings.
+//
+// The retry is corrective, not a plain repeat (FR-018): it re-sends the
+// original task plus a block naming the failed checks and their details,
+// instructing the model to output only the corrected message.
 func generateVerified(
-	ctx context.Context, c *Client, req *model.LLMRequest, diff string, wrapLine int, mounts []AgentFile,
-) (string, error) {
+	ctx context.Context, c *Client, req *model.LLMRequest, diff, task string, wrapLine int, mounts []AgentFile,
+) (string, []Finding, error) {
 	var result string
 
 	for attempt := 1; attempt <= maxVerifyAttempts; attempt++ {
@@ -201,16 +212,16 @@ func generateVerified(
 
 		result, err = generateWithRetry(ctx, c, req, mounts)
 		if err != nil {
-			return "", fmt.Errorf("failed to generate content: %w", err)
+			return "", nil, fmt.Errorf("failed to generate content: %w", err)
 		}
 
 		if result == "" {
-			return "", errors.New("generated message is empty")
+			return "", nil, errors.New("generated message is empty")
 		}
 
 		findings := VerifyMessage(result, diff, wrapLine)
 		if len(findings) == 0 {
-			return result, nil
+			return result, nil, nil
 		}
 
 		slog.Debug("message verification failed, regenerating",
@@ -219,10 +230,18 @@ func generateVerified(
 		if attempt == maxVerifyAttempts {
 			slog.Debug("message verification still failing, serving last output",
 				"findings", findingCodes(findings))
+
+			return result, findings, nil
+		}
+
+		req = &model.LLMRequest{
+			Model:    req.Model,
+			Contents: genai.Text(task + correctiveBlock(findings)),
+			Config:   req.Config,
 		}
 	}
 
-	return result, nil
+	return result, nil, nil
 }
 
 // isTransientErr reports whether err looks retryable: timeouts, 429, 5xx,

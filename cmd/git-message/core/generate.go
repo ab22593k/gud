@@ -54,7 +54,7 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 	// Check for staged changes before any interactive flow. A user with
 	// nothing staged should get the "no staged changes" error immediately,
 	// not a wizard. InitClient runs after this check.
-	diff, err := getStagedDiffOrError(ctx)
+	diff, truncated, err := getStagedDiffOrError(ctx)
 	if err != nil {
 		if op == git.OperationNone {
 			return err
@@ -65,6 +65,14 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 		slog.Debug("no staged changes while a git operation is in progress; using prepared message", "operation", op)
 
 		diff = ""
+	}
+
+	// FR-007: the description below may come from bounded evidence. Say so
+	// before anything is presented. The notice informs; it never fails.
+	if truncated {
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(),
+			"Note: the staged change exceeded the %d-byte evidence bound, so this description comes from a partial change.\n",
+			git.MaxDiffBytes)
 	}
 
 	if err := app.InitClient(ctx); err != nil {
@@ -155,25 +163,30 @@ func buildSubmoduleContext(ctx context.Context, app *AppContext, diff string) st
 }
 
 // getStagedDiffOrError retrieves the staged diff and returns an error if none exists.
-func getStagedDiffOrError(ctx context.Context) (string, error) {
-	diff, deleted, err := getStagedDiffAndDeleted(ctx)
+// The second return reports whether the staged change hit the byte bound
+// (git.MaxDiffBytes): callers present that fact to the developer (FR-007)
+// instead of silently describing a partial change.
+func getStagedDiffOrError(ctx context.Context) (string, bool, error) {
+	diff, deleted, truncated, err := getStagedDiffAndDeleted(ctx)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 
 	if strings.TrimSpace(diff) == "" {
-		return "", errors.New("no staged changes found. Use 'git add' to stage changes")
+		return "", false, errors.New("no staged changes found. Use 'git add' to stage changes")
 	}
 
-	return appendDeletedContext(diff, deleted), nil
+	return appendDeletedContext(diff, deleted), truncated, nil
 }
 
 // getStagedDiffAndDeleted retrieves both the staged diff and the list of
-// deleted file names from a single git subprocess call.
-func getStagedDiffAndDeleted(ctx context.Context) (diff, deleted string, err error) {
+// deleted file names from a single git subprocess call. The truncated return
+// reports whether the diff was cut at git.MaxDiffBytes; it is data for the
+// caller to disclose, not a condition to log here.
+func getStagedDiffAndDeleted(ctx context.Context) (diff, deleted string, truncated bool, err error) {
 	changes, err := git.GetStagedChanges(ctx)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to get staged changes: %w", err)
+		return "", "", false, fmt.Errorf("failed to get staged changes: %w", err)
 	}
 
 	if changes.Truncated {
@@ -185,7 +198,7 @@ func getStagedDiffAndDeleted(ctx context.Context) (diff, deleted string, err err
 		deleted = strings.Join(changes.Deleted, "\n") + "\n"
 	}
 
-	return diff, deleted, nil
+	return diff, deleted, changes.Truncated, nil
 }
 
 // appendDeletedContext appends a note about deleted files to the diff if any exist.

@@ -11,7 +11,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"gud/internal/config"
 	"gud/internal/git"
+	"gud/internal/request"
+	"gud/internal/textwrap"
 	"gud/internal/tui"
 
 	"github.com/spf13/cobra"
@@ -40,10 +43,14 @@ func interactiveCommit(ctx context.Context, cmd *cobra.Command, app *AppContext,
 		cfg := app.Config()
 		client := app.Client()
 
-		msg, preserved, err := loopMessage(ctx, cmd.ErrOrStderr(), app, diff, promptContext, prepared)
+		msg, preserved, findings, err := loopMessage(ctx, cmd.ErrOrStderr(), app, diff, promptContext, prepared)
 		if err != nil {
 			return err
 		}
+
+		// FR-018: a result served with checks still failing is presented
+		// together with that fact, never as a clean success.
+		presentFindings(out, findings)
 
 		prepared = ""
 
@@ -68,7 +75,7 @@ func interactiveCommit(ctx context.Context, cmd *cobra.Command, app *AppContext,
 				model = client.ModelName()
 			}
 
-			edited, err = assembleTrailers(ctx, edited, cfg.Issues, model)
+			edited, err = finalizeMessage(ctx, edited, cfg, model)
 			if err != nil {
 				return err
 			}
@@ -96,45 +103,74 @@ func interactiveCommit(ctx context.Context, cmd *cobra.Command, app *AppContext,
 // first pass of an operation stop it returns git's prepared message with
 // trailers assembled; otherwise it generates a fresh one. The second return
 // marks the message as git's own (not AI-generated) so the edit path skips
-// the Assisted-by trailer for it.
+// the Assisted-by trailer for it. The findings are the verification checks
+// still failing after the bounded regeneration (nil when clean or when the
+// message is git's own); the caller presents them next to the result.
 func loopMessage(
 	ctx context.Context, errW io.Writer, app *AppContext, diff, promptContext, prepared string,
-) (msg string, preserved bool, err error) {
+) (msg string, preserved bool, findings []request.Finding, err error) {
 	preserved = prepared != ""
 	if !preserved {
-		msg, err = generateCommitMessage(ctx, errW, app, diff, promptContext)
+		msg, findings, err = generateCommitMessage(ctx, errW, app, diff, promptContext)
 
-		return msg, false, err
+		return msg, false, findings, err
 	}
 
-	msg, err = assembleTrailers(ctx, prepared, app.Config().Issues, "")
+	msg, err = finalizeMessage(ctx, prepared, app.Config(), "")
 
-	return msg, true, err
+	return msg, true, nil, err
 }
 
 // generateCommitMessage runs the model and returns the message with the
-// Assisted-by and issue trailers applied. It errors when no request client is
-// available (no API key configured) so a preserved git message can be used
-// without one.
+// Assisted-by and issue trailers applied, alongside the residual verification
+// findings. It errors when no request client is available (no API key
+// configured) so a preserved git message can be used without one.
 func generateCommitMessage(
 	ctx context.Context, errW io.Writer, app *AppContext, diff, promptContext string,
-) (string, error) {
+) (string, []request.Finding, error) {
 	if app.Client() == nil {
-		return "", errors.New("failed to generate commit message: request client is unavailable (set GOOGLE_API_KEY)")
+		return "", nil, errors.New("failed to generate commit message: request client is unavailable (set GOOGLE_API_KEY)")
 	}
 
 	cfg := app.Config()
 	mounts := app.AgentFiles(ctx)
 
+	var findings []request.Finding
+
 	msg, err := showProgress(ctx, errW, "Rolling in, obscuring the landscape of the codebase...", func() (string, error) {
-		return app.Client().GenerateCommitMessageWithContent(ctx, diff, promptContext, cfg.DetailLevel,
+		msg, f, err := app.Client().GenerateCommitMessageWithContent(ctx, diff, promptContext, cfg.DetailLevel,
 			cfg.Hint, mounts, cfg.WrapLine)
+		findings = f
+
+		return msg, err
 	})
 	if err != nil {
-		return "", fmt.Errorf("failed to generate commit message: %w", err)
+		return "", nil, fmt.Errorf("failed to generate commit message: %w", err)
 	}
 
-	return assembleTrailers(ctx, msg, cfg.Issues, app.Client().ModelName())
+	finalized, err := finalizeMessage(ctx, msg, cfg, app.Client().ModelName())
+	if err != nil {
+		return "", nil, err
+	}
+
+	return finalized, findings, nil
+}
+
+// presentFindings prints the FR-018 residual-findings notice: one line naming
+// the verification checks still failing. A clean result prints nothing. It
+// cannot fail — the notice informs, it never errors or changes the exit
+// status.
+func presentFindings(out io.Writer, findings []request.Finding) {
+	if len(findings) == 0 {
+		return
+	}
+
+	codes := make([]string, 0, len(findings))
+	for _, f := range findings {
+		codes = append(codes, f.Check)
+	}
+
+	_, _ = fmt.Fprintf(out, "Note: presented with verification still failing (%s).\n", strings.Join(codes, ", "))
 }
 
 // reviewMessage runs the commit-message review: the TUI when both stdin and
@@ -215,6 +251,21 @@ func assembleTrailers(ctx context.Context, msg string, issues []int, model strin
 	}
 
 	return git.AppendTrailers(ctx, msg, trailers)
+}
+
+// finalizeMessage is the single finalization choke point for every
+// presentation path (FR-013): trailers are assembled first via git's own
+// rules, then every line — subject, body, and trailers — is normalized to
+// the configured width in display cells. Wrapping folds; it never truncates
+// content or fails. An empty model omits the Assisted-by trailer (FR-016),
+// e.g. for a git-authored message.
+func finalizeMessage(ctx context.Context, msg string, cfg config.Config, model string) (string, error) {
+	withTrailers, err := assembleTrailers(ctx, msg, cfg.Issues, model)
+	if err != nil {
+		return "", err
+	}
+
+	return textwrap.Wrap(withTrailers, cfg.WrapLine), nil
 }
 
 // editMessage opens the user's $EDITOR with the given message content,

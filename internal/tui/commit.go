@@ -11,7 +11,8 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/clipperhouse/displaywidth"
+
+	"gud/internal/textwrap"
 )
 
 // Action constants returned by RunCommitReview.
@@ -108,7 +109,7 @@ func NewCommitReview(msg string, wrapLine ...int) CommitReviewModel {
 	}
 
 	if wl > 0 {
-		msg = wrapText(msg, wl)
+		msg = textwrap.Wrap(msg, wl)
 	}
 
 	ta := textarea.New()
@@ -264,7 +265,7 @@ func (m CommitReviewModel) handleEditKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// mode with their changes unrecoverable.
 		edited := m.textarea.Value()
 		if m.wrapLine > 0 {
-			edited = wrapText(edited, m.wrapLine)
+			edited = textwrap.Wrap(edited, m.wrapLine)
 		}
 
 		m.msg = edited
@@ -321,70 +322,6 @@ func (m CommitReviewModel) editView() string {
 	)
 
 	return fmt.Sprintf("%s\n%s\n%s\n%s", header, sep, m.textarea.View(), help)
-}
-
-// wrapText wraps lines in text to max display width `limit`, measured in
-// terminal cells rather than bytes: CJK characters occupy two cells and
-// emoji grapheme clusters vary, so byte counting would wrap CJK/emoji text
-// far too early (a 72-col limit becomes ~24 CJK chars). Lines already within
-// `limit` cells are left unchanged.
-func wrapText(text string, limit int) string {
-	if limit <= 0 {
-		return text
-	}
-
-	lines := strings.Split(text, "\n")
-
-	var result []string
-
-	for _, line := range lines {
-		if displaywidth.String(line) <= limit {
-			result = append(result, line)
-
-			continue
-		}
-
-		// Preserve leading indentation (spaces or tabs)
-		indent := line[:len(line)-len(strings.TrimLeft(line, " \t"))]
-		indentWidth := displaywidth.String(indent)
-
-		words := strings.Fields(line)
-		if len(words) == 0 {
-			result = append(result, line)
-
-			continue
-		}
-
-		var currentLine strings.Builder
-
-		currentLine.WriteString(indent)
-		currentLine.WriteString(words[0])
-
-		currentWidth := indentWidth + displaywidth.String(words[0])
-
-		for _, word := range words[1:] {
-			wordWidth := displaywidth.String(word)
-			if currentWidth+1+wordWidth > limit {
-				result = append(result, currentLine.String())
-				currentLine.Reset()
-				currentLine.WriteString(indent)
-				currentLine.WriteString(word)
-
-				currentWidth = indentWidth + wordWidth
-			} else {
-				currentLine.WriteString(" ")
-				currentLine.WriteString(word)
-
-				currentWidth += 1 + wordWidth
-			}
-		}
-
-		if currentLine.Len() > 0 {
-			result = append(result, currentLine.String())
-		}
-	}
-
-	return strings.Join(result, "\n")
 }
 
 // RunCommitReview launches the full-screen commit review TUI and returns the

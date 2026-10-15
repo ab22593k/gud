@@ -146,3 +146,52 @@ func TestRunGenerate_StagedWithoutAPIKey(t *testing.T) {
 		t.Errorf("error = %v, want API key guidance", err)
 	}
 }
+
+// TestTruncationNotice verifies FR-007/SC-009 at the interactive entry point:
+// when the staged change exceeds git.MaxDiffBytes the developer is told the
+// description would come from a partial change. The notice is printed at
+// diff-acquisition time (before client initialisation), so this test runs
+// with no API key: the notice must appear in the command output while the
+// API-key error still surfaces unchanged — the notice informs, it never
+// alters the flow.
+func TestTruncationNotice(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	isolateConfig(t)
+
+	newCoreHistoryTestRepo(t)
+
+	big := make([]byte, 0, 300<<10)
+	for len(big) < 300<<10 {
+		big = append(big, "oversized staged line for truncation disclosure\n"...)
+	}
+
+	if err := os.WriteFile("big.txt", big, 0600); err != nil {
+		t.Fatalf("write big.txt: %v", err)
+	}
+
+	add := exec.CommandContext(t.Context(), "git", "add", "big.txt")
+	if out, err := add.CombinedOutput(); err != nil {
+		t.Fatalf("git add failed: %v\n%s", err, out)
+	}
+
+	setTestStreams(t)
+
+	outBuf := &strings.Builder{}
+	rootCmd.SetOut(outBuf)
+
+	err := rootCmd.Execute()
+	if err == nil {
+		t.Fatal("runGenerate with oversized staged change and no API key: expected error, got nil")
+	}
+
+	if !strings.Contains(strings.ToLower(err.Error()), "api key") {
+		t.Errorf("error = %v, want unchanged API key guidance", err)
+	}
+
+	if got := outBuf.String(); !strings.Contains(got, "partial change") {
+		t.Errorf("output = %q, want one-line partial-change truncation notice", got)
+	}
+}

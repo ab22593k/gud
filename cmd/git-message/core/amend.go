@@ -90,6 +90,17 @@ func resolveAmendCommit(ctx context.Context, app *AppContext, rev string) (amend
 		return job, err
 	}
 
+	// FR-029: the root commit is refused for every amend target — HEAD as
+	// well as any revision — before any diff or message work begins.
+	root, err := git.IsRootCommit(ctx, sha)
+	if err != nil {
+		return job, err
+	}
+
+	if root {
+		return job, fmt.Errorf("cannot amend %s: it is the root commit, which has no parent", rev)
+	}
+
 	merge, err := git.IsMergeCommit(ctx, sha)
 	if err != nil {
 		return job, err
@@ -159,10 +170,12 @@ func amendReviewLoop(ctx context.Context, cmd *cobra.Command, app *AppContext,
 	scanner *bufio.Scanner, out io.Writer, job amendJob, promptContext string,
 ) error {
 	for {
-		msg, _, err := loopMessage(ctx, cmd.ErrOrStderr(), app, job.diff, promptContext, "")
+		msg, _, findings, err := loopMessage(ctx, cmd.ErrOrStderr(), app, job.diff, promptContext, "")
 		if err != nil {
 			return err
 		}
+
+		presentFindings(out, findings)
 
 		action, edited := reviewMessage(cmd, scanner, out, msg, app.Config().WrapLine)
 
@@ -185,7 +198,7 @@ func amendReviewLoop(ctx context.Context, cmd *cobra.Command, app *AppContext,
 				model = c.ModelName()
 			}
 
-			edited, err = assembleTrailers(ctx, edited, app.Config().Issues, model)
+			edited, err = finalizeMessage(ctx, edited, app.Config(), model)
 			if err != nil {
 				return err
 			}

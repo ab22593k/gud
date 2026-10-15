@@ -6,15 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/clipperhouse/displaywidth"
-)
+	"gud/internal/textwrap"
 
-// displayWidthOf measures a wrapped line in terminal cells for assertions;
-// len would count bytes and misjudge CJK/emoji widths.
-func displayWidthOf(s string) int {
-	return displaywidth.String(s)
-}
+	tea "github.com/charmbracelet/bubbletea"
+)
 
 func TestNewCommitReview(t *testing.T) {
 	msg := "feat: add super cool feature"
@@ -143,51 +138,36 @@ func TestActionItemProperties(t *testing.T) {
 	}
 }
 
-func TestWrapText(t *testing.T) {
-	longLine := "This is a long commit message paragraph that exceeds forty characters."
-	wrapped := wrapText(longLine, 40)
+// TestReviewWrapsLikeTextwrap pins the single-implementation contract: the
+// review model wraps at construction exactly as internal/textwrap does, so
+// the TUI and the headless presentation paths share one width measure
+// (FR-013). The cell-level cases live in internal/textwrap/width_test.go.
+func TestReviewWrapsLikeTextwrap(t *testing.T) {
+	longMsg := "This is a very long commit message line that exceeds fifty characters and should be wrapped in the TUI."
+	model := NewCommitReview(longMsg, 50)
 
-	lines := strings.SplitSeq(wrapped, "\n")
-	for l := range lines {
-		if len(l) > 40 {
-			t.Errorf("line length %d exceeds max wrap limit 40: %q", len(l), l)
-		}
+	if want := textwrap.Wrap(longMsg, 50); model.msg != want {
+		t.Errorf("review wrapped at construction:\n%q\nwant textwrap.Wrap:\n%q", model.msg, want)
 	}
 }
 
-// TestWrapTextMeasuresCells guards CJK/emoji wrapping: limits are terminal
-// cells, not bytes. Eight 3-CJK-char words are 79 bytes but 55 cells, so a
-// 72-col limit must keep them on one line; byte counting wrapped them.
-func TestWrapTextMeasuresCells(t *testing.T) {
-	t.Parallel()
+// TestEditConfirmReappliesTextwrap pins FR-024: confirming an inline edit
+// re-applies the configured width exactly as internal/textwrap does.
+func TestEditConfirmReappliesTextwrap(t *testing.T) {
+	edited := "An edited line that is far too long for the forty column width and must fold on confirm."
+	model := NewCommitReview("fix: short", 40)
+	model.editing = true
+	model.textarea.SetValue(edited)
 
-	cjk := strings.TrimSpace(strings.Repeat("漢漢漢 ", 8))
+	updated, _ := model.handleEditKey(tea.KeyMsg{Type: tea.KeyCtrlS})
 
-	if got := wrapText(cjk, 72); len(strings.Split(got, "\n")) != 1 {
-		t.Errorf("CJK line of 55 cells wrapped at 72 cols:\n%q", got)
+	m, ok := updated.(CommitReviewModel)
+	if !ok {
+		t.Fatalf("updated model type = %T, want CommitReviewModel", updated)
 	}
 
-	// Emoji words behave the same way: eight 3-crab words are 103 bytes but
-	// 55 cells, so they stay on one line; twelve are 83 cells and must wrap
-	// with every line within limit. Cell width comes from displaywidth, so
-	// assert with it rather than len. Words stay atomic (long URLs are never
-	// split mid-token), matching the pre-existing wrapping contract.
-	emojiFit := strings.TrimSpace(strings.Repeat("🦀🦀🦀 ", 8))
-	if got := wrapText(emojiFit, 72); len(strings.Split(got, "\n")) != 1 {
-		t.Errorf("55-cell emoji line wrapped at 72 cols:\n%q", got)
-	}
-
-	emojiWide := strings.TrimSpace(strings.Repeat("🦀🦀🦀 ", 12))
-	lines := strings.Split(wrapText(emojiWide, 72), "\n")
-
-	if len(lines) < 2 {
-		t.Fatalf("83-cell emoji line was not wrapped")
-	}
-
-	for _, line := range lines {
-		if w := displayWidthOf(line); w > 72 {
-			t.Errorf("wrapped line is %d cells, want <= 72: %q", w, line)
-		}
+	if want := textwrap.Wrap(edited, 40); m.msg != want {
+		t.Errorf("edit confirm wrapped:\n%q\nwant textwrap.Wrap:\n%q", m.msg, want)
 	}
 }
 

@@ -126,7 +126,7 @@ func BenchmarkGenerateEndToEnd(b *testing.B) {
 	b.ReportAllocs()
 
 	for b.Loop() {
-		if _, err := client.GenerateCommitMessageWithContent(
+		if _, _, err := client.GenerateCommitMessageWithContent(
 			context.Background(), diff, "", DetailStandard, "", nil, defaultWrapLine,
 		); err != nil {
 			b.Fatal(err)
