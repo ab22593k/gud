@@ -52,7 +52,15 @@ type Mediator struct {
 //
 // The parent directory for the XDG path is created if it does not exist.
 func New() (*Mediator, error) {
-	xdgPath := os.Getenv("GUD_CONFIG_PATH")
+	xdgPath := filepath.Clean(os.Getenv("GUD_CONFIG_PATH"))
+	if xdgPath == "" || xdgPath == "." {
+		xdgPath = ""
+	}
+
+	if xdgPath != "" && !filepath.IsAbs(xdgPath) {
+		return nil, fmt.Errorf("config: GUD_CONFIG_PATH must be absolute: %q", xdgPath)
+	}
+
 	if xdgPath == "" {
 		var err error
 
