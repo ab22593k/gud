@@ -69,7 +69,7 @@ func ParseSourceURL(raw string) (SourceRef, error) {
 	}
 
 	if u.User != nil {
-		return SourceRef{}, fmt.Errorf("URL must not embed credentials: %w", ErrBadURL)
+		return SourceRef{}, fmt.Errorf("url must not embed credentials: %w", ErrBadURL)
 	}
 
 	host, err := parseHost(u.Host)
