@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"strings"
 )
 
 // Trailer is a single git commit-message trailer (e.g. "Fixes: #123").
@@ -48,6 +49,10 @@ func AppendTrailers(ctx context.Context, message string, trailers []Trailer) (st
 	for _, tr := range trailers {
 		if !trailerKeyRe.MatchString(tr.Key) {
 			return "", fmt.Errorf("invalid trailer key %q: must match ^[A-Za-z-]+$", tr.Key)
+		}
+
+		if strings.ContainsAny(tr.Value, "\r\n") {
+			return "", fmt.Errorf("invalid trailer value for %q: must not contain CR or LF", tr.Key)
 		}
 
 		args = append(args, "--trailer", tr.Key+": "+tr.Value)
