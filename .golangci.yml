@@ -43,12 +43,14 @@ linters:
     - modernize
   settings:
     # Accepted-risk classes for this local CLI tool:
-    #   G204: subprocesses always use the fixed "git"/"docker" binary; arguments
-    #         come from internal callers (git output / local config), never
-    #         from remote or untrusted user input.
+    #   G204: git subprocesses use the fixed "git" binary; variable-binary
+    #         $EDITOR is validated (metachar rejection + LookPath) in
+    #         core/interact.go, and --amend revs rejecting leading "-".
     #   G304: reading files whose paths come from git output (repo-relative
-    #         paths) or the CLI's own resolved config locations.
-    #   G301: intentionally permissive (0755) fixture directories in tests.
+    #         paths) or the CLI's own resolved config locations; hook
+    #         message-file writes use Lstat + regular-file guard.
+    #   G301: production checkouts use 0750 with file modes masked to 0755;
+    #         0755 remains only for test fixtures.
     gosec:
       excludes:
         - G204
