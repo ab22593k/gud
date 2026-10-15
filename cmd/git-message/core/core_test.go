@@ -165,9 +165,15 @@ func TestMustGet(t *testing.T) {
 				t.Fatal("mustGet on unregistered flag did not panic")
 			}
 
-			msg, ok := r.(string)
-			if !ok {
-				t.Fatalf("panic value = %T, want string", r)
+			var msg string
+
+			switch v := r.(type) {
+			case string:
+				msg = v
+			case error:
+				msg = v.Error()
+			default:
+				t.Fatalf("panic value = %T, want string or error", r)
 			}
 
 			if !strings.Contains(msg, "config:") {

@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"strconv"
@@ -99,7 +100,7 @@ func setupLogLevel() {
 func mustGet[T any](_ *cobra.Command, name string, fn func(string) (T, error)) T {
 	v, err := fn(name)
 	if err != nil {
-		panic("config: " + err.Error())
+		panic(fmt.Errorf("config: %w", err))
 	}
 
 	return v
