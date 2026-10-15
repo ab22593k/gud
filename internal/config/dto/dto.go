@@ -16,27 +16,39 @@ type ConfigDTO struct {
 }
 
 // ToEntity converts the DTO to a domain Config entity.
+// History is cloned so DTO and entity never share the pointed-to int.
 func (d ConfigDTO) ToEntity() config.Config {
 	return config.Config{
 		DetailLevel: config.DetailLevel(d.DetailLevel),
 		Model:       d.Model,
 
 		Hint:     d.Hint,
-		History:  d.History,
+		History:  cloneInt(d.History),
 		APIKey:   d.APIKey,
 		WrapLine: d.WrapLine,
 	}
 }
 
 // FromEntity converts a domain Config entity into a DTO for serialization.
+// History is cloned so entity and DTO never share the pointed-to int.
 func FromEntity(c config.Config) ConfigDTO {
 	return ConfigDTO{
 		DetailLevel: string(c.DetailLevel),
 		Model:       c.Model,
 
 		Hint:     c.Hint,
-		History:  c.History,
+		History:  cloneInt(c.History),
 		APIKey:   c.APIKey,
 		WrapLine: c.WrapLine,
 	}
+}
+
+func cloneInt(v *int) *int {
+	if v == nil {
+		return nil
+	}
+
+	c := *v
+
+	return &c
 }
