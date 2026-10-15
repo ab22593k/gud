@@ -287,8 +287,21 @@ func editMessage(msg string) (string, error) {
 		return "", fmt.Errorf("failed to write temp file: %w", err)
 	}
 
+	fields := strings.Fields(editor)
+	if len(fields) == 0 {
+		return "", fmt.Errorf("editor: empty EDITOR value")
+	}
+
+	if strings.ContainsAny(fields[0], ";|&$`\\()<>\"'") {
+		return "", fmt.Errorf("editor: EDITOR binary %q contains shell metacharacters", fields[0])
+	}
+
+	if _, err := exec.LookPath(fields[0]); err != nil {
+		return "", fmt.Errorf("editor: EDITOR binary %q not found: %w", fields[0], err)
+	}
+
 	//nolint:noctx // interactive editor session must not be killed by cancellation
-	editCmd := exec.Command(editor /* user's $EDITOR */, path) //nolint:gosec
+	editCmd := exec.Command(fields[0], append(fields[1:], path)...) //nolint:gosec
 	editCmd.Stdin = os.Stdin
 	editCmd.Stdout = os.Stdout
 	editCmd.Stderr = os.Stderr
