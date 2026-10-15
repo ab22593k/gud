@@ -79,7 +79,7 @@ func groundingFindings(msg, diff string) []Finding {
 		return nil
 	}
 
-	present := map[string]bool{}
+	present := make(map[string]bool)
 	for _, p := range git.ExtractChangedPaths(diff) {
 		present[p] = true
 		present[path.Base(p)] = true
@@ -87,7 +87,7 @@ func groundingFindings(msg, diff string) []Finding {
 
 	indexDiffTokens(present, diff)
 
-	seen := map[string]bool{}
+	seen := make(map[string]bool)
 
 	var ungrounded []string
 

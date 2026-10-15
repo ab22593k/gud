@@ -316,7 +316,12 @@ func generateWithRetry(
 
 	for attempt := 0; ; attempt++ {
 		result, err = generateContent(ctx, c, req, mounts)
-		if err == nil || ctx.Err() != nil || !isTransientErr(err) || attempt >= len(backoffs) {
+		succeeded := err == nil
+		cancelled := ctx.Err() != nil
+		transient := isTransientErr(err)
+		exhausted := attempt >= len(backoffs)
+
+		if succeeded || cancelled || !transient || exhausted {
 			return result, err
 		}
 

@@ -400,7 +400,9 @@ func isLowerHex(s string, n int) bool {
 	}
 
 	for _, r := range s {
-		isHex := r >= '0' && r <= '9' || r >= 'a' && r <= 'f'
+		isDigit := r >= '0' && r <= '9'
+		isHexLower := r >= 'a' && r <= 'f'
+		isHex := isDigit || isHexLower
 		if !isHex {
 			return false
 		}

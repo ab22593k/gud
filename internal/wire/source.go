@@ -177,7 +177,10 @@ func IsPinnedSHA(ref string) bool {
 	}
 
 	for _, r := range ref {
-		isHex := r >= '0' && r <= '9' || r >= 'a' && r <= 'f' || r >= 'A' && r <= 'F'
+		isDigit := r >= '0' && r <= '9'
+		isHexLower := r >= 'a' && r <= 'f'
+		isHexUpper := r >= 'A' && r <= 'F'
+		isHex := isDigit || isHexLower || isHexUpper
 		if !isHex {
 			return false
 		}
