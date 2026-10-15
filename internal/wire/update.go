@@ -4,6 +4,7 @@ package wire
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -397,7 +398,12 @@ func replaceDir(target, staging string) error {
 	}
 
 	if err := os.Rename(staging, target); err != nil {
-		_ = os.Rename(backup, target)
+		if rbErr := os.Rename(backup, target); rbErr != nil {
+			return errors.Join(
+				fmt.Errorf("install checkout: %w", err),
+				fmt.Errorf("rollback checkout: %w", rbErr),
+			)
+		}
 
 		return fmt.Errorf("install checkout: %w", err)
 	}
