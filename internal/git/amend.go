@@ -194,7 +194,9 @@ func runRebase(ctx context.Context, cmd *exec.Cmd, sha string) error {
 		//nolint:contextcheck // intentional Background use: the abort must
 		// survive a cancelled caller context to leave the repo clean.
 		abort := newGitCmd(context.Background(), "rebase", "--abort")
-		_, _ = abort.Output()
+		if abortOut, abortErr := abort.Output(); abortErr != nil {
+			return fmt.Errorf("reword %s: %w\n%s (abort: %v: %s)", sha, err, out.String(), abortErr, abortOut)
+		}
 
 		return fmt.Errorf("reword %s: %w\n%s", sha, err, out.String())
 	}
