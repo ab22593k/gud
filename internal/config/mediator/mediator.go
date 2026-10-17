@@ -136,15 +136,21 @@ func (m *Mediator) loadOrZero(p *provider.FileProvider) config.Config {
 //   - Known sentinel/placeholder values in the API key
 //   - Missing required fields
 func validateStrict(cfg config.Config) error {
-	stringFields := map[string]string{
-		"model":     cfg.Model,
-		fieldAPIKey: cfg.APIKey,
-		"hint":      cfg.Hint,
+	// Ordered, not a map: when several fields contain placeholders the error
+	// must name the same field every run, otherwise callers and tests see a
+	// different message depending on map iteration order.
+	stringFields := []struct {
+		name  string
+		value string
+	}{
+		{"model", cfg.Model},
+		{fieldAPIKey, cfg.APIKey},
+		{"hint", cfg.Hint},
 	}
 
-	for name, value := range stringFields {
-		if hasPlaceholder(value) {
-			return &UnresolvedPlaceholderError{Field: name, Value: value}
+	for _, field := range stringFields {
+		if hasPlaceholder(field.value) {
+			return &UnresolvedPlaceholderError{Field: field.name, Value: field.value}
 		}
 	}
 

@@ -45,24 +45,24 @@ func configFromEnv() config.Config {
 		}
 	}
 
-	if value, ok := parseEnvFlag(os.Getenv("GUD_NO_ASSISTED_BY")); ok {
-		cfg.NoAssistedBy = value
+	if v := parseEnvFlag(os.Getenv("GUD_NO_ASSISTED_BY")); v != nil {
+		cfg.NoAssistedBy = v
 	}
 
 	return cfg
 }
 
 // parseEnvFlag converts an environment-variable value to an explicit boolean
-// setting. An empty or unrecognised value means "not set"; recognised
-// true/false spellings preserve an explicit choice through Merge.
-func parseEnvFlag(v string) (*bool, bool) {
+// setting. An empty or unrecognised value means "not set" and yields nil, so a
+// recognised true/false spelling preserves an explicit choice through Merge.
+func parseEnvFlag(v string) *bool {
 	switch strings.ToLower(strings.TrimSpace(v)) {
 	case "1", "t", "true", "y", "yes", "on":
-		return config.Ptr(true), true
+		return config.Ptr(true)
 	case "0", "f", "false", "n", "no", "off":
-		return config.Ptr(false), true
+		return config.Ptr(false)
 	default:
-		return nil, false
+		return nil
 	}
 }
 

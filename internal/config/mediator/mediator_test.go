@@ -347,6 +347,14 @@ func TestValidateStrictUnresolvedPlaceholder(t *testing.T) {
 			wantErr: "hint contains unresolved placeholder",
 		},
 		{
+			// Determinism guard: with placeholders in more than one field the
+			// error must always name the same field rather than whichever one
+			// map iteration happened to reach first.
+			name:    "placeholders in multiple fields report the first field",
+			cfg:     config.Config{Model: "${MODEL_NAME}", Hint: "${HINT}"},
+			wantErr: "model contains unresolved placeholder",
+		},
+		{
 			name: "bare dollar placeholder in API key",
 			//nolint:gosec // Test verifies placeholder detection; value is not a real credential.
 			cfg:     config.Config{APIKey: "$GOOGLE_API_KEY"},

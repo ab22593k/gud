@@ -19,9 +19,17 @@ const (
 // Zero values represent "not set" and are treated as undefined, allowing
 // layered overrides (file → env → CLI flags).
 //
-// History is the exception: it is a *int because 0 is a meaningful value that
-// disables recent-commit context. nil means "not set" in an override layer; a
-// non-nil pointer — including one pointing to 0 — means "explicitly set".
+// Pointer fields (History, NoAssistedBy) exist where the zero value is itself
+// meaningful — History 0 disables recent-commit context, NoAssistedBy false
+// leaves the trailer on — so nil means "not set" and a non-nil pointer means
+// "explicitly set", including to the zero value.
+//
+// Ownership: pointers are shared, never written through. Layers hand their
+// pointer to Ptr and Merge replaces the field outright, so the same pointer may
+// legitimately be reachable from an override layer, the merged effective
+// config, and its DTO. Any code that needs to change a value assigns a new
+// pointer instead of dereferencing the existing one. Slices are the one
+// exception — Issues can be mutated in place, so Merge deep-copies it.
 type Config struct {
 	DetailLevel DetailLevel
 	Model       string
@@ -31,10 +39,11 @@ type Config struct {
 	WrapLine    int
 	// Issues are the issue-tracker numbers this commit fixes. nil means "not
 	// set"; each number adds a "Fixes: #N" git trailer before "Assisted-by:".
+	// They describe the current invocation, so they are not persisted.
 	Issues []int
 	// NoAssistedBy explicitly suppresses the "Assisted-by" trailer, even for
-	// generated messages. nil means "not set"; a non-nil value wins during
-	// Merge. The effective default is false, leaving the trailer on.
+	// generated messages. The effective default is false, leaving the trailer
+	// on.
 	NoAssistedBy *bool
 }
 
@@ -87,10 +96,9 @@ const DefaultHistory = 5
 // Validate returns a copy of the config with normalized and clamped values.
 // Invalid or out-of-range values are replaced with sensible defaults.
 func (c Config) Validate() Config {
+	// Empty and unrecognised levels both fall back to the standard level.
 	switch c.DetailLevel {
 	case DetailMinimal, DetailStandard, DetailDetailed:
-	case "":
-		c.DetailLevel = DetailStandard
 	default:
 		c.DetailLevel = DetailStandard
 	}
