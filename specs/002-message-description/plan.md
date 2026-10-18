@@ -22,34 +22,48 @@ the spec for planning to confirm or dismiss (assumptions a/b/c), and three disco
 planning. Each is a defect against the specification, so the work is a **conformance
 closure**, not new capability:
 
-| # | Spec ref | Divergence (confirmed) |
-| - | -------- | ---------------------- |
-| a | FR-013 | Width is enforced on the **subject only** in verification and the **interactive path only** in presentation; the plain-text and unattended paths present unwrapped body lines. SC-003 (100% of lines) is unmet. |
-| b | FR-001 | Verification does **not require a non-empty body**; a subject-only reply passes all checks and is presented as successful. |
-| c | FR-011 / Constitution III | The README documents `--detail`, but the command registers **`--detail-level`** (verified: `go run ./cmd/git-message --help`). |
-| d | FR-018 | Regeneration is a **plain retry**: findings are not fed back into the prompt, and persistent findings are surfaced only at `slog.Debug`, never presented to the developer. |
-| e | FR-007 / SC-009 | Truncation is marked for the **model** only; the **developer is never told** the description came from a partial change (a `slog.Debug` line is the only trace). |
-| f | FR-029 | The **root commit is not refused** when the amend target is `HEAD`; `checkHasParent` runs only on the non-HEAD reword path. |
+| #   | Spec ref                  | Divergence (confirmed)                                                                                                                                                                                          |
+| --- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| a   | FR-013                    | Width is enforced on the **subject only** in verification and the **interactive path only** in presentation; the plain-text and unattended paths present unwrapped body lines. SC-003 (100% of lines) is unmet. |
+| b   | FR-001                    | Verification does **not require a non-empty body**; a subject-only reply passes all checks and is presented as successful.                                                                                      |
+| c   | FR-011 / Constitution III | The README documents `--detail`, but the command registers **`--detail-level`** (verified: `go run ./cmd/git-message --help`).                                                                                  |
+| d   | FR-018                    | Regeneration is a **plain retry**: findings are not fed back into the prompt, and persistent findings are surfaced only at `slog.Debug`, never presented to the developer.                                      |
+| e   | FR-007 / SC-009           | Truncation is marked for the **model** only; the **developer is never told** the description came from a partial change (a `slog.Debug` line is the only trace).                                                |
+| f   | FR-029                    | The **root commit is not refused** when the amend target is `HEAD`; `checkHasParent` runs only on the non-HEAD reword path.                                                                                     |
 
-Technical approach (from [research.md](research.md)): add one small root-module package
+Technical approach (from [research.md](research.md)): add one small workspace-module package
 (`internal/textwrap`) holding the display-width measure and wrapper so width conformance is
-applied at a **single finalization choke point** on every presentation path; add an
-`empty-body` finding to the existing pure verifier; feed findings back on the bounded
-regeneration attempt and return the residual findings so the caller can present them; thread
-the staged-diff `Truncated` flag out to a user-facing notice; unify the root-commit refusal
-before the amend target is accepted; correct the README flag spelling. No new module
-dependencies, no new CLI surface, no schema changes.
+applied at a **single finalization choke point** on every presentation path, and so the
+display-cell measure has **one implementation** shared by the TUI, the finalization step, and
+the verifier; add an `empty-body` finding to the existing pure verifier; feed findings back on
+the bounded regeneration attempt and return the residual findings so the caller can present
+them; thread the staged-diff `Truncated` flag out to a user-facing notice; unify the
+root-commit refusal before the amend target is accepted; correct the README flag spelling. No
+new third-party dependencies, no new CLI surface, no schema changes.
+
+Post-analysis resolution (D7, recorded after `/speckit.analyze`): the first pass of this plan
+described the verifier's subject-width check and the finalization wrapper as "two mechanisms
+cooperating" over a single measure. Both halves of that were wrong — the verifier held a
+**second** measure (a direct `displaywidth.String` call), and wrapping, not checking, is what
+enforces the width. The same pass found that SC-003's "100%" does not hold for a single
+unbreakable token. D7 fixes all three: `internal/textwrap` becomes a `go.work` member so
+`internal/request` imports one measure; the ownership split (verifier advisory over the draft,
+finalizer authoritative over the result) is stated identically in every artifact; and the
+token exception is named and tested instead of silently over-claimed. See
+[research.md](research.md) D7 and `tasks.md` Phase 8 for the tasks that close it.
 
 ## Technical Context
 
 **Language/Version**: go 1.27.2, Go workspace (`go.work`): root module `gud` plus member
-modules `gud/internal/git` and `gud/internal/request`. Build and test from the repository
-root so all three resolve.
+modules `gud/internal/git`, `gud/internal/request`, and — added by D7 —
+`gud/internal/textwrap`. Build and test from the repository root so all four resolve.
 
 **Primary Dependencies**: `spf13/cobra` (CLI), `charmbracelet/{bubbletea,bubbles,lipgloss}`
 (TUI), `clipperhouse/displaywidth` (terminal-cell measurement), `google.golang.org/genai` +
-`google.golang.org/adk` (model transport). **No new dependencies**; `internal/textwrap`
-wraps the already-present `displaywidth`.
+`google.golang.org/adk` (model transport). **No new third-party dependencies**;
+`internal/textwrap` wraps the already-present `displaywidth`, and after D7 the library is a
+direct dependency of that module only — `gud/internal/request` drops it and imports
+`gud/internal/textwrap` as a sibling workspace module.
 
 **Storage**: N/A for this feature — no persistence is added. Existing, unchanged surfaces:
 `./gud.json` and `~/.config/gud/config.json` (config), the installed
@@ -61,6 +75,10 @@ seam is `request.NewClientWithGenerator(llm, name)` backed by a scripted `model.
 `GIT_CONFIG_GLOBAL`), and temp `git init` repos cover the git-facing fixes. Width and
 wrap behaviour is table-driven over ASCII, CJK, and emoji cases (existing precedent in
 `internal/tui/commit_test.go`). Live model coverage stays gated and skipped under `-short`.
+**Suite command change (D7)**: a nested module is excluded from the root `./...` pattern, so
+the full-suite command gains a member — `go test ./... ./internal/git/... ./internal/request/...
+./internal/textwrap/...`. `AGENTS.md` and the constitution's quality-gate list MUST be updated
+in the same change, or the new module's tests silently stop running.
 
 **Target Platform**: Linux/macOS developer machines with a `git` binary on `PATH` (already
 a hard requirement of `gud`; the fixed-binary `G204` rationale applies).
@@ -84,7 +102,8 @@ output, logs, fixtures, or snapshots; optional subsystems degrade rather than bl
 **Scale/Scope**: one repository and one commit per invocation. Bounded evidence: staged diff
 ≤ 256 KiB (`git.MaxDiffBytes`), history ≤ 50 entries, mounted `AGENTS.md` ≤ 32 files /
 64 KiB each / 256 KiB total. Six localized fixes across ~8 source files plus one new
-2-function package.
+2-function workspace module, and (post-analysis, D7) one `go.mod`, one `go.work` line, and one
+import swap in the verifier.
 
 ## Constitution Check
 
@@ -103,8 +122,9 @@ _GATE: Must pass before Phase 0 research. Re-check after Phase 1 design._
   table-driven. Any live-model assertion remains behind the existing integration guard and
   `-short` skip. ✅ PASS
 - **III. Scoped, Minimal Change** — The change set is limited to closing the six confirmed
-  divergences. One new package is introduced with three present callers (justified in
-  Complexity Tracking). No new config knob, no new CLI flag, no new dependency, no
+  divergences. One new workspace module is introduced with three present callers (justified in
+  Complexity Tracking and re-checked post-analysis below). No new config knob, no new CLI flag, no
+  new third-party dependency, no
   speculative compatibility layer: the two changed generation signatures are updated at
   their real call sites and their tests rather than shadowed by a deprecated wrapper. README
   and help text are corrected in the same change. ✅ PASS
@@ -127,19 +147,35 @@ dependency, or CLI-surface change; determinism and degradation posture are uncha
 (deterministic fakes per Principle II; notices are non-fatal per Principle IV). All gates
 still PASS.
 
+**Post-analysis re-check 2026-10-17 (after `/speckit.analyze`, D7)**: the change set gains one
+`go.mod`, one `go.work` line, one import swap in the verifier (a duplicate measure removed,
+net −1 call site), two new table cases, one ownership-pinning test, and a spec amendment
+(FR-013 exception, FR-017 enumeration, SC-008 wording). Determinism and degradation posture are
+unchanged. Principle I: the new module's package and its two exported symbols carry doc
+comments, and lines stay inside `lll`/`funlen`; the package doc's previous "no copies" claim is
+corrected because it was false. Principle II: both new cases are table-driven and hermetic.
+**Principle III: this re-check is the one place where the gate is genuinely contested** — adding
+a workspace module is structural, and the first pass claimed "no new module". It is justified
+because the module is the only construct that removes a real duplication without a layering
+regression (Complexity Tracking, row 1), and because the layout already exists twice in this
+repository. Principle IV: unchanged; the exception in §2.1 emits a disclosure rather than an
+error or a truncation. **Principle V**: the corrected artifacts now state exactly what is
+verified and name the one unexecuted-by-design exception instead of claiming an unsupported
+100%. All gates PASS.
+
 ### Skill-vs-constitution adjudication (`@golang-clean-coder` items)
 
-| Skill item                                                          | Verdict | Reason                                                                                                                                                    |
-| ------------------------------------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Stepdown/newspaper layout, small funcs, SRP, one abstraction level  | ADOPT   | The width measure/wrap pair and the `finalizeMessage` step are extracted so each function does one thing at one level, inside the `funlen`/`lll` gates        |
-| Domain types over primitives (`Finding`, `Message`)                 | ADOPT   | The new `empty-body` check extends the existing typed `Finding` taxonomy; no new stringly-typed plumbing is introduced                                     |
-| Isolated error handling (happy-path extraction)                     | ADOPT   | `resolveAmendCommit` gains an explicit refusal guard so the happy path stays linear; the notice paths stay error-free by construction                      |
-| `slog` structured logging                                          | ADOPT   | Truncation and persistent-finding notices are `slog` records in the unattended path (FR-028) and printed lines in the interactive path (FR-018)             |
-| `context.Context` first on I/O paths                                | ADOPT   | The amended `getStagedDiff*` and generation signatures keep `ctx` first, matching `internal/git`                                                                 |
-| Polymorphism over switches                                          | DEFER   | The `Finding.Check` set is a closed taxonomy consumed by one switch-free formatter; introducing an interface per code is speculative (Principle III)          |
-| `synctest` concurrency bubbles                                      | REJECT  | No new concurrency: the fixes are sequential; the existing parallel prompt-context builders are untouched and already tested                                |
-| Memory arenas (`src/arena`)                                         | REJECT  | No performance-critical bulk allocation: the wrapper is a single linear pass over an already-bounded message. YAGNI (Principle III)                          |
-| Native `uuid` package                                               | REJECT  | No generated identities are needed by any fix. New import without a caller (Principle III)                                                                 |
+| Skill item                                                         | Verdict | Reason                                                                                                                                                 |
+| ------------------------------------------------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Stepdown/newspaper layout, small funcs, SRP, one abstraction level | ADOPT   | The width measure/wrap pair and the `finalizeMessage` step are extracted so each function does one thing at one level, inside the `funlen`/`lll` gates |
+| Domain types over primitives (`Finding`, `Message`)                | ADOPT   | The new `empty-body` check extends the existing typed `Finding` taxonomy; no new stringly-typed plumbing is introduced                                 |
+| Isolated error handling (happy-path extraction)                    | ADOPT   | `resolveAmendCommit` gains an explicit refusal guard so the happy path stays linear; the notice paths stay error-free by construction                  |
+| `slog` structured logging                                          | ADOPT   | Truncation and persistent-finding notices are `slog` records in the unattended path (FR-028) and printed lines in the interactive path (FR-018)        |
+| `context.Context` first on I/O paths                               | ADOPT   | The amended `getStagedDiff*` and generation signatures keep `ctx` first, matching `internal/git`                                                       |
+| Polymorphism over switches                                         | DEFER   | The `Finding.Check` set is a closed taxonomy consumed by one switch-free formatter; introducing an interface per code is speculative (Principle III)   |
+| `synctest` concurrency bubbles                                     | REJECT  | No new concurrency: the fixes are sequential; the existing parallel prompt-context builders are untouched and already tested                           |
+| Memory arenas (`src/arena`)                                        | REJECT  | No performance-critical bulk allocation: the wrapper is a single linear pass over an already-bounded message. YAGNI (Principle III)                    |
+| Native `uuid` package                                              | REJECT  | No generated identities are needed by any fix. New import without a caller (Principle III)                                                             |
 
 ## Project Structure
 
@@ -155,23 +191,24 @@ specs/002-message-description/
 │   ├── cli.md                 # Command/flag/output/notice contract (FR-007, FR-011, FR-018, FR-023)
 │   └── verification.md        # Output-quality check + width-conformance contract (FR-001, FR-013, FR-017–FR-020)
 ├── checklists/requirements.md # Spec quality checklist (pre-existing)
-├── spec.md                    # Feature specification (pre-existing, unmodified)
+├── spec.md                    # Feature specification (pre-existing; amended by D7 — FR-013 exception, FR-017 enumeration, SC-008 wording)
 └── tasks.md                   # Phase 2 output (/speckit.tasks command — NOT created by /speckit.plan)
 ```
 
 ### Source Code (repository root)
 
 ```text
-internal/textwrap/                 # NEW package, root module (mirrors internal/obs, internal/cache precedent)
-├── width.go                       # Columns(string) int; Wrap(text string, limit int) string
-└── width_test.go                  # relocated/expanded CJK, emoji, indentation, at-limit cases
+internal/textwrap/                 # NEW workspace module gud/internal/textwrap (mirrors internal/git, internal/request)
+├── go.mod                         # module gud/internal/textwrap — added by D7 so internal/request can import it
+├── width.go                       # Columns(string) int; Wrap(text string, limit int) string; sole displaywidth holder
+└── width_test.go                  # relocated/expanded CJK, emoji, indentation, at-limit, and unbreakable-token cases
 
 internal/tui/
 ├── commit.go                      # drop private wrapText; call textwrap.Wrap (display path unchanged)
 └── commit_test.go                 # wrap cases move to internal/textwrap
 
 internal/request/                  # separate module gud/internal/request
-├── verify.go                      # ADD "empty-body" finding (FR-001); width/path checks unchanged (FR-017)
+├── verify.go                      # ADD "empty-body" finding (FR-001); subject width via textwrap.Columns (D7); path checks unchanged (FR-017)
 ├── prompt.go                      # corrective regeneration suffix builder (FR-018)
 ├── client.go                      # feed findings back on retry; return residual findings (FR-018)
 ├── verify_test.go                 # body-less table cases; retry-prompt assertion
@@ -195,21 +232,30 @@ README.md                          # --detail-level flag spelling (FR-011 / Cons
 **Structure Decision**: Single CLI tree, unchanged layering. The six fixes land in the
 packages that already own the behaviour: the pure verifier stays in `internal/request`,
 git-state refusal stays in `internal/git`, presentation and finalization stay in
-`cmd/git-message/core`. One neutral root-module package, `internal/textwrap`, is introduced
-so the display-width measure and wrapper have a single implementation shared by the TUI
-(`internal/tui`) and the presentation paths (`cmd/git-message/core`) instead of a second
-copy — the alternative (exporting `tui.WrapText`) would put a pure text utility inside the
-bubbletea UI package and make the headless hook path depend on a TUI package by name. No
-`go.work` change: every new file belongs to the root module, whose packages are already
-resolvable across the workspace the way `internal/request` already imports `gud/internal/git`.
+`cmd/git-message/core`. `internal/textwrap` is introduced as a **workspace module** so the
+display-width measure and wrapper have a single implementation shared by the TUI
+(`internal/tui`), the presentation paths (`cmd/git-message/core`), and the verifier
+(`internal/request`). The alternative (exporting `tui.WrapText`) would put a pure text utility
+inside the bubbletea UI package and make the headless hook path depend on a TUI package by
+name; the alternative of leaving `internal/textwrap` in the root module and having
+`internal/request` import it is **impossible** — `gud/internal/request` would have to require
+`gud`, which already imports `gud/internal/request`, and Go rejects that module cycle.
+
+**`go.work` change (D7)**: `use ./internal/textwrap` is added, giving four workspace members.
+This is the established layout, not a novel one: `internal/git` and `internal/request` are
+already nested members, and `internal/request` already imports the sibling module
+`gud/internal/git` with no `require` line (resolved by the workspace), so the verifier's
+import of `gud/internal/textwrap` is the same shape as an existing, working import. The one
+consequence to action in the same change is the full-suite command, which must name the new
+member explicitly (`AGENTS.md` and the constitution's quality gates).
 
 ## Complexity Tracking
 
-| Violation | Why Needed | Simpler Alternative Rejected Because |
-|---|---|---|
-| New `internal/textwrap` package instead of exporting `tui.WrapText` | The width rule (FR-013) is enforced in `cmd/git-message/core` (plain-text and unattended paths) *and* displayed in `internal/tui`; both need the same display-cell wrapper, and `internal/request` already measures cells. One neutral implementation with three present callers satisfies "one place" (Principle III) and SRP (clean-coder) | Exporting `tui.WrapText` keeps the code count identical but places a pure text utility in the bubbletea UI package and makes the headless `hook.go` path reference a TUI package by name — a layering regression for zero diff saving. Keeping a second copy in `core` duplicates the CJK/emoji cell logic that the TUI tests already pin |
-| Changing the return signature of `GenerateCommitMessageWithContent` to include residual findings | FR-018 requires the caller to *present* "the fact that checks were still failing"; only the generator knows the final findings, and re-running the pure verifier in `core` would create a second source of truth for the same check | A compatibility wrapper (keep the old method, add a new one) is speculative compatibility code and adds a caller-less surface (Principle III). A `slog`-only notice cannot satisfy "present … together with the result" for the interactive path |
-| Root-commit refusal moved ahead of the HEAD/non-HEAD split in `resolveAmendCommit` | FR-029 requires refusal of the root commit; today the guard lives only inside the non-HEAD reword path, so `--amend` on a root HEAD commits the wrong thing | Leaving the guard where it is accepts an action the specification forbids. Relying on git to error is not refusal "naming the specific reason" |
+| Violation                                                                                                                                     | Why Needed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Simpler Alternative Rejected Because                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| --------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| New `internal/textwrap` **workspace module** (adding a `go.work` member) instead of exporting `tui.WrapText` or keeping a root-module package | The width rule (FR-013) is enforced in `cmd/git-message/core` (plain-text and unattended paths), displayed in `internal/tui`, **and measured by the verifier** in `internal/request`. All three need the same display-cell measure. Only a module can serve all three: `internal/request` cannot import a package owned by the root module (it would require `gud`, which already imports `internal/request` — a module cycle), so the alternative is a second measure, which is exactly the duplication D7 removes. One implementation with three present callers satisfies "one place" (Principle III) | Exporting `tui.WrapText` keeps the code count identical but places a pure text utility in the bubbletea UI package and makes the headless `hook.go` path reference a TUI package by name — a layering regression for zero diff saving, and it still leaves the verifier measuring separately. Keeping a second copy (in `core` or in `internal/request`) duplicates the CJK/emoji cell logic the TUI tests already pin and lets the check and the guarantee drift apart silently. D7 rejected "record the duplication as an accepted exception" for the same reason |
+| Changing the return signature of `GenerateCommitMessageWithContent` to include residual findings                                              | FR-018 requires the caller to _present_ "the fact that checks were still failing"; only the generator knows the final findings, and re-running the pure verifier in `core` would create a second source of truth for the same check                                                                                                                                                                                                                                                                                                                                                                      | A compatibility wrapper (keep the old method, add a new one) is speculative compatibility code and adds a caller-less surface (Principle III). A `slog`-only notice cannot satisfy "present … together with the result" for the interactive path                                                                                                                                                                                                                                                                                                                    |
+| Root-commit refusal moved ahead of the HEAD/non-HEAD split in `resolveAmendCommit`                                                            | FR-029 requires refusal of the root commit; today the guard lives only inside the non-HEAD reword path, so `--amend` on a root HEAD commits the wrong thing                                                                                                                                                                                                                                                                                                                                                                                                                                              | Leaving the guard where it is accepts an action the specification forbids. Relying on git to error is not refusal "naming the specific reason"                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 ## Phases
 
@@ -219,7 +265,9 @@ No `NEEDS CLARIFICATION` markers exist in the specification (confirmed by
 `checklists/requirements.md`, zero markers by design). Research therefore resolves the six
 **confirmed divergences**, each as a decision with rationale and rejected alternatives:
 [research.md](research.md) D1–D6, preceded by the divergence register that confirms the
-spec's assumptions (a)(b)(c) and records (d)(e)(f).
+spec's assumptions (a)(b)(c) and records (d)(e)(f). A seventh decision, **D7**, resolves the
+width-measure duplication and the ownership of the width rule found by `/speckit.analyze`
+after this plan was written; it amends D2 and the artifacts that repeated D2's claim.
 
 **Output**: [research.md](research.md) — every divergence resolved to a decision.
 
@@ -234,8 +282,9 @@ Derived from the spec's Key Entities plus the decisions:
 - [contracts/cli.md](contracts/cli.md) — commands, flags, output phrases, exit codes, and the
   two new user-facing notices; the README/help flag spelling.
 - [contracts/verification.md](contracts/verification.md) — the output-quality check contract
-  and the width-conformance (normalization) contract, including their precedence and the
-  bounded-regeneration protocol.
+  and the width-conformance (normalization) contract, including the **ownership split** (verifier
+  advisory over the draft, finalizer authoritative over the result — D7), the one exception to
+  the wrapped-width property (§2.1), and the bounded-regeneration protocol.
 - [quickstart.md](quickstart.md) — runnable, mostly-offline validation scenarios proving each
   fix end-to-end.
 

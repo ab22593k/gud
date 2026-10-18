@@ -1,8 +1,16 @@
 // Package textwrap measures and folds plain text to a terminal-cell width.
 //
-// It is the single width implementation shared by the full-screen review
-// (internal/tui) and the headless presentation paths (cmd/git-message/core),
-// so FR-013 holds on every path: one measure, one wrapper, no copies.
+// It holds the one display-cell measure and the one wrapper every presentation
+// path shares: the full-screen review (internal/tui), the headless review and
+// finalization step (cmd/git-message/core), and the output-quality verifier
+// (internal/request). All three call Columns; none measures cells on its own,
+// so a width check and the width guarantee cannot disagree about what a cell is
+// (decision D7).
+//
+// Wrap folds but never truncates: a single token longer than the limit — a URL,
+// a minified blob, a long identifier — is emitted intact and over-width. That
+// is the one exception to "every presented line fits the limit" (FR-013,
+// SC-003).
 package textwrap
 
 import (
@@ -22,8 +30,10 @@ func Columns(s string) int {
 // cells via Columns. Lines already within limit cells are left unchanged.
 // Leading indentation (spaces or tabs) is preserved on continuation lines.
 // Words stay atomic: a single word longer than limit is never split
-// mid-token, so Wrap folds but never truncates content. A non-positive limit
-// returns text unchanged.
+// mid-token, so Wrap folds but never truncates content. A line that is folded
+// is split on whitespace runs and rejoined with single spaces, so a run of
+// internal spaces becomes one space. A non-positive limit returns text
+// unchanged.
 func Wrap(text string, limit int) string {
 	if limit <= 0 {
 		return text

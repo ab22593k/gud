@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/clipperhouse/displaywidth"
 	"gud/internal/git"
+	"gud/internal/textwrap"
 )
 
 // Finding is one failed output-quality check on a generated message.
@@ -47,10 +47,13 @@ func VerifyMessage(msg, diff string, wrapLine int) []Finding {
 		limit = defaultWrapLine
 	}
 
-	if subject, _, _ := strings.Cut(msg, "\n"); displaywidth.String(subject) > limit {
+	// One measure (D7): textwrap.Columns is the same cell measure the
+	// finalization wrapper uses, evaluated once and reused in the detail.
+	subject, _, _ := strings.Cut(msg, "\n")
+	if cols := textwrap.Columns(subject); cols > limit {
 		out = append(out, Finding{
 			Check:  "subject-length",
-			Detail: fmt.Sprintf("subject is %d cols, limit is %d", displaywidth.String(subject), limit),
+			Detail: fmt.Sprintf("subject is %d cols, limit is %d", cols, limit),
 		})
 	}
 

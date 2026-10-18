@@ -55,3 +55,16 @@
 - Exact limits, defaults, and identifiers (line width and its range, history
   budget, configuration surface) are stated in Assumptions rather than in the
   requirements, keeping the requirements technology-agnostic and user-facing.
+- Validation 2026-10-17 (`/speckit.analyze`, iteration 3): the pass confirmed the
+  spec's own text was the least accurate artifact in three places and amended it.
+  (a) FR-017 enumerated four checks while the implemented and contracted taxonomy
+  has five — `empty-body` was added for FR-001 without updating the enumeration;
+  (b) FR-013 and SC-003 claimed an unqualified 100% width guarantee that the
+  wrapper cannot deliver for a single unbreakable token longer than the limit,
+  so the exception and its disclosure are now stated in both places; (c) SC-008
+  asserted a probe count nothing measures, so it now names the two signals that
+  establish it. Assumptions also gained a pointer to `research.md`'s divergence
+  register, which holds six confirmed divergences where this section describes
+  three. Iterations 1 and 2 above still hold; no new `NEEDS CLARIFICATION` marker
+  was required, since all three amendments resolve to behaviour the code already
+  has or explicitly does not have.

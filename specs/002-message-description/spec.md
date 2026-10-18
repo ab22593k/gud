@@ -60,7 +60,7 @@ syntax; confirm it can be committed as-is.
 A developer or team wants the description to match how they write history:
 terse one-paragraph rationales for small fixes, multi-paragraph technical
 justification for feature work, exhaustive before/after documentation for
-architectural changes. They also want to steer *what* the description focuses
+architectural changes. They also want to steer _what_ the description focuses
 on for a given commit, keep every line within a chosen width, push the
 description toward a specific area, and have issue references recorded.
 
@@ -298,7 +298,10 @@ configuration value at a low-precedence source only and confirm it survives.
 - **FR-013**: The system MUST accept a target line width and MUST hold every
   line of the presented description to it, measured in terminal display columns
   rather than bytes. Out-of-range widths MUST be normalized to the supported
-  range instead of failing.
+  range instead of failing. A line consisting of a single token that alone
+  exceeds the width is the one exception: it MUST be presented intact rather
+  than split or dropped, and the developer MUST be told the description did not
+  meet the width in that case.
 - **FR-014**: The system MUST accept a number of history entries to draw on,
   clamped to a supported maximum, where an explicit zero disables history
   evidence entirely.
@@ -320,9 +323,10 @@ configuration value at a low-precedence source only and confirm it survives.
 **Quality verification**
 
 - **FR-017**: The system MUST check every generated description, before
-  presentation, for: emptiness, subject width against the configured limit,
-  formatting remnants (fences or stray backticks), and any path-like token that
-  names nothing in the change.
+  presentation, for: emptiness, the presence of a non-empty body after the
+  subject line, subject width against the configured limit, formatting remnants
+  (fences or stray backticks), and any path-like token that names nothing in the
+  change.
 - **FR-018**: When a check fails, the system MUST regenerate the description
   with the failure fed back, up to a bounded number of attempts, and MUST
   present the last result together with the fact that checks were still failing
@@ -439,7 +443,10 @@ configuration value at a low-precedence source only and confirm it survives.
 - **SC-002**: 100% of presented descriptions contain no markdown syntax, no
   code fence, no preamble, and no trailing AI commentary.
 - **SC-003**: 100% of presented description lines stay within the configured
-  width, measured in display columns.
+  width, measured in display columns. The one exception is FR-013's single
+  unbreakable token: a line consisting of one token longer than the width is
+  presented intact and disclosed, so it is counted as a disclosed exception
+  rather than a conformance failure.
 - **SC-004**: At least 95% of the file and symbol names in a presented
   description are present in the described change.
 - **SC-005**: The three verbosity levels are distinguishable on the same change:
@@ -453,7 +460,11 @@ configuration value at a low-precedence source only and confirm it survives.
   blocks 0 commits when optional enrichment fails.
 - **SC-008**: Regenerating a description for an already-generated change
   re-walks no filesystem tree and spawns no additional repository-context
-  probes per pass.
+  probes per pass. The evidence for this is (a) the memoisation tests showing
+  instruction discovery and context probing resolve once per invocation, and
+  (b) the regeneration benchmark, whose memoised and unmemoised runs differ by
+  generation cost only. No task measures a probe count directly; the claim is
+  established by those two signals together, not by an instrument.
 - **SC-009**: For a change that exceeds the supported size bound, the developer
   is informed that the description came from a partial change in 100% of cases,
   and no truncated change is silently presented as complete.
@@ -475,7 +486,19 @@ configuration value at a low-precedence source only and confirm it survives.
   plain-text or unattended paths (FR-013); (b) the quality checks do not require
   the body to be non-empty, so a subject-only reply passes them (FR-001); and
   (c) the project README documents a verbosity option spelling that differs from
-  the one the command registers.
+  the one the command registers. Planning confirmed all three and found three
+  more; the full register of six — (d) regeneration does not feed findings back
+  (FR-018), (e) truncation is disclosed to the model but not the developer
+  (FR-007, SC-009), and (f) the root commit is not refused for an amend of
+  `HEAD` (FR-029) — lives in `research.md`, whose decision record is the
+  authority when this section and the implementation disagree.
+- **Width ownership and its one exception.** Verified descriptions are produced
+  by two layers with one owner each: a check that reports the draft's subject
+  width and drives regeneration, and a normalization step that produces the
+  width the developer and git actually see. They are not two enforcers of one
+  rule, and the check is evaluated against the pre-normalization draft. Only
+  the single unbreakable token of FR-013 escapes the width, and that case is
+  disclosed through the same notice as any other residual check failure.
 - Scope is the description produced for the staged change. The `git wire`
   subfolder fetcher is a separate feature (see the `001-git-wire-fetch`
   specification) and is out of scope here.

@@ -35,16 +35,16 @@ treat a file containing only git's comment template as empty.
 
 ## Flags
 
-| Flag | Type | Default | Contract | Source |
-| ---- | ---- | ------- | -------- | ------ |
-| `--detail-level` | string | `standard` | One of `minimal`/`standard`/`detailed`; any other value resolves to `standard` rather than failing | FR-011 |
-| `--hint` | string | — | Focus boundaries; constrains emphasis only | FR-012 |
-| `--history` | int | `5` | Recent/topic commits of context; clamped to `0…50`; `0` disables | FR-014 |
-| `--issue` | string slice | — | Issue numbers; one `Fixes: #N` trailer per **distinct** issue, in the order given, deduplicated | FR-015 |
-| `--model` | string | built-in default | Model identity recorded in the `Assisted-by` trailer | FR-016 |
-| `--no-assisted-by` | bool | `false` | Suppress the `Assisted-by` trailer; accepted with no value | FR-037 |
-| `--wrapline` | int | `72` | Target line width in display cells; clamped to the supported range, never failing | FR-013 |
-| `--amend [rev]` | string | `HEAD` | Regenerate one existing commit from its own change only | FR-029 |
+| Flag               | Type         | Default          | Contract                                                                                           | Source |
+| ------------------ | ------------ | ---------------- | -------------------------------------------------------------------------------------------------- | ------ |
+| `--detail-level`   | string       | `standard`       | One of `minimal`/`standard`/`detailed`; any other value resolves to `standard` rather than failing | FR-011 |
+| `--hint`           | string       | —                | Focus boundaries; constrains emphasis only                                                         | FR-012 |
+| `--history`        | int          | `5`              | Recent/topic commits of context; clamped to `0…50`; `0` disables                                   | FR-014 |
+| `--issue`          | string slice | —                | Issue numbers; one `Fixes: #N` trailer per **distinct** issue, in the order given, deduplicated    | FR-015 |
+| `--model`          | string       | built-in default | Model identity recorded in the `Assisted-by` trailer                                               | FR-016 |
+| `--no-assisted-by` | bool         | `false`          | Suppress the `Assisted-by` trailer; accepted with no value                                         | FR-037 |
+| `--wrapline`       | int          | `72`             | Target line width in display cells; clamped to the supported range, never failing                  | FR-013 |
+| `--amend [rev]`    | string       | `HEAD`           | Regenerate one existing commit from its own change only                                            | FR-029 |
 
 **Help-text rule**: every documented flag MUST match `--help`. The verbosity review on
 2026-10-15 confirmed `--detail-level` is the only registered spelling
@@ -63,10 +63,10 @@ message" preamble, no trailing sign-off (FR-001, FR-004, FR-005).
 These are **presentational only**: they never change the exit status and never suppress the
 result.
 
-| Condition | Interactive output | Unattended output | Source |
-| --------- | ------------------ | ----------------- | ------ |
-| Staged diff hit the byte bound | One line stating the description came from a partial (truncated) change, naming the bound | Structured `slog` record with the bound and cause | FR-007, SC-009, D4 |
-| Check failures persisted through regeneration | One line stating the message is presented with the listed failing checks (`empty-body`, `subject-length`, `fence-remnant`, `file-grounding`) | Structured `slog` record with the check codes and details | FR-018, D3 |
+| Condition                                     | Interactive output                                                                                                                           | Unattended output                                         | Source             |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- | ------------------ |
+| Staged diff hit the byte bound                | One line stating the description came from a partial (truncated) change, naming the bound                                                    | Structured `slog` record with the bound and cause         | FR-007, SC-009, D4 |
+| Check failures persisted through regeneration | One line stating the message is presented with the listed failing checks (`empty-body`, `subject-length`, `fence-remnant`, `file-grounding`) | Structured `slog` record with the check codes and details | FR-018, D3         |
 
 ### Errors
 
@@ -81,10 +81,10 @@ result.
 
 ## Exit codes
 
-| Code | Meaning |
-| ---- | ------- |
-| `0`  | A description was produced and presented (clean *or* with a failing-check notice); or the developer aborted without committing, per the review contract |
-| `1`  | Hard error: no credentials / transport failure / empty reply / empty final description, a named refusal, or a git failure |
+| Code | Meaning                                                                                                                                                 |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `0`  | A description was produced and presented (clean _or_ with a failing-check notice); or the developer aborted without committing, per the review contract |
+| `1`  | Hard error: no credentials / transport failure / empty reply / empty final description, a named refusal, or a git failure                               |
 
 The abort path commits nothing and leaves the working tree unchanged (FR-021).
 

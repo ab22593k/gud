@@ -7,7 +7,9 @@ import (
 	"strings"
 	"testing"
 
+	"gud/internal/config"
 	"gud/internal/request"
+	"gud/internal/textwrap"
 )
 
 func TestEditMessage(t *testing.T) {
@@ -118,6 +120,44 @@ func TestPresentFindings(t *testing.T) {
 
 		if strings.Count(strings.TrimSuffix(got, "\n"), "\n") != 0 {
 			t.Errorf("notice = %q, want exactly one line", got)
+		}
+	})
+
+	t.Run("subject-length notice describes the draft, not the presented subject", func(t *testing.T) {
+		t.Parallel()
+
+		const wrapLine = 72
+
+		// The verifier reports the advisory finding against the pre-finalization
+		// draft, whose subject is a single over-limit line...
+		draft := strings.TrimSpace(strings.Repeat("alpha ", 20)) + "\n\nExplain the change."
+		findings := request.VerifyMessage(draft, "", wrapLine)
+
+		if len(findings) != 1 || findings[0].Check != "subject-length" {
+			t.Fatalf("VerifyMessage(draft) = %v, want one subject-length finding", findings)
+		}
+
+		// ...while finalization brings the presented subject within the limit.
+		finalized, err := finalizeMessage(t.Context(), draft, config.Config{WrapLine: wrapLine}, "")
+		if err != nil {
+			t.Fatalf("finalizeMessage: %v", err)
+		}
+
+		subject, _, _ := strings.Cut(finalized, "\n")
+		if w := textwrap.Columns(subject); w > wrapLine {
+			t.Errorf("presented subject is %d cells, want <= %d: %q", w, wrapLine, subject)
+		}
+
+		var out bytes.Buffer
+		presentFindings(&out, findings)
+
+		notice := out.String()
+		if !strings.Contains(notice, "subject-length") {
+			t.Errorf("notice = %q, want the failing check named", notice)
+		}
+
+		if strings.Contains(strings.ToLower(notice), "too long") {
+			t.Errorf("notice = %q, must not claim the presented subject is too long", notice)
 		}
 	})
 }

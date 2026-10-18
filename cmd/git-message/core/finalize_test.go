@@ -143,6 +143,78 @@ func TestFinalizeMessageAssistedBySuppression(t *testing.T) {
 	}
 }
 
+// TestFinalizeMessageUnbreakableToken proves the documented exception holds on
+// the finalization path (contracts/verification.md §2.1): after trailers are
+// appended and every line is wrapped, the message fits WrapLine on every line
+// except one that is a single unbreakable token, emitted intact and unsplit.
+func TestFinalizeMessageUnbreakableToken(t *testing.T) {
+	t.Parallel()
+
+	const limit = 60
+
+	token := "https://example.test/" + strings.Repeat("segment", 20)
+	cfg := config.Config{WrapLine: limit}
+
+	got, err := finalizeMessage(t.Context(), token+"\n\nExplain the change to the reader.", cfg, "test-model")
+	if err != nil {
+		t.Fatalf("finalizeMessage: %v", err)
+	}
+
+	over := 0
+
+	for line := range strings.SplitSeq(got, "\n") {
+		if textwrap.Columns(line) <= limit {
+			continue
+		}
+
+		over++
+
+		if line != token {
+			t.Errorf("over-width line is not the intact token: %q", line)
+		}
+	}
+
+	if over != 1 {
+		t.Errorf("over-width lines = %d, want exactly 1 (the intact token):\n%q", over, got)
+	}
+
+	if !strings.Contains(got, token) {
+		t.Errorf("finalization split the unbreakable token:\n%q", got)
+	}
+}
+
+// TestFinalizeMessageNormalizesWhitespace pins contract §2's whitespace
+// rewrite: a folded line is split on whitespace runs and rejoined with single
+// spaces, so a body line carrying runs of internal spaces is committed with
+// single spaces while every word survives.
+func TestFinalizeMessageNormalizesWhitespace(t *testing.T) {
+	t.Parallel()
+
+	const limit = 72
+
+	words := []string{
+		"alpha", "bravo", "charlie", "delta", "echo", "foxtrot",
+		"golf", "hotel", "india", "juliet", "kilo", "lima",
+	}
+	body := strings.Join(words, "   ") // runs of internal spaces, over the limit
+
+	got, err := finalizeMessage(t.Context(), "fix: resolve leak\n\n"+body, config.Config{WrapLine: limit}, "")
+	if err != nil {
+		t.Fatalf("finalizeMessage: %v", err)
+	}
+
+	if strings.Contains(got, "  ") {
+		t.Errorf("folded output kept a run of spaces:\n%q", got)
+	}
+
+	joined := strings.Join(strings.Fields(got), " ")
+	for _, w := range words {
+		if !strings.Contains(joined, w) {
+			t.Errorf("finalization lost word %q:\n%q", w, got)
+		}
+	}
+}
+
 // TestFinalizeMessageSuppressedRecordsServingModel pins the second half of
 // FR-037: suppression removes the trailer from the message, not the serving
 // model from diagnostics.
@@ -167,5 +239,33 @@ func TestFinalizeMessageSuppressedRecordsServingModel(t *testing.T) {
 
 	if !strings.Contains(diagnostics, "test-model") {
 		t.Errorf("diagnostics did not record the serving model:\n%q", diagnostics)
+	}
+}
+
+// TestFinalizeMessageIssueTrailersDeduplicated pins FR-015: the finalized
+// message carries one reference per distinct issue, deduplicated, ordered as
+// given, and placed by git's own trailer conventions — including for a message
+// that had no body.
+func TestFinalizeMessageIssueTrailersDeduplicated(t *testing.T) {
+	t.Parallel()
+
+	cfg := config.Config{WrapLine: 72, Issues: []int{7, 7, 9, 7}}
+
+	got, err := finalizeMessage(t.Context(), "fix: resolve leak", cfg, "")
+	if err != nil {
+		t.Fatalf("finalizeMessage: %v", err)
+	}
+
+	if n := strings.Count(got, "Fixes: #7"); n != 1 {
+		t.Errorf("Fixes: #7 appears %d times, want 1:\n%q", n, got)
+	}
+
+	if n := strings.Count(got, "Fixes: #9"); n != 1 {
+		t.Errorf("Fixes: #9 appears %d times, want 1:\n%q", n, got)
+	}
+
+	i7, i9 := strings.Index(got, "Fixes: #7"), strings.Index(got, "Fixes: #9")
+	if i7 < 0 || i9 < 0 || i7 > i9 {
+		t.Errorf("issue trailers not in given order (7 before 9):\n%q", got)
 	}
 }

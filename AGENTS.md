@@ -33,13 +33,13 @@ The repository is a Go workspace using go 1.27.2:
 ## Setup And Commands
 
 No Makefile is used. Run commands from the repository root so `go.work` includes
-the root module and `internal/git` and `internal/request`.
+the root module and `internal/git`, `internal/request`, and `internal/textwrap`.
 
 ```bash
 go mod download                         # Download root-module dependencies
 go run ./cmd/git-message --help         # Run the CLI
 go build ./cmd/git-message              # Build the CLI
-go test ./... ./internal/git/... ./internal/request/... # Test the workspace
+go test ./... ./internal/git/... ./internal/request/... ./internal/textwrap/... # Test the workspace
 go test ./cmd/git-message/core          # Test one package
 go test ./path/to/package -run TestName # Run one test
 golangci-lint run                       # Lint and formatting checks

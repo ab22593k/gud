@@ -103,6 +103,57 @@ func TestWrap(t *testing.T) {
 	})
 }
 
+// TestWrapUnbreakableToken pins the one exception to "every presented line fits
+// the limit" (contracts/verification.md §2.1): a single token longer than the
+// limit is emitted intact and over-width, it is the only over-width line, and
+// the token is never split. Every line that carries a space still folds within
+// the limit, so the exception is narrow and disclosed, not a quiet hole.
+func TestWrapUnbreakableToken(t *testing.T) {
+	t.Parallel()
+
+	const limit = 40
+
+	// One unbreakable token (a URL is the canonical case) well past the limit.
+	token := "https://example.test/" + strings.Repeat("segment", 20)
+
+	cases := []struct {
+		name string
+		in   string
+	}{
+		{name: "single over-long token", in: token},
+		{name: "over-long token among words", in: "See " + token + " for the resolved defect"},
+		{name: "over-long token mid-sentence", in: "fold these words " + token + " and these too"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := Wrap(tc.in, limit)
+			lines := strings.Split(got, "\n")
+
+			// (iii) the token survives whole, never split mid-token.
+			if !strings.Contains(got, token) {
+				t.Errorf("Wrap split the unbreakable token:\n%q", got)
+			}
+
+			// (i) the only over-width line is the raw token itself.
+			for _, line := range lines {
+				if Columns(line) > limit && line != token {
+					t.Errorf("over-width line is not the intact token: %q", line)
+				}
+			}
+
+			// (ii) every line carrying a space still folds within the limit.
+			for _, line := range lines {
+				if strings.Contains(line, " ") && Columns(line) > limit {
+					t.Errorf("spaced line exceeded the limit: %q", line)
+				}
+			}
+		})
+	}
+}
+
 // TestWrapMeasuresCells guards CJK/emoji wrapping: limits are terminal
 // cells, not bytes. Eight 3-CJK-char words are 79 bytes but 55 cells, so a
 // 72-col limit must keep them on one line; byte counting wrapped them.

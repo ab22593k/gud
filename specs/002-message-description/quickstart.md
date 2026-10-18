@@ -10,7 +10,7 @@ rules: [contracts/verification.md](contracts/verification.md); entity rules:
 
 ## Prerequisites
 
-- go 1.27.2, repository root as cwd (so `go.work` resolves all three modules).
+- go 1.27.2, repository root as cwd (so `go.work` resolves all four modules).
 - A `git` binary on `PATH` (already required by `gud`).
 - For scenarios that generate, a fake model only — the tests use
   `request.NewClientWithGenerator(llm, name)`, so **no network and no API key** are needed.
@@ -20,12 +20,14 @@ rules: [contracts/verification.md](contracts/verification.md); entity rules:
 
 ```bash
 go build ./...
-go test -short ./... ./internal/git/... ./internal/request/...
+go test -short ./... ./internal/git/... ./internal/request/... ./internal/textwrap/...
 golangci-lint run
 ```
 
 Expected: the workspace builds clean and the current suite is green (baseline confirmed
-2026-10-15). Every later scenario is a *new* failing-then-passing test.
+2026-10-15). Every later scenario is a _new_ failing-then-passing test. `./internal/textwrap/...`
+is listed explicitly because a `go.work` member is excluded from the root `./...` pattern; a
+gate that omits it silently stops running those tests.
 
 ## 1. Body-less results are not presented as clean (FR-001, FR-018)
 
@@ -46,15 +48,32 @@ go test ./internal/request -run 'TestGenerate_.*(Body|Findings)' -v
 go test ./internal/textwrap -v
 go test ./internal/tui -run TestWrap -v
 go test ./cmd/git-message/core -run 'TestFinalizeMessage|TestHook.*Width' -v
+rg -n 'displaywidth' internal/request   # expect: no matches (one measure only)
 ```
 
-- `internal/textwrap` passes the relocated table: ASCII, CJK (`漢`, double-width), emoji, and
-  indentation, all measured in cells.
+- `internal/textwrap` passes the relocated table: ASCII, CJK (`漢`, double-width), emoji,
+  indentation, and the unbreakable-token exception, all measured in cells.
 - `finalizeMessage` wraps **every** line to `WrapLine` after trailers are appended.
 - The plain-text review path and the unattended hook write contain no line over the width —
   the case that was previously unwrapped.
-- Expected: every asserted line has `Columns(line) <= WrapLine`; a persisted over-long body
-  is wrapped, never truncated.
+- Expected: every asserted line has `Columns(line) <= WrapLine`, with the single documented
+  exception that a line consisting of one over-long token is emitted intact; a persisted
+  over-long body is wrapped, never truncated.
+
+## 2b. One measure, one owner (D7)
+
+```bash
+go test ./internal/request -run TestVerifyMessage -v     # advisory subject check
+go test ./cmd/git-message/core -run TestFinalizeMessage -v # authoritative width
+```
+
+- A draft subject over the limit yields a `subject-length` finding (advisory, drives
+  regeneration) **and** a finalized subject within the limit — both true at once, because the
+  finding describes the draft and the wrapper produces the result.
+- No package other than `internal/textwrap` calls `displaywidth`; the verifier imports
+  `gud/internal/textwrap` as a sibling workspace module.
+- Expected: the notice names the draft violation and does not claim the presented subject is
+  too long.
 
 ## 3. Failure feedback and the residual-finding notice (FR-018)
 
@@ -107,7 +126,7 @@ rg -n -- '--detail' README.md
 ## 7. No regression to existing capability
 
 ```bash
-go test ./... ./internal/git/... ./internal/request/...
+go test ./... ./internal/git/... ./internal/request/... ./internal/textwrap/...
 go test -run xxx -bench 'Benchmark(RegenerateLoop|ContextBuild)' ./cmd/git-message/core
 go test -bench . ./internal/request
 ```
@@ -117,10 +136,12 @@ go test -bench . ./internal/request
 
 ## Troubleshooting
 
-| Symptom | Likely cause | Action |
-| ------- | ------------ | ------ |
-| `plugin ... no such file` / missing module | run from repo root so `go.work` resolves `internal/git` and `internal/request` | `cd` to the repository root |
-| Generation test tries the network | a real `Client` was built instead of the scripted `model.LLM` | use `request.NewClientWithGenerator`; keep `GOOGLE_API_KEY` empty |
-| Width test fails only for CJK/emoji | bytes measured instead of display cells | measure via `textwrap.Columns` / `displaywidth`, never `len` |
-| Body-less test flaky | the scripted model returned a body on attempt 2 | pin the script to return it on every attempt |
-| Notice assertion fails in the hook path | the notice was printed to stdout instead of logged | unattended information goes to `slog` (FR-028) |
+| Symptom                                              | Likely cause                                                                   | Action                                                                                                                                     |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `plugin ... no such file` / missing module           | run from repo root so `go.work` resolves `internal/git` and `internal/request` | `cd` to the repository root                                                                                                                |
+| Generation test tries the network                    | a real `Client` was built instead of the scripted `model.LLM`                  | use `request.NewClientWithGenerator`; keep `GOOGLE_API_KEY` empty                                                                          |
+| Width test fails only for CJK/emoji                  | bytes measured instead of display cells                                        | measure via `textwrap.Columns` — the single implementation — never `len` and never `displaywidth` directly                                 |
+| `rg -n 'displaywidth' internal/request` prints a hit | the verifier regressed to a second measure                                     | import `gud/internal/textwrap` and call `textwrap.Columns`; the library belongs to one module only (D7)                                    |
+| A line is over the configured width                  | a single unbreakable token longer than the limit                               | expected and documented (contract §2.1): the token is never split; if it is on the subject line the residual `subject-length` notice fires |
+| Body-less test flaky                                 | the scripted model returned a body on attempt 2                                | pin the script to return it on every attempt                                                                                               |
+| Notice assertion fails in the hook path              | the notice was printed to stdout instead of logged                             | unattended information goes to `slog` (FR-028)                                                                                             |

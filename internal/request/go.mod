@@ -3,7 +3,6 @@ module gud/internal/request
 go 1.27.2
 
 require (
-	github.com/clipperhouse/displaywidth v0.9.0
 	google.golang.org/adk v1.7.0
 	google.golang.org/genai v1.71.1-0.20260925164548-b70164ad5fd7
 )
@@ -13,8 +12,6 @@ require (
 	cloud.google.com/go/auth v0.20.0 // indirect
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/clipperhouse/stringish v0.1.1 // indirect
-	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect

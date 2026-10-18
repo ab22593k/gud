@@ -48,8 +48,8 @@
   abstractions, configuration knobs, and extension points without a present
   caller MUST NOT be introduced.
 - Package boundaries in `go.work` are real architecture. `internal/git`,
-  `internal/mem`, and `internal/request` are separate modules and MUST NOT be
-  merged into the root module to simplify a build.
+  `internal/request`, and `internal/textwrap` are separate modules and MUST NOT
+  be merged into the root module to simplify a build.
 - Functions MUST do one thing at one level of abstraction. A function that
   needs a comment to explain its second responsibility MUST be decomposed.
 - Comments, doc comments, README statements, and CLI help MUST be updated in the
@@ -96,8 +96,8 @@
 ## Additional Constraints
 
 - **Toolchain**: Go workspace on go 1.27.2, built from the repository root so
-  `go.work` includes the root module and `internal/git`, `internal/mem`, and
-  `internal/request`.
+  `go.work` includes the root module and `internal/git`, `internal/request`, and
+  `internal/textwrap`.
 - **Product vocabulary**: `git message` is the canonical command; `gud` is the
   product name. Help text, errors, docs, and tests MUST preserve that distinction.
 - **Configuration precedence**: CLI flags beat environment variables, which beat
@@ -120,7 +120,7 @@ Run from the repository root. No Makefile is used by design.
 1. `go mod download` when dependencies are unresolved.
 2. `gofmt -w` on every changed Go file.
 3. `go test ./path/to/package -run TestName` for the narrowest loop.
-4. `go test ./... ./internal/git/... ./internal/mem/... ./internal/request/...`
+4. `go test ./... ./internal/git/... ./internal/request/... ./internal/textwrap/...`
    as the full workspace suite.
 5. `golangci-lint run` for any Go change.
 6. `git diff --check`, then read `git diff`.
@@ -155,4 +155,4 @@ Run from the repository root. No Makefile is used by design.
 - **Ratified**: 2026-09-27, the date the template scaffold was first populated
   with governed principles.
 
-**Version**: 1.0.0 | **Ratified**: 2026-09-27 | **Last Amended**: 2026-09-27
+**Version**: 1.0.1 | **Ratified**: 2026-09-27 | **Last Amended**: 2026-10-18

@@ -251,3 +251,83 @@ func TestInteractiveCommit_PreparedMessageWithIssues(t *testing.T) {
 		t.Errorf("preserved message should not carry an Assisted-by trailer, got: %q", msg)
 	}
 }
+
+// TestInteractiveCommit_AbortCommitsNothing pins FR-021: choosing abort ends
+// the review without committing, leaving HEAD and the working tree untouched.
+func TestInteractiveCommit_AbortCommitsNothing(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	newOperationTestRepo(t)
+
+	isolateGitIdentity(t)
+
+	before := mustOutput(t, ".", "rev-parse", "HEAD")
+
+	app := &AppContext{cfg: config.Config{WrapLine: 72}}
+	cmd := &cobra.Command{}
+
+	var outBuf bytes.Buffer
+
+	cmd.SetIn(strings.NewReader("a\n"))
+	cmd.SetOut(&outBuf)
+
+	if err := interactiveCommit(context.Background(), cmd, app,
+		"", "", git.OperationMerge, "Merge branch 'side'"); err != nil {
+		t.Fatalf("interactiveCommit() error = %v", err)
+	}
+
+	if after := mustOutput(t, ".", "rev-parse", "HEAD"); after != before {
+		t.Errorf("HEAD moved on abort: %q -> %q", before, after)
+	}
+
+	if !strings.Contains(outBuf.String(), "Aborted.") {
+		t.Errorf("output should announce the abort, got: %q", outBuf.String())
+	}
+}
+
+// TestInteractiveCommit_EditAppliesTrailers pins FR-022: the edited text is
+// what is committed, and the edit path does not silently bypass the trailer
+// step. The editor deliberately writes no Fixes trailer, so finalization has
+// to add it.
+func TestInteractiveCommit_EditAppliesTrailers(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	newOperationTestRepo(t)
+
+	isolateGitIdentity(t)
+
+	editor := writeEditorScript(t,
+		"#!/bin/sh\ncat > \"$1\" <<'EOF'\nfix: edited subject\n\nEdited body explaining the change.\nEOF\n")
+	t.Setenv("EDITOR", editor)
+
+	app := &AppContext{cfg: config.Config{WrapLine: 72, Issues: []int{42}}}
+	cmd := &cobra.Command{}
+
+	var outBuf bytes.Buffer
+
+	cmd.SetIn(strings.NewReader("e\n"))
+	cmd.SetOut(&outBuf)
+
+	if err := interactiveCommit(context.Background(), cmd, app,
+		"", "", git.OperationMerge, "Merge branch 'side'"); err != nil {
+		t.Fatalf("interactiveCommit() error = %v", err)
+	}
+
+	msg := strings.TrimSpace(mustOutput(t, ".", "log", "-1", "--format=%B"))
+
+	if !strings.Contains(msg, "fix: edited subject") {
+		t.Errorf("committed message is not the edited text: %q", msg)
+	}
+
+	if !strings.Contains(msg, "Fixes: #42") {
+		t.Errorf("edit path bypassed the trailer step: %q", msg)
+	}
+
+	if strings.Contains(msg, "Assisted-by") {
+		t.Errorf("preserved git message should not gain Assisted-by: %q", msg)
+	}
+}

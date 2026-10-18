@@ -1,6 +1,6 @@
 ---
 name: git-message
-description: > 
+description: >
   Generate commit messages with gud's `git message` command and manage its git hooks. Use this skill whenever the user asks for commit-message help, wants automatic or AI-generated commit messages, mentions gud or `git message`, or when commits start failing because of a prepare-commit-msg hook (for example "failed to create request client: api key is required"). Also use it before installing or removing any commit-message hook so existing user hooks are checked and preserved.
 ---
 
