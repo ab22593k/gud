@@ -375,45 +375,11 @@ func isWithin(root, p string) bool {
 	return rel != "" && rel != ".." && !strings.HasPrefix(rel, "../")
 }
 
-// readAgentsFile reads and validates dir/AGENTS.md for the ancestor chain,
-// where the file's existence is not yet known.
-func readAgentsFile(dir string) (string, bool) {
-	p := filepath.Join(dir, agentsFileName)
-
-	info, err := os.Lstat(p)
-	if err != nil {
-		// Covers a plain miss, a broken symlink, and a permission failure on
-		// the parent directory: none of them is worth more than a debug line.
-		slog.Debug("AGENTS.md not readable", "path", p, "error", err)
-
-		return "", false
-	}
-
-	// Never follow symlinks: content is mounted inline and sent to the remote
-	// agent, so a shipped docs/AGENTS.md -> ~/.ssh/id_rsa would otherwise
-	// exfiltrate arbitrary local files.
-	if info.Mode()&os.ModeSymlink != 0 {
-		slog.Warn("AGENTS.md is a symlink; skipping to avoid exfiltrating link target", "path", p)
-
-		return "", false
-	}
-
-	// A directory (or FIFO, device, socket) named AGENTS.md is a collision,
-	// not instructions. os.ReadFile would reject some of these too, but this
-	// states the reason without touching the target.
-	if !info.Mode().IsRegular() {
-		slog.Debug("AGENTS.md is not a regular file; ignoring", "path", p)
-
-		return "", false
-	}
-
-	return readAgentsPath(p)
-}
-
-// readAgentsPath reads an AGENTS.md whose existence is already known — the
-// downward walk reported it — so the walk-time Lstat already passed. It
-// re-validates with Lstat anyway: the walk→read window is enough for a
-// symlink swap, and ancestor-chain callers never walked at all.
+// readAgentsPath reads an AGENTS.md, or rejects it, without following
+// symlinks and without mounting a directory, oversized, or non-UTF-8 entry.
+// The downward walk reports paths whose walk-time Lstat already passed; the
+// ancestor-chain callers pass paths that were never walked at all — so every
+// call re-validates from scratch, closing the walk→read window.
 //
 // Every failure mode is non-fatal and logged, never returned: the caller has no
 // way to act on it, and an unreadable instruction file must not block a commit.

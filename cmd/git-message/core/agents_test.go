@@ -9,7 +9,7 @@ import (
 	"gud/internal/request"
 )
 
-func TestReadAgentsFile(t *testing.T) {
+func TestReadAgentsPath(t *testing.T) {
 	t.Parallel()
 
 	const content = "Use conventional commits.\nName the ticket in the subject."
@@ -20,21 +20,21 @@ func TestReadAgentsFile(t *testing.T) {
 		dir := t.TempDir()
 		writeFile(t, filepath.Join(dir, agentsFileName), content)
 
-		got, ok := readAgentsFile(dir)
+		got, ok := readAgentsPath(filepath.Join(dir, agentsFileName))
 		if !ok {
-			t.Fatal("readAgentsFile() ok = false, want true")
+			t.Fatal("readAgentsPath() ok = false, want true")
 		}
 
 		if got != content {
-			t.Errorf("readAgentsFile() = %q, want %q", got, content)
+			t.Errorf("readAgentsPath() = %q, want %q", got, content)
 		}
 	})
 
 	t.Run("missing file", func(t *testing.T) {
 		t.Parallel()
 
-		if _, ok := readAgentsFile(t.TempDir()); ok {
-			t.Error("readAgentsFile() ok = true, want false for a missing file")
+		if _, ok := readAgentsPath(filepath.Join(t.TempDir(), agentsFileName)); ok {
+			t.Error("readAgentsPath() ok = true, want false for a missing file")
 		}
 	})
 
@@ -44,8 +44,8 @@ func TestReadAgentsFile(t *testing.T) {
 		dir := t.TempDir()
 		writeFile(t, filepath.Join(dir, agentsFileName), "")
 
-		if _, ok := readAgentsFile(dir); ok {
-			t.Error("readAgentsFile() ok = true, want false for an empty file")
+		if _, ok := readAgentsPath(filepath.Join(dir, agentsFileName)); ok {
+			t.Error("readAgentsPath() ok = true, want false for an empty file")
 		}
 	})
 
@@ -55,8 +55,8 @@ func TestReadAgentsFile(t *testing.T) {
 		dir := t.TempDir()
 		writeFile(t, filepath.Join(dir, agentsFileName), "\n\t  \n")
 
-		if _, ok := readAgentsFile(dir); ok {
-			t.Error("readAgentsFile() ok = true, want false for a whitespace-only file")
+		if _, ok := readAgentsPath(filepath.Join(dir, agentsFileName)); ok {
+			t.Error("readAgentsPath() ok = true, want false for a whitespace-only file")
 		}
 	})
 
@@ -66,13 +66,13 @@ func TestReadAgentsFile(t *testing.T) {
 		dir := t.TempDir()
 		writeFile(t, filepath.Join(dir, agentsFileName), "\n\n"+content+"\n\n")
 
-		got, ok := readAgentsFile(dir)
+		got, ok := readAgentsPath(filepath.Join(dir, agentsFileName))
 		if !ok {
-			t.Fatal("readAgentsFile() ok = false, want true")
+			t.Fatal("readAgentsPath() ok = false, want true")
 		}
 
 		if got != content {
-			t.Errorf("readAgentsFile() = %q, want %q", got, content)
+			t.Errorf("readAgentsPath() = %q, want %q", got, content)
 		}
 	})
 
@@ -82,13 +82,13 @@ func TestReadAgentsFile(t *testing.T) {
 		dir := t.TempDir()
 		writeFile(t, filepath.Join(dir, agentsFileName), "\ufeff"+content)
 
-		got, ok := readAgentsFile(dir)
+		got, ok := readAgentsPath(filepath.Join(dir, agentsFileName))
 		if !ok {
-			t.Fatal("readAgentsFile() ok = false, want true")
+			t.Fatal("readAgentsPath() ok = false, want true")
 		}
 
 		if got != content {
-			t.Errorf("readAgentsFile() = %q, want %q", got, content)
+			t.Errorf("readAgentsPath() = %q, want %q", got, content)
 		}
 	})
 
@@ -100,8 +100,8 @@ func TestReadAgentsFile(t *testing.T) {
 			t.Fatalf("mkdir: %v", err)
 		}
 
-		if _, ok := readAgentsFile(dir); ok {
-			t.Error("readAgentsFile() ok = true, want false for a directory")
+		if _, ok := readAgentsPath(filepath.Join(dir, agentsFileName)); ok {
+			t.Error("readAgentsPath() ok = true, want false for a directory")
 		}
 	})
 
@@ -119,8 +119,8 @@ func TestReadAgentsFile(t *testing.T) {
 			t.Skipf("symlinks unavailable: %v", err)
 		}
 
-		if got, ok := readAgentsFile(dir); ok || got != "" {
-			t.Errorf("readAgentsFile() = %q, %v; want %q, false (symlinks must not be followed)", got, ok, "")
+		if got, ok := readAgentsPath(filepath.Join(dir, agentsFileName)); ok || got != "" {
+			t.Errorf("readAgentsPath() = %q, %v; want %q, false (symlinks must not be followed)", got, ok, "")
 		}
 	})
 
@@ -137,8 +137,8 @@ func TestReadAgentsFile(t *testing.T) {
 			t.Skipf("symlinks unavailable: %v", err)
 		}
 
-		if got, ok := readAgentsFile(dir); ok || got != "" {
-			t.Errorf("readAgentsFile() = %q, %v; want rejection (exfiltration blocked)", got, ok)
+		if got, ok := readAgentsPath(filepath.Join(dir, agentsFileName)); ok || got != "" {
+			t.Errorf("readAgentsPath() = %q, %v; want rejection (exfiltration blocked)", got, ok)
 		}
 
 		if got, ok := readAgentsPath(filepath.Join(dir, agentsFileName)); ok || got != "" {
@@ -155,8 +155,8 @@ func TestReadAgentsFile(t *testing.T) {
 			t.Skipf("symlinks unavailable: %v", err)
 		}
 
-		if _, ok := readAgentsFile(dir); ok {
-			t.Error("readAgentsFile() ok = true, want false for a broken symlink")
+		if _, ok := readAgentsPath(filepath.Join(dir, agentsFileName)); ok {
+			t.Error("readAgentsPath() ok = true, want false for a broken symlink")
 		}
 	})
 
@@ -168,8 +168,8 @@ func TestReadAgentsFile(t *testing.T) {
 		// the encoder rather than producing a marshal error.
 		writeFile(t, filepath.Join(dir, agentsFileName), "valid \xff\xfe invalid")
 
-		if _, ok := readAgentsFile(dir); ok {
-			t.Error("readAgentsFile() ok = true, want false for invalid UTF-8")
+		if _, ok := readAgentsPath(filepath.Join(dir, agentsFileName)); ok {
+			t.Error("readAgentsPath() ok = true, want false for invalid UTF-8")
 		}
 	})
 
@@ -179,9 +179,9 @@ func TestReadAgentsFile(t *testing.T) {
 		dir := t.TempDir()
 		writeFile(t, filepath.Join(dir, agentsFileName), strings.Repeat("a", maxAgentsFileBytes))
 
-		got, ok := readAgentsFile(dir)
+		got, ok := readAgentsPath(filepath.Join(dir, agentsFileName))
 		if !ok {
-			t.Fatal("readAgentsFile() ok = false, want true at exactly the limit")
+			t.Fatal("readAgentsPath() ok = false, want true at exactly the limit")
 		}
 
 		if len(got) != maxAgentsFileBytes {
@@ -197,8 +197,8 @@ func TestReadAgentsFile(t *testing.T) {
 		dir := t.TempDir()
 		writeFile(t, filepath.Join(dir, agentsFileName), strings.Repeat("a", maxAgentsFileBytes+1))
 
-		if _, ok := readAgentsFile(dir); ok {
-			t.Error("readAgentsFile() ok = true, want false above the limit")
+		if _, ok := readAgentsPath(filepath.Join(dir, agentsFileName)); ok {
+			t.Error("readAgentsPath() ok = true, want false above the limit")
 		}
 	})
 }
