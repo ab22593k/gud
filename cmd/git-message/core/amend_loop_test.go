@@ -1,7 +1,6 @@
 package core
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"io"
@@ -102,7 +101,7 @@ func runAmendLoop(t *testing.T, app *AppContext, job amendJob, input string) (st
 	cmd.SetOut(&out)
 	cmd.SetErr(io.Discard)
 
-	err := amendReviewLoop(context.Background(), cmd, app, bufio.NewScanner(cmd.InOrStdin()), &out, job, "repo context")
+	err := amendReviewLoop(context.Background(), cmd, app, &out, job, "repo context")
 
 	return out.String(), err
 }

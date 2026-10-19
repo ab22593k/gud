@@ -1,7 +1,6 @@
 package core
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"fmt"
@@ -159,59 +158,23 @@ func runAmendFlow(ctx context.Context, cmd *cobra.Command, app *AppContext, rev 
 	out := cmd.OutOrStdout()
 	_, _ = fmt.Fprintf(out, "Amending %s (old: %s)\n", shortSHA(job.sha), firstLine(job.oldMsg))
 
-	scanner := bufio.NewScanner(cmd.InOrStdin())
-
-	return amendReviewLoop(ctx, cmd, app, scanner, out, job, promptContext)
+	return amendReviewLoop(ctx, cmd, app, out, job, promptContext)
 }
 
 // amendReviewLoop runs the generate → review cycle for one amend job until the
-// user commits, edits, regenerates, or aborts.
+// user commits, edits, regenerates, or aborts. Regeneration is always
+// available: runAmendFlow initialises the request client before entering.
 func amendReviewLoop(ctx context.Context, cmd *cobra.Command, app *AppContext,
-	scanner *bufio.Scanner, out io.Writer, job amendJob, promptContext string,
+	out io.Writer, job amendJob, promptContext string,
 ) error {
-	for {
-		msg, _, findings, err := loopMessage(ctx, cmd.ErrOrStderr(), app, job.diff, promptContext, "")
-		if err != nil {
-			return err
-		}
-
-		presentFindings(out, findings)
-
-		action, edited := reviewMessage(cmd, scanner, out, msg, app.Config().WrapLine)
-
-		if action == actionCommit && edited != "" {
-			msg = edited
-		}
-
-		switch action {
-		case actionCommit:
+	return reviewLoop(ctx, cmd, app, reviewRequest{
+		diff:          job.diff,
+		promptContext: promptContext,
+		canRegenerate: true,
+		commit: func(ctx context.Context, out io.Writer, msg string) error {
 			return applyAmendedMessage(ctx, out, msg, job.head, job.sha)
-		case actionEdit:
-			edited, err := editMessage(msg)
-			if err != nil {
-				return fmt.Errorf("failed to edit message: %w", err)
-			}
-
-			model := ""
-
-			if c := app.Client(); c != nil {
-				model = c.ModelName()
-			}
-
-			edited, err = finalizeMessage(ctx, edited, app.Config(), model)
-			if err != nil {
-				return err
-			}
-
-			return applyAmendedMessage(ctx, out, edited, job.head, job.sha)
-		case actionRegenerate:
-			continue
-		case actionAbort:
-			_, _ = fmt.Fprintln(out, "Aborted.")
-
-			return nil
-		}
-	}
+		},
+	})
 }
 
 // applyAmendedMessage writes msg onto HEAD or rewrites an older commit.
