@@ -229,8 +229,41 @@ func generateAndWriteMsg(ctx context.Context, app *AppContext, diff, msgFile str
 		return fmt.Errorf("failed to apply trailers: %w", err)
 	}
 
-	if err := os.WriteFile(filepath.Clean(msgFile), []byte(msg), 0600); err != nil {
+	if err := writeMessageFile(filepath.Clean(msgFile), []byte(msg)); err != nil {
 		return fmt.Errorf("failed to write message file: %w", err)
+	}
+
+	return nil
+}
+
+// writeMessageFile replaces path with data without following a symlink at
+// path. It stages the content in a temporary file in the same directory and
+// renames that file into place: rename replaces the destination link itself
+// instead of opening it, so a symlink substituted after the caller's Lstat
+// check cannot redirect the write.
+func writeMessageFile(path string, data []byte) error {
+	path = filepath.Clean(path)
+
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".gud-msg-*")
+	if err != nil {
+		return fmt.Errorf("stage message file: %w", err)
+	}
+
+	tmpName := tmp.Name()
+	defer func() { _ = os.Remove(tmpName) }()
+
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+
+		return fmt.Errorf("write staged message file: %w", err)
+	}
+
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close staged message file: %w", err)
+	}
+
+	if err := os.Rename(tmpName, path); err != nil {
+		return fmt.Errorf("install message file: %w", err)
 	}
 
 	return nil

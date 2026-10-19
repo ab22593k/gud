@@ -3,6 +3,7 @@ package core
 import (
 	"bytes"
 	"context"
+	"iter"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -13,6 +14,9 @@ import (
 	"gud/internal/git"
 	"gud/internal/request"
 	"gud/internal/textwrap"
+
+	"google.golang.org/adk/model"
+	"google.golang.org/genai"
 )
 
 func TestHasMeaningfulContent(t *testing.T) {
@@ -268,5 +272,183 @@ func TestGenerateAndWriteMsg_RefusesSymlink(t *testing.T) {
 
 	if err := generateAndWriteMsg(t.Context(), app, "diff", link); err == nil {
 		t.Errorf("generateAndWriteMsg(symlink) = nil, want refusal")
+	}
+}
+
+// symlinkSwapLLM replaces the message file with a symlink while the model call
+// is in flight, reproducing the window between the Lstat guard and the final
+// write.
+type symlinkSwapLLM struct {
+	msgFile string
+	target  string
+}
+
+func (m *symlinkSwapLLM) Name() string { return "symlink-swap" }
+
+func (m *symlinkSwapLLM) GenerateContent(
+	_ context.Context, _ *model.LLMRequest, _ bool,
+) iter.Seq2[*model.LLMResponse, error] {
+	return func(yield func(*model.LLMResponse, error) bool) {
+		if err := os.Remove(m.msgFile); err != nil {
+			yield(nil, err)
+
+			return
+		}
+
+		if err := os.Symlink(m.target, m.msgFile); err != nil {
+			yield(nil, err)
+
+			return
+		}
+
+		yield(&model.LLMResponse{Content: genai.NewContentFromText(
+			"feat: keep the message path safe\n\nExplain the race window.", "model")}, nil)
+	}
+}
+
+// TestGenerateAndWriteMsg_DoesNotFollowSymlinkSwappedDuringGeneration pins the
+// TOCTOU fix: a symlink substituted after the Lstat guard but before the final
+// write must not be followed.
+func TestGenerateAndWriteMsg_DoesNotFollowSymlinkSwappedDuringGeneration(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+
+	msgFile := filepath.Join(dir, "COMMIT_EDITMSG")
+	if err := os.WriteFile(msgFile, []byte("# Please enter the commit message\n"), 0600); err != nil {
+		t.Fatalf("write message file: %v", err)
+	}
+
+	target := filepath.Join(dir, "victim")
+
+	const original = "original"
+
+	if err := os.WriteFile(target, []byte(original), 0600); err != nil {
+		t.Fatalf("write victim: %v", err)
+	}
+
+	probe := filepath.Join(dir, "symlink-probe")
+	if err := os.Symlink(target, probe); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	if err := os.Remove(probe); err != nil {
+		t.Fatalf("remove symlink probe: %v", err)
+	}
+
+	suppress := true
+
+	app := &AppContext{
+		cfg:           config.Config{WrapLine: 72, NoAssistedBy: &suppress},
+		client:        request.NewClientWithGenerator(&symlinkSwapLLM{msgFile: msgFile, target: target}, "mock"),
+		agentsFilesOK: true,
+	}
+
+	if err := generateAndWriteMsg(t.Context(), app, "diff", msgFile); err != nil {
+		t.Fatalf("generateAndWriteMsg: %v", err)
+	}
+
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("read victim: %v", err)
+	}
+
+	if string(got) != original {
+		t.Errorf("victim target was overwritten: got %q, want %q", got, original)
+	}
+
+	fi, err := os.Lstat(msgFile)
+	if err != nil {
+		t.Fatalf("lstat message file: %v", err)
+	}
+
+	if !fi.Mode().IsRegular() {
+		t.Errorf("message file mode = %v, want a regular file", fi.Mode())
+	}
+
+	msg, err := os.ReadFile(msgFile)
+	if err != nil {
+		t.Fatalf("read message file: %v", err)
+	}
+
+	if !strings.Contains(string(msg), "keep the message path safe") {
+		t.Errorf("message file = %q, want the generated message", msg)
+	}
+}
+
+// TestWriteMessageFile_DoesNotFollowSymlink pins the primitive directly: a
+// symlink at the destination is replaced, never followed.
+func TestWriteMessageFile_DoesNotFollowSymlink(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+
+	target := filepath.Join(dir, "victim")
+
+	const original = "original"
+
+	if err := os.WriteFile(target, []byte(original), 0600); err != nil {
+		t.Fatalf("write victim: %v", err)
+	}
+
+	link := filepath.Join(dir, "message")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	if err := writeMessageFile(link, []byte("replacement")); err != nil {
+		t.Fatalf("writeMessageFile: %v", err)
+	}
+
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("read victim: %v", err)
+	}
+
+	if string(got) != original {
+		t.Errorf("victim target was overwritten: got %q, want %q", got, original)
+	}
+
+	fi, err := os.Lstat(link)
+	if err != nil {
+		t.Fatalf("lstat message file: %v", err)
+	}
+
+	if !fi.Mode().IsRegular() {
+		t.Errorf("message file mode = %v, want a regular file", fi.Mode())
+	}
+
+	msg, err := os.ReadFile(link)
+	if err != nil {
+		t.Fatalf("read message file: %v", err)
+	}
+
+	if string(msg) != "replacement" {
+		t.Errorf("message file = %q, want %q", msg, "replacement")
+	}
+}
+
+// TestWriteMessageFile_CreatesAndReplaces covers the two ordinary cases the
+// hook relies on: a missing file is created and an existing file is replaced.
+func TestWriteMessageFile_CreatesAndReplaces(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "COMMIT_EDITMSG")
+
+	if err := writeMessageFile(path, []byte("first")); err != nil {
+		t.Fatalf("writeMessageFile(create): %v", err)
+	}
+
+	if got, err := os.ReadFile(path); err != nil || string(got) != "first" {
+		t.Fatalf("created file = %q, %v; want %q", got, err, "first")
+	}
+
+	if err := writeMessageFile(path, []byte("second")); err != nil {
+		t.Fatalf("writeMessageFile(replace): %v", err)
+	}
+
+	if got, err := os.ReadFile(path); err != nil || string(got) != "second" {
+		t.Fatalf("replaced file = %q, %v; want %q", got, err, "second")
 	}
 }
