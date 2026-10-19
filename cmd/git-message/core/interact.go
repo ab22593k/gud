@@ -39,18 +39,46 @@ func interactiveCommit(
 	op git.Operation,
 	prepared string,
 ) error {
+	if prepared != "" {
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(),
+			"Git %s in progress — using git's prepared message (press [r] to regenerate).\n", op)
+	}
+
+	return reviewLoop(ctx, cmd, app, reviewRequest{
+		diff:          diff,
+		promptContext: promptContext,
+		prepared:      prepared,
+		// Without a client there is nothing to regenerate from; the review
+		// loop still lets the user keep git's prepared message or edit it.
+		canRegenerate: app.Client() != nil,
+		commit:        commitFinalized,
+	})
+}
+
+// reviewRequest is one generate → review → commit session. commit performs
+// the terminal action (commit the message as-is, or amend a target commit);
+// canRegenerate reports whether a client is available to regenerate with.
+type reviewRequest struct {
+	diff          string
+	promptContext string
+	prepared      string
+	canRegenerate bool
+	commit        func(ctx context.Context, out io.Writer, msg string) error
+}
+
+// reviewLoop drives the message review until the user commits, edits,
+// regenerates, or aborts. It is shared by the ordinary commit flow and the
+// amend flow; only the terminal commit action and the regenerate guard differ.
+func reviewLoop(ctx context.Context, cmd *cobra.Command, app *AppContext, req reviewRequest) error {
 	scanner := bufio.NewScanner(cmd.InOrStdin())
 	out := cmd.OutOrStdout()
-
-	if prepared != "" {
-		_, _ = fmt.Fprintf(out, "Git %s in progress — using git's prepared message (press [r] to regenerate).\n", op)
-	}
+	prepared := req.prepared
 
 	for {
 		cfg := app.Config()
 		client := app.Client()
 
-		msg, preserved, findings, err := loopMessage(ctx, cmd.ErrOrStderr(), app, diff, promptContext, prepared)
+		msg, preserved, findings, err := loopMessage(ctx, cmd.ErrOrStderr(), app, req.diff, req.promptContext, prepared)
 		if err != nil {
 			return err
 		}
@@ -68,7 +96,7 @@ func interactiveCommit(
 
 		switch action {
 		case actionCommit:
-			return commitFinalized(ctx, out, msg)
+			return req.commit(ctx, out, msg)
 
 		case actionEdit:
 			edited, err := editMessage(msg)
@@ -78,7 +106,7 @@ func interactiveCommit(
 			// A preserved (git-drafted) message that the user then edits is
 			// still not AI-generated, so no Assisted-by trailer is added.
 			model := ""
-			if !preserved {
+			if !preserved && client != nil {
 				model = client.ModelName()
 			}
 
@@ -87,10 +115,10 @@ func interactiveCommit(
 				return err
 			}
 
-			return commitFinalized(ctx, out, edited)
+			return req.commit(ctx, out, edited)
 
 		case actionRegenerate:
-			if client == nil {
+			if !req.canRegenerate {
 				_, _ = fmt.Fprintln(out, "Regeneration requires GOOGLE_API_KEY — aborting; git's prepared message is unchanged.")
 
 				return nil
