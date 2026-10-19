@@ -86,7 +86,7 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	promptContext := buildPromptContext(ctx, app, diff, op)
+	promptContext := buildPromptContextParallel(ctx, app, diff, op)
 
 	obs.LogSizes(len(diff), len(promptContext))
 
@@ -101,13 +101,6 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 	}
 
 	return interactiveCommit(ctx, cmd, app, diff, promptContext, op, prepared)
-}
-
-// buildPromptContext assembles the auxiliary prompt context: repo overview,
-// commit history, submodule state, and the in-progress git operation, joined
-// by blank lines so the model can read them as separate sections.
-func buildPromptContext(ctx context.Context, app *AppContext, diff string, op git.Operation) string {
-	return buildPromptContextParallel(ctx, app, diff, op)
 }
 
 // buildOperationContext returns a prompt fragment describing the in-progress

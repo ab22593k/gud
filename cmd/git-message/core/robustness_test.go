@@ -47,7 +47,7 @@ func TestTimedBuildPromptContext_EmitsNoError(t *testing.T) {
 
 	app := &AppContext{}
 
-	got := buildPromptContext(ctx, app, "x", git.OperationNone)
+	got := buildPromptContextParallel(ctx, app, "x", git.OperationNone)
 
 	if strings.Contains(got, "\x00") {
 		t.Fatalf("context contains NUL: %q", got)
