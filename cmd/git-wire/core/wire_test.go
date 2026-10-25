@@ -273,6 +273,81 @@ func TestUpdateWithNoOp(t *testing.T) {
 	}
 }
 
+// TestUpdateWithPinned proves the FR-006 CLI contract: exit 0, the exact
+// pinned phrase on stdout, target contents and .git-wire.json untouched.
+func TestUpdateWithPinned(t *testing.T) {
+	shaPin := strings.Repeat("e", 40)
+
+	fake := coreSuccessFake()
+	target := filepath.Join(t.TempDir(), "co")
+	run := fetchCoreCheckout(t, fake, target)
+	t.Chdir(run)
+
+	regPath := wire.RegistryPath(run)
+
+	reg, err := wire.LoadRegistry(regPath)
+	if err != nil {
+		t.Fatalf("LoadRegistry: %v", err)
+	}
+
+	key, err := wire.KeyFor(regPath, target)
+	if err != nil {
+		t.Fatalf("KeyFor: %v", err)
+	}
+
+	entry, err := reg.Lookup(key)
+	if err != nil {
+		t.Fatalf("Lookup: %v", err)
+	}
+
+	entry.Ref = shaPin
+	entry.RefKind = wire.RefKindCommit
+	entry.ResolvedCommit = shaPin
+	entry.SourceURL = "https://github.com/OCA/server-tools/tree/" + shaPin + "/auto_backup"
+
+	if err := reg.Upsert(key, entry); err != nil {
+		t.Fatalf("Upsert: %v", err)
+	}
+
+	if err := wire.SaveRegistry(regPath, reg); err != nil {
+		t.Fatalf("SaveRegistry: %v", err)
+	}
+
+	beforeReg, err := os.ReadFile(regPath)
+	if err != nil {
+		t.Fatalf("read registry: %v", err)
+	}
+
+	beforeTarget, err := wire.HashDir(target)
+	if err != nil {
+		t.Fatalf("HashDir: %v", err)
+	}
+
+	cmd, out := testUpdateCmd(t, fake, "co")
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+
+	want := "Pinned to commit " + shaPin + " — cannot update without new ref."
+	if !strings.Contains(out.String(), want) {
+		t.Fatalf("output = %q, want %q", out.String(), want)
+	}
+
+	if live, err := wire.HashDir(target); err != nil || live != beforeTarget {
+		t.Fatalf("target changed: err=%v live=%q want %q", err, live, beforeTarget)
+	}
+
+	afterReg, err := os.ReadFile(regPath)
+	if err != nil {
+		t.Fatalf("read registry: %v", err)
+	}
+
+	if !bytes.Equal(afterReg, beforeReg) {
+		t.Fatal("registry changed under a pinned update")
+	}
+}
+
 func TestUpdateWithUpstreamChange(t *testing.T) {
 	fake := coreSuccessFake()
 	run := fetchCoreCheckout(t, fake, filepath.Join(t.TempDir(), "co"))

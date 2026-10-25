@@ -21,6 +21,11 @@ not promised here).
   slashes (e.g. a branch `release/v1.0`) are supported: the command queries
   the remote's live ref listing and treats the longest matching branch/tag
   name as the reference (spec FR-003a); no `--ref` override flag is provided.
+- A reference that is a full commit SHA — exactly 40 lowercase hex (SHA-1)
+  or 64 lowercase hex (SHA-256) — is an immutable snapshot: it is verified
+  directly with no ref listing, and the fetched checkout is pinned to it
+  (spec FR-003a). Tags, once fetched, are pins too; only branch references
+  float (research D15).
 - Repository-root URLs are not fetchable: `.../tree/{ref}` and
   `.../tree/{ref}/` end at the reference with no folder, so they fail as
   `ErrBadURL` (exit 1) during parsing — before any network call, mirror,
@@ -71,6 +76,11 @@ extra positionals are a usage error.
   (clean upstream-only change); `Merged <commit-short> into <dir> (<n>
 upstream files, <m> local files kept).` (conflict-free merge with local
   edits preserved).
+- Pinned-reference outcomes (stable phrases, exit 0, no network attempted):
+  `Pinned to commit <sha> — cannot update without new ref.` and
+  `Pinned to tag <tag> (commit <sha>) — cannot update without new ref.`
+  The target and registry entry are left untouched; advancing requires a
+  fresh fetch from a URL naming a new reference (spec FR-006, research D15).
 - Missing upstream path/ref on a tracked source: hard error naming the
   source path; local files untouched.
 
@@ -85,6 +95,9 @@ as empty.
   `<host>/<owner>/<repo>@<ref>:<subpath>`, last commit short SHA, and state
   (`current`, `behind`, `diverged`, `unreachable`). Unreachable entries show
   the resolution failure class, never credentials.
+- Pinned references (commit SHA or tag) are never resolved against the
+  remote: their state is `current` or `diverged` (local content check
+  only), never `behind` or `unreachable` (research D15).
 - Exits 0 even when some/all remotes are unreachable (states carry the
   information — FR-012). `No tracked folders under <root>.` when empty
   (exit 0).

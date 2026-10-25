@@ -207,10 +207,18 @@ func parseSubpath(segs []string) (string, error) {
 	return strings.Join(segs, "/"), nil
 }
 
-// IsPinnedSHA reports whether ref is a full 40-hex commit SHA, which needs
-// no remote ref listing to resolve.
+// sha1HexLen and sha256HexLen are the lowercase commit lengths that pin a
+// checkout: 40 hex for SHA-1 object stores, 64 hex for SHA-256 ones.
+const (
+	sha1HexLen   = 40
+	sha256HexLen = 64
+)
+
+// IsPinnedSHA reports whether ref is a full lowercase commit SHA, which
+// needs no remote ref listing to resolve. Shorter fragments are ref
+// names, not pins, and resolve through the longest-match rule.
 func IsPinnedSHA(ref string) bool {
-	if len(ref) != 40 {
+	if len(ref) != sha1HexLen && len(ref) != sha256HexLen {
 		return false
 	}
 

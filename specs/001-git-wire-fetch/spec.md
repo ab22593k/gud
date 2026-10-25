@@ -23,6 +23,8 @@
 - Q: When a URL ends at the repository root (`.../tree/main` or `.../tree/main/`), with nothing after the reference, how should `git wire` respond? → A: Option A - reject during URL parsing as a bad-URL failure (exit 1), before any network call or cache/mirror creation, with a message stating that whole-repository fetch is not supported.
 - Q: When the subfolder path is deeply nested (e.g. `.../tree/main/a/b/c/d/e`), should `git wire` accept it, and how much of the tree should it download? → A: Option A - accept any depth with no cap, store the full relative path, materialize that folder's entire subtree recursively, and never fetch ancestors or siblings.
 - Q: If a URL ends at the repository root but the user also passes `--subfolder <path>`, should `git wire` accept it and use the flag's path, or reject it? → A: Option A - reject; a `/tree/{ref}/` URL with an empty path is always a bad-URL error, and `--subfolder` applies only to reference-less repository URLs.
+- Q: What should `update` do when the tracked reference is an immutable commit SHA? → A: Immediately report `Pinned to commit <sha> — cannot update without new ref` without attempting any upstream fetch; advancing requires a fresh fetch from a URL naming a new reference. A full-length hex reference is 40 characters (SHA-1) or 64 characters (SHA-256) and denotes an immutable snapshot.
+- Q: When the tracked reference is a tag, should `update` treat it as another immutable pin or follow it if upstream re-points it? → A: Option A - tags are pins too: report `Pinned to tag <tag> (commit <sha>) — cannot update without new ref` and perform no upstream fetch; only branch refs can advance via update.
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -128,6 +130,12 @@ upstream state.
    content, **When** the user runs the update operation, **Then** the command
    reports the conflicting paths, writes nothing, and leaves local files
    untouched unless explicit discard intent is given.
+6. **Given** a target directory whose registry entry tracks an immutable
+   reference (a full commit SHA or a tag), **When** the user runs the update
+   operation, **Then** the command reports the checkout as pinned — `Pinned to
+commit <sha>` or `Pinned to tag <tag> (commit <sha>)` — states that it
+   cannot update without a new reference, performs no upstream fetch, and
+   leaves the target and registry entry untouched.
 
 ---
 
@@ -196,6 +204,19 @@ observing a fast no-op with bounded cache size.
   leaves no remaining subfolder path, the empty-subfolder rule applies
   (bad-URL error, whole-repository fetch not supported — see FR-003b). Slashes
   in ref names are therefore supported with no extra flag.
+- What happens when the reference is a full commit SHA (40-hex SHA-1 or
+  64-hex SHA-256)? The URL denotes an immutable snapshot: fetch verifies that
+  exact commit and pins the checkout to it; no branch-style movement applies.
+- What happens when `update` runs against a pinned reference (an immutable
+  commit SHA or a tag)? It immediately reports `Pinned to commit <sha>` (or
+  `Pinned to tag <tag> (commit <sha>)`) with `— cannot update without new ref`
+  and does not attempt any upstream fetch or remote resolution; the target and
+  registry entry stay untouched. Advancing requires a fresh fetch from a URL
+  naming a new reference.
+- What happens when `list/status` reports on a pinned reference? Sync state is
+  `current` once fetched (or `diverged` with local edits against the fetched
+  content); it can never be `behind`, because a pinned ref has no floating tip
+  to compare against.
 - What happens when the upstream folder is very large (many files or large
   total size)? The command shows progress, fetches incrementally, and never
   requires downloading the full repository to obtain the folder.
@@ -233,7 +254,9 @@ message` command tree MUST NOT carry git-wire subcommands; the two
   that matches a known branch or tag name as the reference (e.g. in
   `.../tree/release/v1.0/pkg/util`, if `release/v1.0` exists remotely the
   reference is `release/v1.0` and the subfolder path is `pkg/util`). A
-  full 40-hex commit reference needs no listing and is verified directly. The
+  full-length commit reference — 40-hex SHA-1 or 64-hex SHA-256 — needs no
+  listing and is verified directly, and shorter hex fragments are not treated
+  as pins but resolve as ref names under the same longest-match rule. The
   system MUST NOT disallow slashes in ref names and MUST NOT require a flag
   override for them. Behavior when offline follows FR-012 (the listing fetch
   fails as an unreachable-remote error, leaving local state intact).
@@ -266,7 +289,11 @@ message` command tree MUST NOT carry git-wire subcommands; the two
   the URL. Fetched folders themselves MUST stay free of bookkeeping files.
 - **FR-006**: The system MUST provide an update operation that re-resolves the
   tracked source and brings the target folder up to date with upstream, working
-  from the registry entry alone (no URL re-entry required).
+  from the registry entry alone (no URL re-entry required). When the tracked
+  reference is a pinned one (a full commit SHA, 40-hex SHA-1 or 64-hex
+  SHA-256, or a tag), the operation MUST instead report the checkout as
+  pinned — naming the reference and its resolved commit — and MUST NOT attempt
+  an upstream fetch, rewrite the target, or advance the registry entry.
 - **FR-007**: The system MUST provide a list/status operation showing, for each
   tracked folder, its local path, source URL, reference, subfolder path, and
   sync state (current, behind, diverged/unreachable).
@@ -302,7 +329,10 @@ message` command tree MUST NOT carry git-wire subcommands; the two
 
 - **Wire source reference**: The parsed identity of what to fetch — hosting
   location, repository (owner/name), reference (branch, tag, or commit as given
-  in the URL), and subfolder path within the repository.
+  in the URL), and subfolder path within the repository. The reference has one
+  of three kinds: a branch (floating — update follows the tip), a tag
+  (pinned), or a full 40/64-hex commit (immutable pin); only branch refs can
+  advance via update.
 - **Wire checkout**: The local target directory holding the fetched subfolder
   contents plus its association to exactly one wire source reference.
 - **Tracking registry**: The single `.git-wire.json` file at the run level,
@@ -351,9 +381,14 @@ message` command tree MUST NOT carry git-wire subcommands; the two
   `{host}/{owner}/{repo}/tree/{ref}/{subfolder-path}` (GitHub-style); other
   hosts or SSH-style inputs are out of scope for v1 and produce a clear
   "unsupported source" error.
-- The reference in the URL is treated as given (floating branch follows the
-  branch; pinned tag/commit stays pinned); the registry entry additionally
-  stores the resolved commit when cheaply known so status can detect staleness.
+- The reference in the URL is treated as given and has one of three kinds: a
+  branch (floating — `update` follows the branch tip), a tag (pinned), or a
+  full commit — 40-hex SHA-1 or 64-hex SHA-256 (immutable pin). Update on a
+  pinned reference reports `Pinned to commit <sha>` or `Pinned to tag <tag>
+(commit <sha>)` with `— cannot update without new ref`, performs no upstream
+  fetch, and advances only via a fresh fetch naming a new reference; the
+  registry entry additionally stores the resolved commit when cheaply known so
+  status can detect staleness.
   When the URL's reference contains slashes, the reference stored is the
   resolved longest-matching remote ref (FR-003a), not the first URL segment.
 - Tracking state lives in a single `.git-wire.json` registry file in the

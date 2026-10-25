@@ -89,6 +89,19 @@
 - [x] T035 [US1] Implement `--subfolder` handling (generic repo URL only, `Ref=HEAD`, path validation via `ParseSubpath`) in `fetchWith` (FR-003c) (path: cmd/git-wire/core/wire.go)
 - [x] T036 [US1] Ensure fetched folders hold contents only (no bookkeeping files) and registry stays at run level (FR-005, SC-006) (path: internal/wire/fetch.go + .git-wire.json (run level))
 
+### Amendment 2026-10-25 (pinned references) — US1 delta (research D15)
+
+Tests first (Constitution II — must fail before the implementation tasks below):
+
+- [x] T064 [P] [US1] Table tests for `IsPinnedSHA` in `internal/wire/source_test.go` — accept exactly 40 lowercase hex (SHA-1) and 64 lowercase hex (SHA-256); reject 39/41/63/65-length hex and non-hex refs (data-model §1: "any other shape — including hex-looking fragments of 39 or 41 characters — is a ref name subject to longest-match resolution")
+- [x] T065 [P] [US1] Registry schema tests in `internal/wire/registry_test.go` — `ref_kind` accepts exactly `branch|tag|commit` and nothing else; a missing `ref_kind` loads with the legacy default (shape-detect 40/64-hex `commit`, else `branch`); `resolved_commit` accepts 40- or 64-hex and rejects other lengths (data-model §2, contracts/tracking-record.md)
+
+Implementation:
+
+- [x] T066 [US1] Extend `IsPinnedSHA` in `internal/wire/source.go` to recognize full 40-hex (SHA-1) and 64-hex (SHA-256) lowercase commits (currently 40-hex only) (FR-003a, D15)
+- [x] T067 [US1] Add optional `ref_kind` (`branch`|`tag`|`commit`) to `RegistryEntry` load/save/validate in `internal/wire/registry.go`: absent → legacy default; widen `resolved_commit` validation to 40- or 64-hex (data-model §2, contracts/tracking-record.md)
+- [x] T068 [US1] Record `ref_kind` at fetch upsert in `internal/wire/fetch.go` — `commit` when `IsPinnedSHA(ref)`, else the kind of the resolved ref (`tag` for a `refs/tags/*` match, `branch` otherwise) (data-model §2, D15)
+
 **Checkpoint**: User Story 1 fully functional and testable independently (MVP)
 
 ---
@@ -115,6 +128,17 @@
 - [x] T045 [US2] Implement `--force` re-materialization of upstream state (FR-009) (path: internal/wire/update.go)
 - [x] T046 [US2] Advance registry entry on successful update (resolved_commit, export_hash, updated_at) (FR-006) (path: internal/wire/registry.go + internal/wire/update.go)
 
+### Amendment 2026-10-25 (pinned references) — US2 delta (research D15)
+
+Tests first (Constitution II):
+
+- [x] T069 [P] [US2] Sealed-fake pinned-update tests in `internal/wire/update_test.go` — an entry with `ref_kind` `commit`/`tag` makes `Update` report `Pinned to commit <sha> — cannot update without new ref.` / `Pinned to tag <tag> (commit <sha>) — cannot update without new ref.` and return no error, with the fake recording ZERO `Resolve` calls (FR-006, D15)
+- [x] T070 [P] [US2] Command-level pinned-update tests in `cmd/git-wire/core/wire_test.go` — exit 0, pinned phrase on stdout, target contents and `.git-wire.json` byte-identical before/after (FR-006, contracts/cli.md)
+
+Implementation:
+
+- [x] T071 [US2] Short-circuit `Update` in `internal/wire/update.go` on `ref_kind` `commit`/`tag` immediately after the registry `Lookup` — before `os.Stat`, `HashDir`, or `Fetcher.Resolve` — printing the pinned phrase with exit 0 and no writes (FR-006, D15)
+
 **Checkpoint**: User Stories 1 AND 2 both work independently
 
 ---
@@ -139,6 +163,16 @@
 - [x] T053 [US3] Ensure offline degradation leaves files and registry intact with structured `slog` records (Principle IV) (path: internal/wire/*.go (slog call sites))
 - [x] T054 [US3] Performance: memoize remote-SHA lookups within a run (`internal/wire/memo.go`) and bound copy buffers (SC-004, SC-005)
 
+### Amendment 2026-10-25 (pinned references) — US3 delta (research D15)
+
+Tests first (Constitution II):
+
+- [x] T072 [P] [US3] Pinned-state derivation tests in `internal/wire/status_test.go` — entries with `ref_kind` `commit`/`tag` derive `current` (export hash matches) or `diverged` (local edits) from local content only and can never be `behind`/`unreachable`; no remote resolution is attempted for them (data-model §4, D15)
+
+Implementation:
+
+- [x] T073 [US3] Make `list`/status skip remote resolution for `ref_kind` `tag`/`commit` in `internal/wire/status.go` — local hash comparison only (FR-007, contracts/cli.md, D15)
+
 **Checkpoint**: All user stories independently functional
 
 ---
@@ -148,7 +182,7 @@
 **Purpose**: Improvements affecting multiple stories and final validation
 
 - [x] T055 [P] Update `contracts/cli.md` if any flag/phrase drift is found during implementation (keep in sync with `wire.go`)
-- [x] T056 [P] Update `contracts/tracking-record.md` only if entry fields change (they must not — byte-identical to v1)
+- [x] T056 [P] Update `contracts/tracking-record.md` to match the final v1 entry schema — `ref_kind` added and `resolved_commit` widened to 40/64-hex by the 2026-10-25 amendment (plan/research D15); the original premise that entry fields stay byte-identical to v1 is superseded by T067
 - [x] T057 [P] Add `GUD_LOG_LEVEL=debug` structured records for degraded paths and memo counters (Principle IV) (path: internal/wire/*.go)
 - [x] T058 Run `gofmt -w` and `goimports` on every changed Go file (Principle I) (path: changed Go files (./))
 - [x] T059 Run `golangci-lint run` and fix any findings (Principle I) (path: ./ (repository root))
@@ -156,6 +190,12 @@
 - [x] T061 Run `git diff --check` and inspect `git diff` for accidental edits (Principle V) (path: ./ (repository root))
 - [x] T062 Validate quickstart.md scenarios end-to-end (steps 1–7 including 6a root-URL check) and record evidence (path: specs/001-git-wire-fetch/quickstart.md)
 - [x] T063 Fix ref resolution to prefer refreshed remote-tracking refs over the mirror's clone-time `refs/heads/*` (found in T062): sort ref names for deterministic collision handling, let peeled tags beat tag objects and tags beat same-named branches, and read `refs/remotes/origin/HEAD` for the default branch; tests in `internal/wire/gitfetch_test.go`, implementation in `internal/wire/gitfetch.go` (research D14) (FR-008, SC-004)
+- [x] T074 [P] Re-verify `contracts/cli.md` and `contracts/tracking-record.md` against the pinned-ref implementation (docs already amended in the plan round; fix any phrase/schema drift surfaced by T070/T072 tests) (path: specs/001-git-wire-fetch/contracts/)
+- [x] T075 [P] Run `gofmt -w` and `goimports` on every changed Go file (Principle I) (path: changed Go files (./))
+- [x] T076 [P] Run `golangci-lint run` and fix any findings (Principle I) (path: ./ (repository root))
+- [x] T077 Run full workspace suite: `go test ./... ./internal/git/... ./internal/request/... ./internal/textwrap/...` (Principle V)
+- [x] T078 [P] Run `git diff --check` and inspect `git diff` for accidental edits (Principle V) (path: ./ (repository root))
+- [x] T079 [P] Validate quickstart.md scenario 6b end-to-end (pinned fetch → `Pinned to commit <sha>` update, exit 0, `.git-wire.json` `cmp` clean; offline `go test ./internal/wire -run 'TestUpdatePinned|TestIsPinnedSHA'`) and record evidence (path: specs/001-git-wire-fetch/quickstart.md)
 
 ---
 
@@ -184,6 +224,13 @@
 - Core implementation before integration
 - Story complete before moving to next priority
 
+### Amendment Dependencies (2026-10-25, T064–T079)
+
+- T064/T065 (US1 tests) run in parallel; T066/T067/T068 (US1 impl) follow their tests
+- T067 (registry `ref_kind`) BLOCKS T069/T070/T072 — pinned behavior needs the kind readable from the entry
+- T069/T070 → T071 (US2 pinned update); T072 → T073 (US3 pinned list states)
+- T074–T079 close the amendment; T079 needs T071 and T073 in place
+
 ### Parallel Opportunities
 
 - All Phase 1 tasks marked [P] can run in parallel
@@ -191,6 +238,7 @@
 - All tests within a user story marked [P] can run in parallel
 - US1, US2, US3 can be worked on in parallel by different developers once Phase 2 is complete
 - Phase 6 tasks marked [P] can run in parallel
+- Amendment delta: T064+T065 parallel; T069+T070 parallel once T067 lands; T072 parallel with US2 amendment work; T074–T076, T078 parallel in polish
 
 ### Parallel Example: User Story 1
 
@@ -209,6 +257,17 @@ Task: "T028 [US1] Enforce empty-subfolder rejection (FR-003b)"
 Task: "T030 [US1] Table case for trailing-slash root URL"
 Task: "T031 [US1] Table case for deep nesting"
 Task: "T032 [US1] Command-level root-URL rescue test"
+```
+
+```bash
+# Amendment delta (2026-10-25, pinned references) — parallel tests:
+Task: "T064 [P] [US1] IsPinnedSHA 40/64-hex table tests"
+Task: "T065 [P] [US1] ref_kind registry schema tests"
+
+# Once T067 lands (ref_kind readable), US2+US3 pinned tests in parallel:
+Task: "T069 [P] [US2] Sealed-fake pinned-update tests"
+Task: "T070 [P] [US2] Command-level pinned-update tests"
+Task: "T072 [P] [US3] Pinned-state derivation tests"
 ```
 
 ---
@@ -254,3 +313,13 @@ With multiple developers:
 - Stop at any checkpoint to validate story independently
 - Avoid: vague tasks, same file conflicts, cross-story dependencies that break independence
 - **Amendment-derived tasks**: T028–T032 and T029 (the FR-003b message sentence) exist solely because of the 2026-10-25 clarification round; they are the delta over the pre-amendment plan. T029 is the one implementation change not yet present in code.
+- **Amendment 2026-10-25 (pinned references)**: T064–T073 are the delta from research D15 — immutable commit SHAs (40/64-hex) and tags are pins; `update` reports `Pinned to ... — cannot update without new ref.` (exit 0, no fetch, no writes); `list` is local-only for pins. They supersede T056's "byte-identical to v1" premise (the entry schema gains `ref_kind`). T074–T079 close the amendment with contract re-verification, gates, and quickstart 6b validation.
+
+---
+
+## Phase 7: Convergence
+
+**Purpose**: Gaps found by the converge pass that no open task tracks (F1–F3 remain actionable but are already itemized in open T065–T073, so they are not duplicated per Constitution III)
+
+- [x] T080 Thread the resolved ref kind (`tag` for a `refs/tags/*` match, `branch` otherwise) from `internal/wire/gitfetch.go` through `Resolution` to the fetch upsert in `internal/wire/fetch.go` per data-model §2 (partial)
+- [x] T081 Preserve `ref_kind` across update-driven registry advances in `internal/wire/update.go` (`swapCheckout`/`applyMerged` → `recordCheckout`) with a test proving the kind survives per FR-006 (partial)

@@ -29,20 +29,33 @@ const registryFileName = ".git-wire.json"
 // maxEntryBytes bounds each serialized registry entry (SC-006 budget).
 const maxEntryBytes = 10 * 1024
 
+// RefKind is the kind of reference a registry entry tracks: a floating
+// branch that update advances, or a pin (tag, immutable commit) that
+// update reports without fetching.
+type RefKind string
+
+// Registry entry reference kinds.
+const (
+	RefKindBranch RefKind = "branch"
+	RefKindTag    RefKind = "tag"
+	RefKindCommit RefKind = "commit"
+)
+
 // RegistryEntry is one tracked target's source association: the sole input
 // the update operation needs. Field shapes match the retired per-checkout
 // record so fixtures migrate by re-keying.
 type RegistryEntry struct {
-	SourceURL      string `json:"source_url"`
-	Host           string `json:"host"`
-	Owner          string `json:"owner"`
-	Repo           string `json:"repo"`
-	Ref            string `json:"ref"`
-	Subpath        string `json:"subpath"`
-	ResolvedCommit string `json:"resolved_commit"`
-	ExportHash     string `json:"export_hash"`
-	FetchedAt      string `json:"fetched_at"`
-	UpdatedAt      string `json:"updated_at"`
+	SourceURL      string  `json:"source_url"`
+	Host           string  `json:"host"`
+	Owner          string  `json:"owner"`
+	Repo           string  `json:"repo"`
+	Ref            string  `json:"ref"`
+	Subpath        string  `json:"subpath"`
+	ResolvedCommit string  `json:"resolved_commit"`
+	ExportHash     string  `json:"export_hash"`
+	FetchedAt      string  `json:"fetched_at"`
+	UpdatedAt      string  `json:"updated_at"`
+	RefKind        RefKind `json:"ref_kind,omitempty"`
 }
 
 // Registry is the versioned envelope holding one entry per fetched target.
@@ -51,12 +64,14 @@ type Registry struct {
 	Entries map[string]RegistryEntry `json:"entries"`
 }
 
-// EntryFor builds the initial entry for a fresh fetch.
+// EntryFor builds the initial entry for a fresh fetch, recording how the
+// reference resolves: pins stay terminal, branches advance on update.
 func EntryFor(
 	source SourceRef,
 	commit string,
 	exportHash string,
 	now time.Time,
+	kind RefKind,
 ) RegistryEntry {
 	stamp := now.UTC().Format(time.RFC3339)
 
@@ -71,6 +86,7 @@ func EntryFor(
 		ExportHash:     exportHash,
 		FetchedAt:      stamp,
 		UpdatedAt:      stamp,
+		RefKind:        kind,
 	}
 }
 
@@ -260,6 +276,8 @@ func installFile(path string, data []byte) error {
 
 // canonicalize normalizes keys and validates entries, failing closed on the
 // first defect: colliding keys after normalization count as corrupt.
+// Entries without a kind predate pins and default by shape: a 40/64-hex
+// ref is an immutable commit, anything else a branch.
 func canonicalize(path string, entries map[string]RegistryEntry) (map[string]RegistryEntry, error) {
 	clean := make(map[string]RegistryEntry, len(entries))
 
@@ -271,6 +289,14 @@ func canonicalize(path string, entries map[string]RegistryEntry) (map[string]Reg
 
 		if _, dup := clean[normal]; dup {
 			return nil, fmt.Errorf("registry %s: duplicate entry %s: %w", path, normal, ErrInvalidRecord)
+		}
+
+		if entry.RefKind == "" {
+			if IsPinnedSHA(entry.Ref) {
+				entry.RefKind = RefKindCommit
+			} else {
+				entry.RefKind = RefKindBranch
+			}
 		}
 
 		if err := checkEntry(entry); err != nil {
@@ -359,8 +385,14 @@ func normalizeKey(key string) (string, error) {
 // invariant and a hostile registry file cannot smuggle hostile values
 // past it.
 func checkEntry(entry RegistryEntry) error {
-	if !isLowerHex(entry.ResolvedCommit, 40) {
+	if !isLowerHex(entry.ResolvedCommit, sha1HexLen) && !isLowerHex(entry.ResolvedCommit, sha256HexLen) {
 		return fmt.Errorf("bad resolved_commit: %w", ErrInvalidRecord)
+	}
+
+	switch entry.RefKind {
+	case RefKindBranch, RefKindTag, RefKindCommit:
+	default:
+		return fmt.Errorf("bad ref_kind %q: %w", entry.RefKind, ErrInvalidRecord)
 	}
 
 	if !isLowerHex(entry.ExportHash, 64) {

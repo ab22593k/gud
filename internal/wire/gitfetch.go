@@ -73,7 +73,7 @@ func (f *gitFetcher) resolvePinned(ctx context.Context, mirror string, source So
 		return Resolution{}, err
 	}
 
-	return Resolution{Commit: source.Ref, Ref: source.Ref, Subpath: source.Subpath}, nil
+	return Resolution{Commit: source.Ref, Ref: source.Ref, Subpath: source.Subpath, Kind: RefKindCommit}, nil
 }
 
 // resolveNamed matches the greedy ref against the mirror's branches and
@@ -116,7 +116,7 @@ func (f *gitFetcher) resolveNamed(ctx context.Context, mirror string, source Sou
 		return Resolution{}, err
 	}
 
-	return Resolution{Commit: commit, Ref: actualRef, Subpath: actualPath}, nil
+	return Resolution{Commit: commit, Ref: actualRef, Subpath: actualPath, Kind: refKindOf(refs, actualRef)}, nil
 }
 
 // resolveDefaultRef resolves a reference-less source against the remote's
@@ -140,7 +140,22 @@ func resolveDefaultRef(
 		return Resolution{}, err
 	}
 
-	return Resolution{Commit: commit, Ref: source.Ref, Subpath: source.Subpath}, nil
+	return Resolution{Commit: commit, Ref: source.Ref, Subpath: source.Subpath, Kind: RefKindBranch}, nil
+}
+
+// refKindOf reports whether the resolved short name matched a tag: a
+// refs/tags/ entry (plain or peeled annotated) pins, while heads and
+// remote-tracking names float as branches.
+func refKindOf(refs map[string]string, actualRef string) RefKind {
+	if _, ok := refs["refs/tags/"+actualRef]; ok {
+		return RefKindTag
+	}
+
+	if _, ok := refs["refs/tags/"+actualRef+"^{}"]; ok {
+		return RefKindTag
+	}
+
+	return RefKindBranch
 }
 
 // defaultBranchSHA reports the remote's default branch tip. The mirror's

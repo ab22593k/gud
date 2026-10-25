@@ -43,11 +43,19 @@ so a rejection creates no mirror, worktree, target, or registry entry.
 | `.../tree/main/`                              | `ErrBadURL`: same after slash trim (FR-003b)                                                                                |
 | `.../tree/main/` + `--subfolder x`            | `ErrBadURL`: parse fails before the flag is read; no override (FR-003c)                                                     |
 | `.../tree/release/v1.0/pkg/util`              | Greedy `Ref=release`; FR-003a longest match may yield `Ref=release/v1.0`, `Subpath=pkg/util`; empty remainder → `ErrBadURL` |
+| `.../tree/<40-hex SHA-1>/auto_backup`         | Accepted: `Ref=<sha>` — pinned commit, verified directly, no ref listing (FR-003a)                                          |
+| `.../tree/<64-hex SHA-256>/auto_backup`       | Accepted: `Ref=<sha>` — pinned commit (SHA-256 object repo), verified directly, no ref listing (FR-003a)                    |
 | `{host}/{owner}/{repo}`                       | Accepted only with `--subfolder`: `Ref=HEAD`, `Subpath` from flag                                                           |
 | `{host}/{owner}/{repo}` without `--subfolder` | `ErrBadURL`: nothing names a folder                                                                                         |
 
 The empty-subpath rejection is the guard that keeps the mirror sparse: it is
 the single URL shape that would otherwise widen a fetch to the full tree.
+
+Pin detection: a reference that is exactly 40 lowercase hex (SHA-1) or 64
+lowercase hex (SHA-256) is a pinned commit — `IsPinnedSHA`, verified
+directly, never listed (FR-003a). Any other shape — including hex-looking
+fragments of 39 or 41 characters — is a ref name subject to longest-match
+resolution. The pinned kind is recorded at fetch (D15).
 
 ## 2. Registry (run-level `.git-wire.json`, versioned envelope + entries)
 
@@ -65,16 +73,17 @@ Envelope:
 
 Entry fields (byte-identical to the retired per-checkout record):
 
-| Field                                         | Type    | Rules                                                                                                                                                                                                                     |
-| --------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `source_url`                                  | string  | Verbatim URL as given at fetch                                                                                                                                                                                            |
-| `host` / `owner` / `repo` / `ref` / `subpath` | strings | Denormalized from the **resolved** source (FR-003a): `ref`/`subpath` are the longest-match split against the remote ref listing, not the greedy first-segment parse, so update/list never re-parse and never re-list refs |
-| `resolved_commit`                             | string  | Full 40-hex SHA the ref resolved to at last fetch/update. Lowercase hex, length 40                                                                                                                                        |
-| `export_hash`                                 | string  | `content_sha` aggregate (hex SHA-256) of exactly what was written to the target; recomputed on update for divergence check (D4)                                                                                           |
-| `fetched_at` / `updated_at`                   | strings | RFC 3339 timestamps (informational; never used for freshness — SHAs decide)                                                                                                                                               |
+| Field                                         | Type    | Rules                                                                                                                                                                                                                       |
+| --------------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `source_url`                                  | string  | Verbatim URL as given at fetch                                                                                                                                                                                              |
+| `host` / `owner` / `repo` / `ref` / `subpath` | strings | Denormalized from the **resolved** source (FR-003a): `ref`/`subpath` are the longest-match split against the remote ref listing, not the greedy first-segment parse, so update/list never re-parse and never re-list refs   |
+| `ref_kind`                                    | string  | `branch` \| `tag` \| `commit` — the resolved kind, recorded at fetch (D15). Absent on legacy entries → default: shape-detect 40/64-hex `commit`, else `branch`. Validation accepts exactly these three values, nothing else |
+| `resolved_commit`                             | string  | Full 40-hex (SHA-1) or 64-hex (SHA-256) SHA the ref resolved to at last fetch/update. Lowercase hex, length 40 or 64                                                                                                        |
+| `export_hash`                                 | string  | `content_sha` aggregate (hex SHA-256) of exactly what was written to the target; recomputed on update for divergence check (D4)                                                                                             |
+| `fetched_at` / `updated_at`                   | strings | RFC 3339 timestamps (informational; never used for freshness — SHAs decide)                                                                                                                                                 |
 
 Validation on load: malformed JSON, missing `version`, bad keys, or entry
-violations (non-40-hex commit and friends) → invalid-record error naming
+violations (non-40/64-hex `resolved_commit`, bad `ref_kind`, and friends) → invalid-record error naming
 the file and the specific problem (never guess a source — spec edge case).
 Size budget: entry fields bounded as before; each entry MUST serialize
 under 10 KB (SC-006 per folder) — enforced by a unit test that marshals a
@@ -85,10 +94,12 @@ reports the entry `diverged`, update on it fails missing-target. Renamed
 targets orphan identically (accepted trade-off for pristine folders).
 
 State transitions per entry: `absent → current` (fetch upsert);
-`current → current` (no-op update, timestamps refreshed);
-`current → current@new-commit` (update with upstream change,
-`resolved_commit` + `export_hash` + `updated_at` rewritten); any →
-`diverged` is _derived, never stored_ (see SyncState).
+`current → current` (no-op update on a branch ref, timestamps refreshed);
+`current → current@new-commit` (branch update with upstream change,
+`resolved_commit` + `export_hash` + `updated_at` rewritten); pinned
+entries (`ref_kind` `tag` or `commit`) are terminal after fetch — `update`
+reports `Pinned to ...` (D15) and rewrites nothing, not even timestamps;
+any → `diverged` is _derived, never stored_ (see SyncState).
 
 ## 3. Checkout (local target directory — contents only, association in registry)
 
@@ -112,10 +123,13 @@ Ordered derivation (first match wins; order is load-bearing per D5):
 | `behind`      | Upstream moved                | remote SHA ≠ `record.resolved_commit` (and not diverged)                                      |
 | `current`     | In sync                       | remote SHA == `record.resolved_commit` (and not diverged)                                     |
 
-Pinned refs (tags/SHAs) converge to `current` once fetched; floating
-branches move between `current`/`behind` as upstream advances. Deleted
-upstream paths surface at update time as a missing-path error naming the
-source path (spec acceptance scenario), not as a sync state.
+Pinned refs (`ref_kind` `tag` or `commit`) derive locally only: `current`
+once fetched, `diverged` with local edits — they never resolve the remote,
+so `behind` and `unreachable` cannot occur for them (D15). Floating
+branches move between `current`/`behind` as upstream advances, with
+`unreachable` on resolution failure. Deleted upstream paths surface at
+update time as a missing-path error naming the source path (spec
+acceptance scenario), not as a sync state.
 
 ## 5. MirrorCache (shared blobless mirror + ephemeral sparse worktrees)
 
@@ -155,6 +169,10 @@ surface at `GUD_LOG_LEVEL=debug` only.
 | `ErrInvalidRecord`  | Record corrupt/versioned-unknown                                                                                                           | Name file + specific problem; never guess                                                                                                                               |
 | `ErrDiverged`       | Local mods on update without `--force`                                                                                                     | Explain keep (`--force` discards) vs. back-up-first options                                                                                                             |
 | `ErrUpstream`       | Network/auth/rate-limit/host failure                                                                                                       | Label retryable; affirm local contents left intact                                                                                                                      |
+
+Pinned reports are not failures: `update` on a `ref_kind` of `tag` or
+`commit` prints the exit-0 `Pinned to ...` phrase defined in
+[contracts/cli.md](contracts/cli.md) and uses no sentinel (D15).
 
 All wrap with `%w` + operation context (`fetch <display>`, `update <dir>`,
 …); presentation maps sentinels to messages/exit codes in exactly one place

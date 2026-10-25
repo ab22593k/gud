@@ -453,3 +453,69 @@ pkg`) complicate parser precedence and weaken the root-URL refusal into a
   regression (`TestGitFetcherResolvePrefersRefreshedRefs`) that advances a
   fixture remote after the mirror is seeded and asserts ten consecutive
   resolutions return the refreshed SHA for both a named branch and `HEAD`.
+
+## D15 — Pinned references: commit SHAs and tags are immutable; update reports without fetching (2026-10-25 clarifications)
+
+- **Decision**: A tracked reference has exactly one of three kinds — branch
+  (floating), tag (pinned), full commit SHA (immutable pin) — recorded at
+  fetch time as `ref_kind` in the registry entry (`branch` | `tag` |
+  `commit`). A full commit reference is exactly 40 lowercase hex (SHA-1) or
+  64 lowercase hex (SHA-256); `IsPinnedSHA` recognizes both, and shorter
+  hex fragments are NOT pins — they resolve as ref names under the
+  longest-match rule (FR-003a). `update` on a pinned entry short-circuits
+  immediately after the registry lookup — before any resolve, mirror
+  access, or local content hash — and reports `Pinned to commit <sha> —
+cannot update without new ref.` or `Pinned to tag <tag> (commit <sha>) —
+cannot update without new ref.` with exit 0, leaving the target and the
+  entry byte-identical (FR-006). `list` derives pinned states locally:
+  `current` (export hash matches) or `diverged` (local edits); a pinned ref
+  can never be `behind` or `unreachable` because it has no floating tip to
+  compare. Advancing requires a fresh fetch from a URL naming a new
+  reference.
+- **Rationale**: The user decision (spec Session 2026-10-25) defines commit
+  SHAs as immutable snapshots and extends the pin to tags. Fetch time is
+  the only place the kind is authoritative — FR-003a resolves the ref
+  against the remote listing and D14 fixes tag-vs-branch precedence there —
+  so storing the kind avoids a second, ambiguous inference on every
+  update/list. The immediate short-circuit is the required UX (report
+  "rather than attempting an upstream fetch") and a strict degradation win:
+  a pinned checkout is fully usable offline and provably never triggers a
+  network call (FR-012). Exit 0 mirrors the existing no-op convention
+  (`Already up to date`): a pin is an informational terminal state, not an
+  operational failure — the stable phrase, not a new exit code, is the
+  script signal, so the sentinel taxonomy and exit-code contract stay
+  untouched.
+- **Alternatives considered**:
+  - _Infer the kind at update/list time from mirror refs (`refs/tags/*` vs
+    `refs/remotes/origin/*`) instead of storing it_: rejected — a
+    same-named tag and branch exist by D14's own precedence rules, so a
+    mirror-local inference can disagree with the fetch-time resolution;
+    it also requires mirror access on every update/list, re-classifies
+    refs after a mirror reset, and adds a classification code path where
+    one enum field (far below the SC-006 budget) removes the problem.
+  - _Shape-only pins (40/64-hex) without a tag pin_: rejected — violates
+    the clarification that tags are pins too; a bare `ref` string cannot
+    distinguish `19.0`-the-branch from `19.0`-the-tag.
+  - _Pinned report as a sentinel failure (exit 1) or a new exit code_: rejected
+    — a pin is neither damage nor corruption; exit 0 with a fixed phrase
+    composes with scripts already handling the no-op case, and a new exit
+    class adds a documented code for no signal.
+  - _Bump the registry version and migrate legacy entries_: rejected —
+    `ref_kind` is an additive optional field; readers ignore unknown fields
+    per the versioning rules, and absence resolves to a legacy default
+    (shape-detect commit via 40/64-hex, else treat as branch), so v1 stays
+    v1 and existing checkouts keep working with no migration.
+- **Preserved details**: fetch of a pinned SHA already verifies locally
+  (`resolvePinned`) — unchanged except 64-hex recognition; the merge
+  machinery (D10) applies to branches only — pinned entries can never reach
+  it; registry atomicity, memoization (never consulted for pins), and the
+  error taxonomy are unchanged.
+- **Implementation notes for tasks**: (1) `IsPinnedSHA` accepts 40- or
+  64-hex — table cases: 40 ✓, 64 ✓, 39/41/63/65 ✗, non-hex ✗; (2) registry
+  entries gain optional `ref_kind` validated to the three values (absent →
+  legacy default), and `resolved_commit` validation accepts 40 or 64 hex;
+  (3) `Update` inspects `ref_kind` right after `Lookup` and before
+  `os.Stat`/`HashDir`/`Resolve`; the fake fetcher records calls so tests
+  prove pinned updates never reach `Resolve`; (4) `list` skips remote
+  resolution for pinned kinds — unit tests pin the `current`/`diverged`
+  derivation and the absence of `behind`/`unreachable`.

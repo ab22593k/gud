@@ -24,9 +24,10 @@ type UpdateOptions struct {
 
 // Update brings target up to date with its tracked source, working from the
 // registry entry alone. Unchanged checkouts report "Already up to date"
-// without rewriting files. A missing target directory reports diverged.
-// The new state is staged aside and swapped in, so a failed update leaves
-// local files and the registry untouched.
+// without rewriting files. A pinned entry (tag or commit) reports its pin
+// without any upstream contact: pins never advance via update. A missing
+// target directory reports diverged. The new state is staged aside and
+// swapped in, so a failed update leaves local files and the registry untouched.
 func Update(ctx context.Context, opts UpdateOptions, target string) (string, error) {
 	if opts.Fetcher == nil {
 		return "", fmt.Errorf("update %s: nil fetcher", target)
@@ -56,6 +57,12 @@ func Update(ctx context.Context, opts UpdateOptions, target string) (string, err
 	entry, err := reg.Lookup(key)
 	if err != nil {
 		return "", fmt.Errorf("update %s: %w", target, err)
+	}
+
+	// Pins never advance: report without touching the filesystem or the
+	// fetcher, so a pinned checkout is offline-safe by construction.
+	if summary, ok := pinnedSummary(target, entry); ok {
+		return summary, nil
 	}
 
 	if _, err := os.Stat(target); err != nil {
@@ -91,7 +98,24 @@ func Update(ctx context.Context, opts UpdateOptions, target string) (string, err
 	return mergeAttempt(ctx, opts.Fetcher, opts.RegistryPath, entry, res, target)
 }
 
-// updateSameCommit handles an update when upstream has not moved: a clean
+// pinnedSummary reports a pinned entry's terminal line, ok=false for a
+// floating branch that update may advance.
+func pinnedSummary(target string, entry RegistryEntry) (string, bool) {
+	switch entry.RefKind {
+	case RefKindCommit:
+		slog.Debug("wire pinned", "dir", target, "ref", entry.Ref)
+
+		return fmt.Sprintf("Pinned to commit %s — cannot update without new ref.", entry.Ref), true
+	case RefKindTag:
+		slog.Debug("wire pinned", "dir", target, "ref", entry.Ref, "commit", entry.ResolvedCommit)
+
+		return fmt.Sprintf("Pinned to tag %s (commit %s) — cannot update without new ref.",
+			entry.Ref, entry.ResolvedCommit), true
+	default:
+		return "", false
+	}
+}
+
 // checkout is already current, a diverged one has nothing to merge with.
 func updateSameCommit(
 	ctx context.Context,
@@ -122,7 +146,7 @@ func updateClean(
 	res Resolution,
 	target string,
 ) (string, error) {
-	files, err := swapCheckout(ctx, opts.Fetcher, entry.Source(), res, target, opts.RegistryPath)
+	files, err := swapCheckout(ctx, opts.Fetcher, entry.Source(), res, entry.RefKind, target, opts.RegistryPath)
 	if err != nil {
 		return "", fmt.Errorf("update %s: %w", target, err)
 	}
@@ -167,7 +191,7 @@ func mergeAttempt(
 			target, strings.Join(conflicts, "\n  "), ErrDiverged)
 	}
 
-	summary, err := applyMerged(source, res, registryPath, key, target,
+	summary, err := applyMerged(source, res, registryPath, key, entry.RefKind, target,
 		snaps.newDir, take, del, keptLocal(snaps.base, snaps.local, conflicts))
 	if err != nil {
 		return "", fmt.Errorf("update %s: %w", target, err)
@@ -299,11 +323,13 @@ func keptLocal(base, local map[string]snapFile, conflicts []string) int {
 }
 
 // applyMerged stages the merge onto a clone of the target, then swaps it
-// in and advances the registry entry.
+// in and advances the registry entry, preserving the tracked kind: the
+// entry keeps floating or pinning exactly as it did before the advance.
 func applyMerged(
 	source SourceRef,
 	res Resolution,
-	registryPath, key,
+	registryPath, key string,
+	kind RefKind,
 	target, newDir string,
 	take, del []string,
 	kept int,
@@ -335,7 +361,7 @@ func applyMerged(
 		return "", err
 	}
 
-	if err := recordCheckout(registryPath, key, target, resolved, res.Commit); err != nil {
+	if err := recordCheckout(registryPath, key, target, resolved, res.Commit, kind); err != nil {
 		return "", err
 	}
 
@@ -349,12 +375,14 @@ func applyMerged(
 
 // swapCheckout stages the new state aside, then swaps it into target with
 // a backup so interruption cannot lose the previous checkout. The registry
-// entry advances to the new commit once the swap succeeds.
+// entry advances to the new commit once the swap succeeds, preserving the
+// tracked kind it already carried.
 func swapCheckout(
 	ctx context.Context,
 	fetcher Fetcher,
 	source SourceRef,
 	res Resolution,
+	kind RefKind,
 	target, registryPath string,
 ) (int, error) {
 	staging, err := os.MkdirTemp(filepath.Dir(target), ".wire-update-*")
@@ -386,7 +414,7 @@ func swapCheckout(
 		return 0, err
 	}
 
-	if err := recordCheckout(registryPath, key, target, resolved, res.Commit); err != nil {
+	if err := recordCheckout(registryPath, key, target, resolved, res.Commit, kind); err != nil {
 		return 0, err
 	}
 

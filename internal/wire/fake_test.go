@@ -14,6 +14,7 @@ import (
 type fakeFetcher struct {
 	commits map[string]string
 	files   map[string]map[string]string
+	kinds   map[string]RefKind
 
 	resolveErr     error
 	materializeErr error
@@ -34,7 +35,21 @@ func (f *fakeFetcher) Resolve(_ context.Context, source SourceRef) (Resolution, 
 		return Resolution{}, fmt.Errorf("ref %q: %w", source.Ref, ErrUnknownRef)
 	}
 
-	return Resolution{Commit: sha, Ref: source.Ref, Subpath: source.Subpath}, nil
+	return Resolution{Commit: sha, Ref: source.Ref, Subpath: source.Subpath, Kind: f.kindFor(source.Ref)}, nil
+}
+
+// kindFor reports the scripted kind for ref, defaulting by shape: a full
+// commit SHA pins, anything else floats as a branch.
+func (f *fakeFetcher) kindFor(ref string) RefKind {
+	if kind, ok := f.kinds[ref]; ok {
+		return kind
+	}
+
+	if IsPinnedSHA(ref) {
+		return RefKindCommit
+	}
+
+	return RefKindBranch
 }
 
 func (f *fakeFetcher) Materialize(_ context.Context, _ SourceRef, res Resolution, dir string) (int, error) {

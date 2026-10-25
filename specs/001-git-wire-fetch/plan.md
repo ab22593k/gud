@@ -51,6 +51,24 @@ message still needs the "whole-repository fetch is not supported" sentence.
 `contracts/cli.md`, `data-model.md`, and `quickstart.md` updated;
 `tasks.md` needs the two verification cases (research D13).
 
+**Amendment 2026-10-25 (pinned references)** (clarifications:
+immutable commit SHAs + tag pins): a tracked reference has exactly one of
+three kinds — branch (floating), tag (pinned), full commit SHA (immutable
+pin: 40-hex SHA-1 or 64-hex SHA-256) — recorded at fetch time as
+`ref_kind` in the registry entry. `update` on a pinned entry
+short-circuits right after the registry lookup — before any remote
+resolve, mirror access, or local content hash — and reports
+`Pinned to commit <sha> — cannot update without new ref.` / `Pinned to tag
+<tag> (commit <sha>) — cannot update without new ref.` with exit 0,
+leaving the target and the entry byte-identical; only branch refs advance.
+`list` derives pinned states locally (`current`/`diverged`, never
+`behind`/`unreachable`). `IsPinnedSHA` extends to 40 or 64 hex.
+No new dependencies, no sentinel, no exit-code change, no registry version
+bump (`ref_kind` is additive-optional; absent = legacy default: shape-detect
+commit, else branch). `contracts/cli.md`, `contracts/tracking-record.md`,
+`data-model.md`, and `quickstart.md` updated; `tasks.md` needs regen for
+the pinned cases (research D15).
+
 ## Summary
 
 Add a standalone `git wire` binary (`cmd/git-wire`) that fetches a single
@@ -62,7 +80,10 @@ lookups. URLs that name the repository root are rejected at parse time, and
 subfolder depth is unbounded — the named folder only, never its ancestors or
 siblings (FR-003b/FR-003c). `update` merges upstream changes into
 locally-modified checkouts when conflict-free (FR-009/FR-013; research D10),
-refusing with a file list otherwise. Technical approach (from
+refusing with a file list otherwise. Commit-SHA and tag references are
+immutable pins: `update` reports `Pinned to ...` without any upstream
+fetch, and only branch references advance (2026-10-25 clarification;
+research D15). Technical approach (from
 [research.md](research.md), D1 as amended):
 parse the URL into a `SourceRef` domain type; maintain one bare blobless
 mirror per repository under `~/.config/gud/wire/`; materialize the subfolder
@@ -104,6 +125,10 @@ ordering and worktree lifecycle. Live-network coverage gated by
 `RUN_GITWIRE_INTEGRATION` (skip cleanly when unset; `-short` skips),
 following the constitution's established integration-guard pattern.
 Table-driven tests for URL parsing and sync-state derivation.
+Pinned-ref cases are table-driven too: `IsPinnedSHA` accepts 40- and
+64-hex, rejecting 39/41/63/65 and non-hex lengths; sealed fakes record
+`Resolve` calls so tests prove a pinned update never reaches the fetcher
+on any path.
 
 **Target Platform**: Linux/macOS developer machines with a `git` binary on
 PATH (already a hard requirement of `gud`; fixed-binary subprocess rationale
@@ -198,6 +223,15 @@ Principle III holds and no dependency moves. Principle V gained evidence:
 four new regression tests plus three live fetches agreeing on one commit. All
 gates still PASS.
 
+**Post-design re-check 2026-10-25 (pinned references)**: pins
+short-circuit before any network or mirror access, which strengthens
+Principle IV (a pinned checkout is offline-safe by construction and, being
+terminal-by-reference, has no degraded path to observe) and Principle II
+(table-driven 40/64-hex `IsPinnedSHA` cases; sealed fakes proving pinned
+updates never call `Resolve`). Principle III holds: one optional enum field
+in the entry, no new dependencies, no new sentinel or exit code, legacy
+records keep working via the documented default. All gates still PASS.
+
 **Skill-vs-constitution adjudication** (`@golang-clean-coder` items):
 
 | Skill item                                                          | Verdict     | Reason                                                                                                                                                         |
@@ -225,7 +259,7 @@ specs/001-git-wire-fetch/
 ├── contracts/           # Phase 1 output (/speckit.plan command)
 │   ├── cli.md               # Command signatures, flags, exit codes, output phrases (amended 2026-10-25: root-URL rejection, depth, --subfolder scope)
 │   └── tracking-record.md   # .git-wire.json v1 schema and versioning rules (UNCHANGED by amendments)
-└── tasks.md             # Phase 2 output (/speckit.tasks command - STALE after amendments, needs regen for registry + URL boundary cases)
+└── tasks.md             # Phase 2 output (/speckit.tasks command - STALE after amendments, needs regen for registry, URL boundary, and pinned-ref cases)
 ```
 
 ### Source Code (repository root)

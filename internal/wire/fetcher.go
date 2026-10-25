@@ -8,11 +8,13 @@ import (
 
 // Resolution is a fully disambiguated source: the commit to export plus
 // the actual ref and subpath (which may differ from the greedy parse when
-// refs contain slashes).
+// refs contain slashes). Kind records how the ref resolved so fetch can
+// store pins as terminal and branches as advancing.
 type Resolution struct {
 	Commit  string
 	Ref     string
 	Subpath string
+	Kind    RefKind
 }
 
 // Fetcher resolves references and materializes subfolders. The real

@@ -107,7 +107,7 @@ func fetchInstall(
 		return "", err
 	}
 
-	if err := recordCheckout(absReg, key, target, resolved, res.Commit); err != nil {
+	if err := recordCheckout(absReg, key, target, resolved, res.Commit, res.Kind); err != nil {
 		return "", err
 	}
 
@@ -287,12 +287,15 @@ func checkTarget(target string, force bool) error {
 
 // recordCheckout hashes the extracted target and upserts its registry
 // entry under the already-validated key, persisting the registry atomically.
+// A zero kind predates pins and defaults by shape: a full commit SHA
+// pins, anything else floats as a branch.
 func recordCheckout(
 	registryPath string,
 	key string,
 	target string,
 	resolved SourceRef,
 	commit string,
+	kind RefKind,
 ) error {
 	hash, err := HashDir(target)
 	if err != nil {
@@ -304,7 +307,15 @@ func recordCheckout(
 		return err
 	}
 
-	if err := reg.Upsert(key, EntryFor(resolved, commit, hash, time.Now())); err != nil {
+	if kind == "" {
+		if IsPinnedSHA(resolved.Ref) {
+			kind = RefKindCommit
+		} else {
+			kind = RefKindBranch
+		}
+	}
+
+	if err := reg.Upsert(key, EntryFor(resolved, commit, hash, time.Now(), kind)); err != nil {
 		return err
 	}
 

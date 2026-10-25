@@ -18,6 +18,24 @@ const (
 	StateCurrent SyncState = "current"
 )
 
+// derivePinned computes a pin's state from the local content hash only:
+// current when the checkout matches the recorded export, diverged on any
+// local edit. Pins float nowhere, so behind and unreachable are impossible.
+func derivePinned(entry RegistryEntry, localHash string) SyncState {
+	if localHash != entry.ExportHash {
+		return StateDiverged
+	}
+
+	return StateCurrent
+}
+
+// describePinned derives a pinned entry's state without touching the
+// fetcher. The fetcher argument exists only so tests can seal the
+// no-resolution contract by counting Resolve calls.
+func describePinned(_ string, entry RegistryEntry, live string, _ Fetcher) SyncState {
+	return derivePinned(entry, live)
+}
+
 // deriveState computes the sync state for an entry, a live content hash of
 // the checkout, and a freshly resolved remote SHA. Local divergence
 // dominates: edits must never be silently clobbered even when upstream

@@ -21,6 +21,7 @@ long segments) and asserts the bound. Fetched folders hold contents only.
       "repo": "server-tools",
       "ref": "19.0",
       "subpath": "auto_backup",
+      "ref_kind": "branch",
       "resolved_commit": "9f2c4a1b8d3e5f60718293a4b5c6d7e8f90a1b2c3",
       "export_hash": "4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3",
       "fetched_at": "2026-10-05T09:55:00Z",
@@ -42,7 +43,13 @@ Entry field rules:
   (rejected at parse — secret hygiene); writers MUST NOT add any.
 - `host`, `owner`, `repo`, `ref`, `subpath`: denormalized parse output so
   update/list never re-parse. Same segment rules as `ParseSourceURL`.
-- `resolved_commit`: 40 lowercase hex chars. Anything else is invalid.
+- `resolved_commit`: 40 lowercase hex (SHA-1) or 64 lowercase hex
+  (SHA-256) chars. Anything else is invalid.
+- `ref_kind` (optional, written by fetch): `branch`, `tag`, or `commit` —
+  the kind the ref resolved to (research D15). Validators accept exactly
+  these three values; parsers treat absence as the legacy default
+  (shape-detect 40/64-hex `commit`, else treat as `branch`), so existing
+  checkouts keep working unmodified.
 - `export_hash`: 64 lowercase hex chars (SHA-256 aggregate). Anything else
   is invalid.
 - `fetched_at`, `updated_at`: RFC 3339 UTC. Informational only; parsers MUST
@@ -51,7 +58,10 @@ Entry field rules:
 ## Versioning rules
 
 - Readers ignore unknown _fields_ (forward-tolerant) but reject unknown
-  _envelope versions_ (explicit, never guess).
+  _envelope versions_ (explicit, never guess). `ref_kind` is an additive
+  optional field, so no version bump is required for either direction: a
+  v1 writer emitting it and a v1 reader that ignores it are both
+  conformant, and a reader MUST NOT require it.
 - `version` increments only with a spec amendment that documents migration:
   readers of version N MUST state the minimum tool version that writes N+1
   in the invalid-record message.

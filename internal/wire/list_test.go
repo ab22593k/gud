@@ -273,7 +273,7 @@ func TestListMixedStatesAcrossEntries(t *testing.T) {
 		Ref:       "vanished-branch",
 		Subpath:   "auto_backup",
 		SourceURL: "https://github.com/OCA/server-tools/tree/vanished-branch/auto_backup",
-	}, testCommitB, live, time.Now())
+	}, testCommitB, live, time.Now(), RefKindBranch)
 
 	key, err := KeyFor(registry, ghost)
 	if err != nil {

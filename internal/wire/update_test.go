@@ -67,6 +67,105 @@ func readTarget(t *testing.T, target, name string) string {
 	return string(data)
 }
 
+// TestUpdatePinned proves FR-006/D15: a pinned entry (commit SHA or tag)
+// short-circuits Update right after the registry lookup — no Resolve
+// calls, no errors, pinned phrase instead of a sync decision.
+func TestUpdatePinned(t *testing.T) {
+	t.Parallel()
+
+	shaPin := strings.Repeat("e", 40)
+	tagCommit := strings.Repeat("f", 40)
+
+	cases := []struct {
+		name     string
+		ref      string
+		kind     RefKind
+		commit   string
+		wantLine string
+	}{
+		{
+			name:     "commit pin names only the sha",
+			ref:      shaPin,
+			kind:     RefKindCommit,
+			commit:   shaPin,
+			wantLine: "Pinned to commit " + shaPin + " — cannot update without new ref.",
+		},
+		{
+			name:     "tag pin names tag and commit",
+			ref:      "v19.0",
+			kind:     RefKindTag,
+			commit:   tagCommit,
+			wantLine: "Pinned to tag v19.0 (commit " + tagCommit + ") — cannot update without new ref.",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			f := &fakeFetcher{
+				commits: map[string]string{"19.0": testCommitA, tc.ref: tc.commit},
+				files: map[string]map[string]string{
+					testCommitA: {"a.txt": "alpha"},
+					tc.commit:   {"a.txt": "alpha"},
+				},
+			}
+
+			registry, target := fetchFixture(t, f)
+
+			before, err := HashDir(target)
+			if err != nil {
+				t.Fatalf("HashDir: %v", err)
+			}
+
+			reg, err := LoadRegistry(registry)
+			if err != nil {
+				t.Fatalf("LoadRegistry: %v", err)
+			}
+
+			entry := lookupFixture(t, registry)
+			entry.Ref = tc.ref
+			entry.RefKind = tc.kind
+			entry.ResolvedCommit = tc.commit
+			entry.SourceURL = "https://github.com/OCA/server-tools/tree/" + tc.ref + "/auto_backup"
+
+			if err := reg.Upsert("./checkout", entry); err != nil {
+				t.Fatalf("Upsert: %v", err)
+			}
+
+			if err := SaveRegistry(registry, reg); err != nil {
+				t.Fatalf("SaveRegistry: %v", err)
+			}
+
+			base := f.resolves
+
+			summary := updateFixture(context.Background(), t, f, registry, target, false)
+
+			if summary != tc.wantLine {
+				t.Fatalf("summary = %q, want %q", summary, tc.wantLine)
+			}
+
+			if f.resolves != base {
+				t.Fatalf("Resolve called %d times, want zero upstream contact", f.resolves-base)
+			}
+
+			live, err := HashDir(target)
+			if err != nil {
+				t.Fatalf("HashDir: %v", err)
+			}
+
+			if live != before {
+				t.Fatal("pinned update rewrote the checkout")
+			}
+
+			after := lookupFixture(t, registry)
+			if after != entry {
+				t.Fatal("pinned update rewrote the registry entry")
+			}
+		})
+	}
+}
+
 func TestUpdateNoOp(t *testing.T) {
 	t.Parallel()
 

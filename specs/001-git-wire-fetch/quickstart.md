@@ -131,6 +131,40 @@ one is already cached from an earlier run, its mtime and contents are
 unchanged). The third command proves `--subfolder` is not an override for a
 `/tree/` URL (spec FR-003b/FR-003c).
 
+### 6b. Pinned references: update reports without network (LIVE fetch, offline assertion)
+
+A checkout tracked at an immutable reference — a full commit SHA (40-hex
+SHA-1 or 64-hex SHA-256) or a tag — can never advance via `update`; the
+command reports the pin without touching the network (spec FR-006,
+research D15):
+
+```bash
+cd /tmp/wire-demo
+PIN=$(jq -r '.entries["./auto_backup"].resolved_commit' .git-wire.json)   # commit recorded by step 3
+/tmp/git-wire "https://github.com/OCA/server-tools/tree/$PIN/auto_backup" -t ./auto_backup_pinned
+cp .git-wire.json /tmp/registry-before.json
+/tmp/git-wire update -t ./auto_backup_pinned; echo "exit=$?"
+cmp .git-wire.json /tmp/registry-before.json && echo "registry untouched"
+/tmp/git-wire list
+```
+
+Expected: the pinned fetch lands the same folder at exactly the recorded
+commit; `update` prints `Pinned to commit <sha> — cannot update without new
+ref.` with exit `0` (an informational no-op like `Already up to date`, not a
+failure), attempts no network, and leaves both the target contents and the
+`.git-wire.json` entry byte-identical (the `cmp` proves it). `list` shows
+the pinned entry as `current` (or `diverged` after a local edit) and never
+`behind`. The tag variant prints `Pinned to tag <tag> (commit <sha>) —
+cannot update without new ref.` and is covered offline by:
+
+```bash
+go test ./internal/wire -run 'TestUpdatePinned|TestIsPinnedSHA' -v
+```
+
+Expected: sealed-fake tests prove a pinned update never calls the fetcher
+(`Resolve` call-recorded), and the `IsPinnedSHA` table accepts 40- and
+64-hex while rejecting 39/41/63/65 and non-hex refs — no git, no network.
+
 ## 7. Merge matrix (unit, offline) + diverged refusal (manual)
 
 ```bash
@@ -163,3 +197,4 @@ still refuses; `--force` discards).
 | Slow first fetch, fast repeats           | expected: mirror warms once (blobless), then SHA-compare no-ops   | `GUD_LOG_LEVEL=debug` shows memo hits and skipped exports                                                |
 | Stale worktrees under cache `worktrees/` | killed run skipped removal                                        | `git -C <mirror> worktree prune`; next fetch/update prunes automatically                                 |
 | Record rejected as invalid               | hand-edited or newer-version record                               | error names file + defect; re-fetch to regenerate                                                        |
+| `Pinned to commit <sha>` on update       | tracked ref is an immutable commit SHA or a tag                   | the checkout cannot advance by reference; re-fetch from a URL naming a new ref (spec FR-006)             |

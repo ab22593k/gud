@@ -23,6 +23,7 @@ func testEntry() RegistryEntry {
 		strings.Repeat("a", 40),
 		strings.Repeat("b", 64),
 		time.Date(2026, 10, 5, 9, 55, 0, 0, time.UTC),
+		RefKindBranch,
 	)
 }
 
@@ -160,6 +161,97 @@ func TestLoadRegistryCorrupt(t *testing.T) {
 
 			if _, err := LoadRegistry(path); !errors.Is(err, ErrInvalidRecord) {
 				t.Fatalf("err = %v, want ErrInvalidRecord", err)
+			}
+		})
+	}
+}
+
+func TestRegistryRefKind(t *testing.T) {
+	t.Parallel()
+
+	tag := validEntryMap()
+	tag["ref_kind"] = "tag"
+
+	commit := validEntryMap()
+	commit["ref_kind"] = "commit"
+
+	branch := validEntryMap()
+	branch["ref_kind"] = "branch"
+
+	badKind := validEntryMap()
+	badKind["ref_kind"] = "main"
+
+	legacySHA := validEntryMap()
+	legacySHA["ref"] = strings.Repeat("a", 40)
+
+	legacySHA256 := validEntryMap()
+	legacySHA256["ref"] = strings.Repeat("b", 64)
+
+	sha256Commit := validEntryMap()
+	sha256Commit["resolved_commit"] = strings.Repeat("c", 64)
+
+	shortCommit := validEntryMap()
+	shortCommit["resolved_commit"] = strings.Repeat("d", 39)
+
+	longCommit := validEntryMap()
+	longCommit["resolved_commit"] = strings.Repeat("d", 41)
+
+	short256Commit := validEntryMap()
+	short256Commit["resolved_commit"] = strings.Repeat("d", 63)
+
+	long256Commit := validEntryMap()
+	long256Commit["resolved_commit"] = strings.Repeat("d", 65)
+
+	cases := []struct {
+		name     string
+		entry    map[string]any
+		wantKind RefKind
+		wantErr  bool
+	}{
+		{name: "branch kind loads", entry: branch, wantKind: RefKindBranch},
+		{name: "tag kind loads", entry: tag, wantKind: RefKindTag},
+		{name: "commit kind loads", entry: commit, wantKind: RefKindCommit},
+		{name: "missing kind defaults branch for ref name", entry: validEntryMap(), wantKind: RefKindBranch},
+		{name: "missing kind defaults commit for 40-hex ref", entry: legacySHA, wantKind: RefKindCommit},
+		{name: "missing kind defaults commit for 64-hex ref", entry: legacySHA256, wantKind: RefKindCommit},
+		{name: "unknown kind rejects", entry: badKind, wantErr: true},
+		{name: "64-hex resolved commit loads", entry: sha256Commit, wantKind: RefKindBranch},
+		{name: "39-hex resolved commit rejects", entry: shortCommit, wantErr: true},
+		{name: "41-hex resolved commit rejects", entry: longCommit, wantErr: true},
+		{name: "63-hex resolved commit rejects", entry: short256Commit, wantErr: true},
+		{name: "65-hex resolved commit rejects", entry: long256Commit, wantErr: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			path := RegistryPath(t.TempDir())
+
+			if err := os.WriteFile(path, []byte(envelopeJSON("./x", tc.entry)), 0o600); err != nil {
+				t.Fatalf("fixture: %v", err)
+			}
+
+			reg, err := LoadRegistry(path)
+			if tc.wantErr {
+				if !errors.Is(err, ErrInvalidRecord) {
+					t.Fatalf("err = %v, want ErrInvalidRecord", err)
+				}
+
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("LoadRegistry: %v", err)
+			}
+
+			entry, err := reg.Lookup("./x")
+			if err != nil {
+				t.Fatalf("Lookup: %v", err)
+			}
+
+			if entry.RefKind != tc.wantKind {
+				t.Fatalf("ref_kind = %q, want %q", entry.RefKind, tc.wantKind)
 			}
 		})
 	}

@@ -78,6 +78,77 @@ func (f slashedRefFetcher) Resolve(_ context.Context, source SourceRef) (Resolut
 	return Resolution{Commit: sha, Ref: actualRef, Subpath: actualPath}, nil
 }
 
+// TestFetchRecordsRefKind proves the D15 pinning rule at fetch time: the
+// entry stores how the reference resolved, so floating branches advance
+// via update while tags and commit pins report without fetching.
+func TestFetchRecordsRefKind(t *testing.T) {
+	t.Parallel()
+
+	shaPin := strings.Repeat("e", 40)
+
+	f := &fakeFetcher{
+		commits: map[string]string{
+			"19.0":   testCommitA,
+			"v19.0":  testCommitB,
+			shaPin:   testCommitA,
+			"19.0.x": testCommitB,
+		},
+		files: map[string]map[string]string{
+			testCommitA: {"a.txt": "alpha"},
+			testCommitB: {"a.txt": "beta"},
+		},
+		kinds: map[string]RefKind{"v19.0": RefKindTag, shaPin: RefKindCommit, "19.0.x": RefKindBranch},
+	}
+
+	cases := []struct {
+		name     string
+		ref      string
+		wantKind RefKind
+	}{
+		{name: "branch floats", ref: "19.0", wantKind: RefKindBranch},
+		{name: "tag pins", ref: "v19.0", wantKind: RefKindTag},
+		{name: "commit pins", ref: shaPin, wantKind: RefKindCommit},
+		{name: "kinded ref without scripted kind defaults by shape", ref: "19.0.x", wantKind: RefKindBranch},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			src := testSource()
+			src.Ref = tc.ref
+			src.SourceURL = "https://github.com/OCA/server-tools/tree/" + tc.ref + "/auto_backup"
+
+			registry, target := fetchRun(t, "co-"+strings.ToLower(tc.name[:4]))
+
+			if _, err := Fetch(
+				context.Background(), FetchOptions{Fetcher: f, RegistryPath: registry}, src, target,
+			); err != nil {
+				t.Fatalf("Fetch: %v", err)
+			}
+
+			reg, err := LoadRegistry(registry)
+			if err != nil {
+				t.Fatalf("LoadRegistry: %v", err)
+			}
+
+			key, err := KeyFor(registry, target)
+			if err != nil {
+				t.Fatalf("KeyFor: %v", err)
+			}
+
+			entry, err := reg.Lookup(key)
+			if err != nil {
+				t.Fatalf("Lookup: %v", err)
+			}
+
+			if entry.RefKind != tc.wantKind {
+				t.Fatalf("ref_kind = %q, want %q", entry.RefKind, tc.wantKind)
+			}
+		})
+	}
+}
+
 func TestFetchSuccess(t *testing.T) {
 	t.Parallel()
 

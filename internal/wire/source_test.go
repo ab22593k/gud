@@ -133,11 +133,18 @@ func TestParseSourceURLRejectsRepositoryRoot(t *testing.T) {
 func TestIsPinnedSHA(t *testing.T) {
 	t.Parallel()
 
-	if !IsPinnedSHA(strings.Repeat("a", 40)) {
-		t.Fatal("40-hex should pin")
+	for _, ref := range []string{strings.Repeat("a", 40), strings.Repeat("b", 64), strings.Repeat("A", 64)} {
+		if !IsPinnedSHA(ref) {
+			t.Fatalf("%d-hex %q should pin", len(ref), ref[:8])
+		}
 	}
 
-	for _, ref := range []string{"main", "19.0", strings.Repeat("a", 39), strings.Repeat("z", 40), ""} {
+	for _, ref := range []string{
+		"main", "19.0", "",
+		strings.Repeat("a", 39), strings.Repeat("a", 41),
+		strings.Repeat("b", 63), strings.Repeat("b", 65),
+		strings.Repeat("z", 40), strings.Repeat("z", 64),
+	} {
 		if IsPinnedSHA(ref) {
 			t.Fatalf("ref %q should not pin", ref)
 		}

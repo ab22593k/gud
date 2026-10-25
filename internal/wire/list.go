@@ -143,8 +143,10 @@ func hashAll(dirs []string) []hashResult {
 }
 
 // describeHashed derives one entry's state from its precomputed hash,
-// skipping the remote resolution when local divergence already decides it. A
-// missing target directory reports diverged without resolving.
+// skipping the remote resolution when local divergence already decides it.
+// Pinned entries (tag, commit) resolve locally only: with a hash match
+// they are current and a remote tip can never make them behind. A missing
+// target directory reports diverged without resolving.
 func describeHashed(
 	ctx context.Context, fetcher Fetcher, dir string, entry RegistryEntry, h hashResult,
 ) (Entry, error) {
@@ -154,6 +156,10 @@ func describeHashed(
 
 	if h.missing {
 		return Entry{Dir: dir, Entry: entry, State: StateDiverged}, nil
+	}
+
+	if entry.RefKind == RefKindTag || entry.RefKind == RefKindCommit {
+		return Entry{Dir: dir, Entry: entry, State: describePinned(dir, entry, h.live, fetcher)}, nil
 	}
 
 	if h.live != entry.ExportHash {
