@@ -18,7 +18,7 @@ git message                          Generate a commit message from staged chang
 git message --detail-level detailed  More verbose commit messages
 git message --no-assisted-by        Omit the Assisted-by trailer
 git message --issue 123,456          Reference fixed issues (adds "Fixes: #123" trailer per issue)
-git message --amend                  Regenerate the HEAD message
+git message --amend                  Regenerate the previous commit message
 git message --amend HEAD~2           Regenerate only the HEAD~2 message
 git message hook install             Install git prepare-commit-msg hook
 git wire <url> -t <dir>  Fetch one subfolder (tracked for updates)

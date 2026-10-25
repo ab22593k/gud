@@ -16,7 +16,7 @@ import (
 )
 
 // amendHeadRev is the default amend target for a bare --amend.
-const amendHeadRev = "HEAD"
+const amendHeadRev = "HEAD~1"
 
 // amendFlag is the amend flag in --flag form, shared by registration,
 // arg normalization, and tests.
@@ -24,7 +24,7 @@ const amendFlag = "--amend"
 
 // amendTarget reads the --amend flag and positional args. The second return
 // reports whether amend mode was requested. Forms supported:
-// --amend (bare) → HEAD; --amend HEAD~2 (space) → HEAD~2 via positional;
+// --amend (bare) → HEAD~1; --amend HEAD~2 (space) → HEAD~2 via positional;
 // --amend=HEAD~2 → HEAD~2 (explicit value always wins, except an explicit
 // =HEAD combined with a positional, which resolves the positional — the
 // review loop always prints the resolved SHA before acting).

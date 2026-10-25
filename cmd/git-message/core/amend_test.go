@@ -24,10 +24,10 @@ func TestAmendTarget(t *testing.T) {
 		wantAmend  bool
 	}{
 		{"unset", []string{}, nil, "", false},
-		{"bare flag means HEAD", []string{amendFlag}, nil, "HEAD", true},
+		{"bare flag means HEAD~1", []string{amendFlag}, nil, "HEAD~1", true},
 		{"space form", []string{amendFlag}, []string{"HEAD~2"}, "HEAD~2", true},
 		{"equals form", []string{amendFlag + "=HEAD~2"}, nil, "HEAD~2", true},
-		{"explicit value wins over positional", []string{amendFlag + "=HEAD~1"}, []string{"HEAD~2"}, "HEAD~1", true},
+		{"explicit value wins over positional", []string{amendFlag + "=HEAD"}, []string{"HEAD~2"}, "HEAD", true},
 		{"sha rev", []string{amendFlag + "=abc1234"}, nil, "abc1234", true},
 	}
 

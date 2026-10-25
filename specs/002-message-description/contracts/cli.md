@@ -44,7 +44,7 @@ treat a file containing only git's comment template as empty.
 | `--model`          | string       | built-in default | Model identity recorded in the `Assisted-by` trailer                                               | FR-016 |
 | `--no-assisted-by` | bool         | `false`          | Suppress the `Assisted-by` trailer; accepted with no value                                         | FR-037 |
 | `--wrapline`       | int          | `72`             | Target line width in display cells; clamped to the supported range, never failing                  | FR-013 |
-| `--amend [rev]`    | string       | `HEAD`           | Regenerate one existing commit from its own change only                                            | FR-029 |
+| `--amend [rev]`    | string       | `HEAD~1`         | Regenerate one existing commit from its own change only                                            | FR-029 |
 
 **Help-text rule**: every documented flag MUST match `--help`. The verbosity review on
 2026-10-15 confirmed `--detail-level` is the only registered spelling
