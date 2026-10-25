@@ -128,7 +128,7 @@ still refuses; `--force` discards).
 
 | Symptom                                  | Likely cause                                                    | Check                                                                    |
 | ---------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `unknown ref` on a slashed branch        | v1 greedy ref parse (D3)                                        | use the first-segment ref form or wait for `--ref` support               |
+| `unknown ref` on a slashed branch        | no known remote ref is a prefix of the URL path (e.g. typo) | check branch/tag spelling; slashed refs resolve by longest match (spec FR-003a) |
 | `unreachable` for a private repo         | git credentials absent                                          | `git ls-remote <repo-url>` manually; tool reuses env git auth            |
 | Slow first fetch, fast repeats           | expected: mirror warms once (blobless), then SHA-compare no-ops | `GUD_LOG_LEVEL=debug` shows memo hits and skipped exports                |
 | Stale worktrees under cache `worktrees/` | killed run skipped removal                                      | `git -C <mirror> worktree prune`; next fetch/update prunes automatically |

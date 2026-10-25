@@ -18,8 +18,8 @@ validation rule below is table-testable without network or git.
 | `Host`      | string | Lowercased hostname, e.g. `github.com`. Must be non-empty, no port, no userinfo                                                                |
 | `Owner`     | string | Single path segment. Must be non-empty; reject `.`, `..`, leading `-`, control chars, `/`                                                      |
 | `Repo`      | string | Single path segment; trailing `.git` suffix stripped. Same segment rules as `Owner`                                                            |
-| `Ref`       | string | First segment after `/tree/`, e.g. `19.0`. Non-empty; reject `..`, leading `-`, control chars, whitespace                                      |
-| `Subpath`   | string | Remaining path joined with `/`, e.g. `auto_backup`. Non-empty; no absolute form, no `..` elements, no empty elements, no trailing slash stored |
+| `Ref`       | string | Greedy first segment after `/tree/`, e.g. `19.0` (or `release` in `.../tree/release/v1.0/...`). Non-empty; reject `..`, leading `-`, control chars, whitespace. Disambiguated to the longest matching remote ref at fetch time (FR-003a) — the *stored* ref below is the resolved one, not this greedy value |
+| `Subpath`   | string | Greedy remaining path joined with `/`, e.g. `auto_backup` (or `v1.0/pkg/util`). Non-empty; no absolute form, no `..` elements, no empty elements, no trailing slash stored. Re-split against the resolved ref at fetch time (FR-003a) |
 | `SourceURL` | string | Original URL verbatim (normalized: trimmed whitespace, default `https` scheme handling per contract)                                           |
 
 Relationships: one `SourceRef` ↔ zero-or-more checkouts (same repo+ref may
@@ -48,7 +48,7 @@ Entry fields (byte-identical to the retired per-checkout record):
 | Field                                         | Type    | Rules                                                                                                                           |
 | --------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | `source_url`                                  | string  | Verbatim URL as given at fetch                                                                                                  |
-| `host` / `owner` / `repo` / `ref` / `subpath` | strings | Denormalized from `SourceRef` so update/list never re-parse                                                                     |
+| `host` / `owner` / `repo` / `ref` / `subpath` | strings | Denormalized from the **resolved** source (FR-003a): `ref`/`subpath` are the longest-match split against the remote ref listing, not the greedy first-segment parse, so update/list never re-parse and never re-list refs |
 | `resolved_commit`                             | string  | Full 40-hex SHA the ref resolved to at last fetch/update. Lowercase hex, length 40                                              |
 | `export_hash`                                 | string  | `content_sha` aggregate (hex SHA-256) of exactly what was written to the target; recomputed on update for divergence check (D4) |
 | `fetched_at` / `updated_at`                   | strings | RFC 3339 timestamps (informational; never used for freshness — SHAs decide)                                                     |

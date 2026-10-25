@@ -192,3 +192,40 @@ Single implementer recommended (shared `internal/wire` files across stories); a 
 
 - [x] T027 Detect already-up-to-date on re-fetch and skip re-download/rewrite per FR-008 (missing)
 - [x] T028 Report file-instead-of-folder subpaths as ErrMissingPath with parsed identity echoed per FR-011 (partial)
+
+---
+
+## Phase 8: Convergence — Slashed-Ref Disambiguation (FR-003a, amendment 2026-10-25)
+
+**Purpose**: Close the spec amendment applied by `/speckit.specify` 2026-10-25. FR-003a and the
+spec's US1 scenario 6, Edge Cases entry, and Assumptions line 308 require: (1) slashed refs
+are disambiguated by **longest match against the remote's live ref listing** (no flag
+override, slashes allowed); (2) a full 40-hex commit ref needs no listing (verified directly);
+(3) the registry stores the **resolved** ref, not the greedy first URL segment; (4) offline
+behavior falls under FR-012. The implementation already ships `ResolveRef` (longest-match,
+`internal/wire/source.go`), `resolveNamed` (LsRemote → `shortRefs` → `ResolveRef`,
+`internal/wire/gitfetch.go`), `IsPinnedSHA` fast path, and `fetchFresh`/`fetchTracked` writing
+`resolved.Ref = res.Ref` into the registry. Unit-level coverage exists (`TestResolveRef`
+"slashed branch wins longest", `TestShortRefs`, `TestIsPinnedSHA`, `TestFetchUnknownRef`).
+The gaps this round closes: no **end-to-end** fixture test through the real `gitFetcher` for a
+slashed branch, no explicit registry-resolved-ref assertion, and two artifacts that still
+contradict FR-003a (quickstart troubleshooting row, data-model/contract wording).
+
+### Tests (red-first per constitution Principle II)
+
+> **NOTE**: T029 is the one net-new behavioral test; T030 is an assertion alongside existing
+> registry behavior. Write the test first, confirm it FAILS against the current code (currently
+> the fixture has no slashed branch, so resolveNamed is never exercised end-to-end), then
+> implement or extend the fixture.
+
+- [x] T029 [P] [US1] Add an end-to-end slashed-ref resolution test to `internal/wire/gitfetch_test.go`: seed a local remote (extend the `seedWireMirror`/`mustInitFixture` pattern) with branches `main` and `release/v1.0`, where `release/v1.0` holds `pkg/util/tool.go`; resolve `SourceRef{Host: "example.com", Owner: "o", Repo: "r", Ref: "release", Subpath: "v1.0/pkg/util"}` through the real fetcher and assert `Resolution{Ref: "release/v1.0", Subpath: "pkg/util"}` with the `release/v1.0` commit; add a competing case where a shorter branch `release` also exists and assert the longest match (`release/v1.0`) wins; assert `ErrUnknownRef` when no known ref is a prefix. Skip in short mode like the neighbouring temp-repo tests. ✅ green: exposed a real `peelRef` defect (mirror refs under `refs/remotes/origin/` were dropped, so resolveNamed failed; fixed in `internal/wire/gitfetch.go` with `remoteTrackingPrefix` + HEAD-symref skip)
+- [x] T030 [US1] Add/extend a registry assertion that a fetch with a slashed source records the **resolved** ref: in `internal/wire/fetch_test.go`, drive `Fetch` with a fakeFetcher whose `Resolve` performs longest-match (or a fixture with a `release/v1.0` branch) from `SourceRef{Ref: "release", Subpath: "v1.0/pkg/util"}`, then assert the upserted registry entry has `Ref == "release/v1.0"` and `Subpath == "pkg/util"` (not the greedy first segment), and `ResolvedCommit` is the resolved SHA (spec Assumptions line 308; FR-003a(3)). ✅ green via `slashedRefFetcher` (ResolveRef over a canned list, delegating Materialize to the embedded fake); zero deletions to existing assertions
+
+### Implementation (documentation conformance — FR-003a texts)
+
+- [x] T031 [US1] Conform `specs/001-git-wire-fetch/quickstart.md` troubleshooting row to FR-003a: the row "`unknown ref` on a slashed branch … use the first-segment ref form or wait for `--ref` support" contradicts the amendment (slashes in ref names are supported and disambiguated by longest-match against the remote; no flag exists or is planned). Rewrite the row and its Check column to describe the FR-003a behavior and point at the spec amendment; keep the `git ls-remote` private-repo row unchanged.
+- [x] T032 [P] Align `specs/001-git-wire-fetch/data-model.md` §1/§2 and `specs/001-git-wire-fetch/contracts/cli.md` with FR-003a: (a) annotate the registry-entry `ref`/`subpath` fields (data-model §2 entry rows) that they store the **resolved** longest-match ref, not the first URL segment; (b) add one sentence to `contracts/cli.md` (Commands → fetch/URL shape or Non-goals) stating slashed refs are supported and resolved by longest-match against the remote ref listing, and that no `--ref` override is provided. Do not add any new flag or surface.
+- [x] T033 [US1] Gate run for the amendment from repo root: `gofmt -l` on changed files, `go test ./... ./internal/git/... ./internal/request/...` (including the new T029/T030 tests), `golangci-lint run`, `git diff --check`. All green. Run `go run ./cmd/git-wire --help` to confirm no flag surface changed. ✅ full workspace suite green; gofmt clean; diff clean; help smoke confirms no new flags; lint shows only pre-existing findings (verified via stash baseline — the one new lll was fixed)
+- [x] T034 [P] Optional live validation with `RUN_GITWIRE_INTEGRATION=1` per `specs/001-git-wire-fetch/quickstart.md` §3/§7 against a public repo URL whose ref contains a slash (fallback: the T029 fixture is the deterministic proof if no stable public slashed-branch URL is available; record which was used and the observed success line echoing the resolved ref, e.g. `@release/v1.0:pkg/util`). ✅ live run 2026-10-26: `git wire https://github.com/github/gitignore/tree/copilot/research-github-gitignore-repository/Global -t ./copilotprobe` → `Fetched github.com/github/gitignore@copilot/research-github-gitignore-repository:Global at 1046d8f into /tmp/wirelive/copilotprobe (75 files).` Registry entry ref=`copilot/research-github-gitignore-repository`, subpath=`Global`, commit `1046d8f` (matches ls-remote). Caveat: copilot/* branches are ephemeral — T029 stays the durable proof.
+
+**Checkpoint**: FR-003a is closed — slashed refs resolve deterministically (T029), the registry proves the resolved ref (T030), and every artifact agrees with the amended spec (T031, T032, T033).

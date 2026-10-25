@@ -3,6 +3,7 @@ package wire
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -52,6 +53,29 @@ func fetchWithRegistry(t *testing.T, f *fakeFetcher, registry, target string) st
 	}
 
 	return summary
+}
+
+// slashedRefFetcher scripts longest-match disambiguation (FR-003a) the way
+// the real gitFetcher performs it: it resolves the greedy source against a
+// canned known-ref list via ResolveRef, then serves files for the winning
+// commit from the embedded fake.
+type slashedRefFetcher struct {
+	known []string
+	*fakeFetcher
+}
+
+func (f slashedRefFetcher) Resolve(_ context.Context, source SourceRef) (Resolution, error) {
+	actualRef, actualPath, ok := ResolveRef(f.known, source.Ref, source.Subpath)
+	if !ok {
+		return Resolution{}, fmt.Errorf("ref %q: %w", source.Ref, ErrUnknownRef)
+	}
+
+	sha, ok := f.commits[actualRef]
+	if !ok {
+		return Resolution{}, fmt.Errorf("ref %q: %w", source.Ref, ErrUnknownRef)
+	}
+
+	return Resolution{Commit: sha, Ref: actualRef, Subpath: actualPath}, nil
 }
 
 func TestFetchSuccess(t *testing.T) {
@@ -105,6 +129,59 @@ func TestFetchSuccess(t *testing.T) {
 
 	if entry.ExportHash != live {
 		t.Fatal("entry hash does not match checkout")
+	}
+}
+
+// TestFetchRecordsResolvedSlashedRef proves FR-003a(3): when the URL's ref
+// contains slashes, the registry stores the longest-match resolved ref
+// (release/v1.0), not the greedy first URL segment (release).
+func TestFetchRecordsResolvedSlashedRef(t *testing.T) {
+	t.Parallel()
+
+	registry, target := fetchRun(t, "util")
+
+	fetcher := slashedRefFetcher{
+		known: []string{"main", "release", "release/v1.0"},
+		fakeFetcher: &fakeFetcher{
+			commits: map[string]string{"release/v1.0": testCommitA},
+			files:   map[string]map[string]string{testCommitA: {"tool.go": "package util"}},
+		},
+	}
+
+	source := SourceRef{
+		Host:      "github.com",
+		Owner:     "o",
+		Repo:      "r",
+		Ref:       "release",
+		Subpath:   "v1.0/pkg/util",
+		SourceURL: "https://github.com/o/r/tree/release/v1.0/pkg/util",
+	}
+
+	if _, err := Fetch(
+		context.Background(),
+		FetchOptions{Fetcher: fetcher, RegistryPath: registry},
+		source,
+		target,
+	); err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+
+	reg, err := LoadRegistry(registry)
+	if err != nil {
+		t.Fatalf("LoadRegistry: %v", err)
+	}
+
+	entry, err := reg.Lookup("./util")
+	if err != nil {
+		t.Fatalf("Lookup: %v", err)
+	}
+
+	if entry.Ref != "release/v1.0" || entry.Subpath != "pkg/util" {
+		t.Fatalf("got (%q,%q), want (%q,%q)", entry.Ref, entry.Subpath, "release/v1.0", "pkg/util")
+	}
+
+	if entry.ResolvedCommit != testCommitA {
+		t.Fatalf("commit = %q, want %q", entry.ResolvedCommit, testCommitA)
 	}
 }
 

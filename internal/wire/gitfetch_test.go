@@ -62,6 +62,95 @@ func seedWireMirror(t *testing.T) (*Store, string) {
 	return store, localHead(t, remote)
 }
 
+// seedSlashedRemote builds a local remote with branches main and
+// release/v1.0, where release/v1.0 holds pkg/util/tool.go. Local git only:
+// deterministic, no network.
+func seedSlashedRemote(t *testing.T) (*Store, map[string]string) {
+	t.Helper()
+
+	remote := t.TempDir() + "/remote"
+	mustInitFixture(t, remote)
+
+	// Create the slashed branch with its own subfolder, then return to main
+	// so the default HEAD is unaffected.
+	gitOut(t, remote, "checkout", "-b", "release/v1.0")
+
+	util := filepath.Join(remote, "pkg", "util")
+
+	if err := os.MkdirAll(util, 0o750); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(util, "tool.go"), []byte("package util"), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	gitOut(t, remote, "add", ".")
+	gitOut(t, remote, "commit", "-m", "slashed branch")
+
+	slashed := gitOut(t, remote, "rev-parse", "HEAD")
+
+	gitOut(t, remote, "checkout", "main")
+
+	store, err := NewStoreWithDir(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStoreWithDir: %v", err)
+	}
+
+	if err := localClone(t, remote, store.MirrorDir("example.com", "o", "r")); err != nil {
+		t.Fatalf("seed mirror: %v", err)
+	}
+
+	return store, map[string]string{"main": localHead(t, remote), "release/v1.0": slashed}
+}
+
+// TestGitFetcherResolveSlashedRef proves FR-003a: a greedy URL split of
+// .../tree/release/v1.0/pkg/util resolves against the remote's live ref
+// listing, choosing the longest known ref (release/v1.0) and leaving the
+// remainder as the subpath.
+func TestGitFetcherResolveSlashedRef(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping temp-repo test in short mode")
+	}
+
+	ctx := context.Background()
+	store, commits := seedSlashedRemote(t)
+	fetcher := mustFetcher(t, store)
+
+	source := func(ref, subpath string) SourceRef {
+		return SourceRef{Host: "example.com", Owner: "o", Repo: "r", Ref: ref, Subpath: subpath}
+	}
+
+	for _, tc := range []struct {
+		name    string
+		source  SourceRef
+		wantRef string
+		wantSub string
+	}{
+		{name: "slashed branch", source: source("release", "v1.0/pkg/util"), wantRef: "release/v1.0", wantSub: "pkg/util"},
+		{name: "plain branch", source: source("main", "auto_backup"), wantRef: "main", wantSub: "auto_backup"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			res, err := fetcher.Resolve(ctx, tc.source)
+			if err != nil {
+				t.Fatalf("Resolve: %v", err)
+			}
+
+			if res.Ref != tc.wantRef || res.Subpath != tc.wantSub {
+				t.Fatalf("got (%q,%q), want (%q,%q)", res.Ref, res.Subpath, tc.wantRef, tc.wantSub)
+			}
+
+			if res.Commit != commits[tc.wantRef] {
+				t.Fatalf("commit = %q, want %q", res.Commit, commits[tc.wantRef])
+			}
+		})
+	}
+
+	if _, err := fetcher.Resolve(ctx, source("nope", "v1.0/pkg/util")); !errors.Is(err, ErrUnknownRef) {
+		t.Fatalf("err = %v, want ErrUnknownRef", err)
+	}
+}
+
 func TestGitFetcherResolveFileSubpath(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping temp-repo test in short mode")

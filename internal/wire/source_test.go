@@ -109,7 +109,7 @@ func TestIsPinnedSHA(t *testing.T) {
 func TestResolveRef(t *testing.T) {
 	t.Parallel()
 
-	known := []string{"main", "feature/foo", "19.0"}
+	known := []string{"main", "feature/foo", "release", "release/v1.0", "19.0"}
 
 	cases := []struct {
 		name     string
@@ -121,12 +121,16 @@ func TestResolveRef(t *testing.T) {
 	}{
 		{name: "plain branch", ref: "main", subpath: "p", wantRef: "main", wantPath: "p", wantOK: true},
 		{
-			name: "slashed branch wins longest", ref: "feature", subpath: "foo/bar",
-			wantRef: "feature/foo", wantPath: "bar", wantOK: true,
+			name: "longest match wins over shorter branch", ref: "release", subpath: "v1.0/pkg/util",
+			wantRef: "release/v1.0", wantPath: "pkg/util", wantOK: true,
 		},
 		{name: "exact tag", ref: "19.0", subpath: "auto_backup", wantRef: "19.0", wantPath: "auto_backup", wantOK: true},
-		{name: "unknown", ref: "nope", subpath: "p", wantOK: false},
+		{name: "unknown ref is ErrUnknownRef", ref: "nope", subpath: "p", wantOK: false},
 		{name: "root remainder", ref: "main", subpath: "", wantRef: "main", wantPath: "", wantOK: true},
+		{
+			name: "exact slashed ref, empty remainder", ref: "feature", subpath: "foo",
+			wantRef: "feature/foo", wantPath: "", wantOK: true,
+		},
 	}
 
 	for _, tc := range cases {

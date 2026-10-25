@@ -63,6 +63,13 @@ the run-level registry.
    folder path), **When** the user runs the command, **Then** the command fails
    with a user-friendly error explaining the expected URL shape and no partial
    contents are left as a successful result.
+6. **Given** a URL whose reference contains slashes (e.g.
+   `.../tree/release/v1.0/pkg/util` where the branch is `release/v1.0` and
+   the folder is `pkg/util`), **When** the user runs the fetch command,
+   **Then** the command resolves the longest prefix matching a live remote
+   branch/tag as the reference and fetches that folder; the success message
+   echoes the resolved reference (`release/v1.0`) and subfolder path
+   (`pkg/util`) so the split is visible.
 
 ---
 
@@ -147,6 +154,15 @@ observing a fast no-op with bounded cache size.
 - What happens when the URL names a file instead of a folder, or the branch
   reference does not exist? The command rejects it as "not a fetchable folder"
   with the parsed owner/repository/reference/path echoed back.
+- What happens when the reference in the URL contains slashes (e.g.
+  `.../tree/release/v1.0/pkg/util`)? Static parsing alone cannot tell whether
+  the ref is `release` and the path is `v1.0/pkg/util`, or the ref is
+  `release/v1.0` and the path is `pkg/util`. The command MUST query the
+  remote's live ref listing and treat the longest matching known branch/tag
+  name as the reference (see FR-003a). When no known ref is a prefix of the
+  URL path, it reports an unknown-reference error; when the longest match
+  leaves no remaining subfolder path, it reports a not-a-fetchable-folder
+  error. Slashes in ref names are therefore supported with no extra flag.
 - What happens when the upstream folder is very large (many files or large
   total size)? The command shows progress, fetches incrementally, and never
   requires downloading the full repository to obtain the folder.
@@ -179,6 +195,15 @@ message` command tree MUST NOT carry git-wire subcommands; the two
   reference (branch, tag, or commit), and subfolder path components, and MUST
   reject URLs from which those three cannot be determined with an error that
   shows the expected shape.
+- **FR-003a**: The system MUST resolve ambiguous references containing slashes
+  by querying the remote's live ref listing and choosing the longest prefix
+  that matches a known branch or tag name as the reference (e.g. in
+  `.../tree/release/v1.0/pkg/util`, if `release/v1.0` exists remotely the
+  reference is `release/v1.0` and the subfolder path is `pkg/util`). A
+  full 40-hex commit reference needs no listing and is verified directly. The
+  system MUST NOT disallow slashes in ref names and MUST NOT require a flag
+  override for them. Behavior when offline follows FR-012 (the listing fetch
+  fails as an unreachable-remote error, leaving local state intact).
 - **FR-004**: The system MUST download only the requested subfolder's contents
   into the target path; it MUST NOT require or retain a full working copy of
   the repository to satisfy the fetch.
@@ -279,6 +304,8 @@ message` command tree MUST NOT carry git-wire subcommands; the two
 - The reference in the URL is treated as given (floating branch follows the
   branch; pinned tag/commit stays pinned); the registry entry additionally
   stores the resolved commit when cheaply known so status can detect staleness.
+  When the URL's reference contains slashes, the reference stored is the
+  resolved longest-matching remote ref (FR-003a), not the first URL segment.
 - Tracking state lives in a single `.git-wire.json` registry file in the
   directory the command runs in, with one entry per target folder; fetched
   folders hold contents only. Renaming or moving a target orphans its

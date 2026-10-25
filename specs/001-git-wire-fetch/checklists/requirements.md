@@ -36,3 +36,10 @@
   shape, colocated tracking record, sibling update/list operations) recorded as
   explicit Assumptions. CLI surface (`git-wire`, `-t/--target-path`) is
   user-facing contract, not implementation detail. No spec rework required.
+- Amendment 2026-10-25 (slashed-ref disambiguation, FR-003a): re-validated, all
+  items still pass. The gap (static slash-splitting cannot split
+  `release/v1.0/pkg/util` into ref vs. path) is closed by mandating longest-match
+  resolution against the remote's live ref listing; no new flag, no ref-name
+  restriction. User Story 1 scenario 6, the Edge Cases entry, and the registry
+  assumption cover the new requirement. Matches implemented behavior
+  (`ResolveRef` longest-match + pinned-SHA fast path) and research D3.

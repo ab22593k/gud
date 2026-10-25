@@ -263,14 +263,29 @@ func shortRefs(refs map[string]string) (known []string, commits map[string]strin
 // peelRef strips refs/heads/ or refs/tags/ prefixes, reporting peeled
 // annotated tags separately so their commit SHA wins over the tag object.
 func peelRef(full string) (string, bool) {
-	for _, prefix := range []string{"refs/heads/", "refs/tags/"} {
-		if rest, ok := strings.CutPrefix(full, prefix); ok {
-			return strings.CutSuffix(rest, "^{}")
+	for _, prefix := range []string{"refs/heads/", "refs/tags/", remoteTrackingPrefix} {
+		rest, ok := strings.CutPrefix(full, prefix)
+		if !ok {
+			continue
 		}
+
+		// Remote-tracking HEAD symrefs (refs/remotes/origin/HEAD) are not
+		// branches or tags; the bare HEAD entry covers the default branch.
+		if rest == "HEAD" {
+			return "", false
+		}
+
+		return strings.CutSuffix(rest, "^{}")
 	}
 
 	return "", false
 }
+
+// remoteTrackingPrefix matches the ref namespace of a cloned mirror,
+// whose branches are only visible as remote-tracking refs. LsRemote runs
+// against the mirror, not the upstream URL, so without this prefix the
+// longest-match table would be empty for every named ref (FR-003a).
+const remoteTrackingPrefix = "refs/remotes/origin/"
 
 // upstream wraps a transport failure as ErrUpstream, preserving detail.
 // Both the operation context and the sentinel stay in the errors.Is chain.

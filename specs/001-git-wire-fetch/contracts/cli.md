@@ -17,7 +17,10 @@ not promised here).
 
 - `<url>`: required positional, one argument. Supported shape:
   `https://{host}/{owner}/{repo}/tree/{ref}/{subpath...}` (also tolerates a
-  trailing slash and an optional `.git` on the repo segment).
+  trailing slash and an optional `.git` on the repo segment). Refs containing
+  slashes (e.g. a branch `release/v1.0`) are supported: the command queries
+  the remote's live ref listing and treats the longest matching branch/tag
+  name as the reference (spec FR-003a); no `--ref` override flag is provided.
 - `-t, --target-path <dir>`: destination path. Default: `./<subpath-basename>`.
   Created (with parents) when absent.
 - `-n, --target-name <name>`: bare folder name for a folder that does not
