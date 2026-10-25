@@ -106,7 +106,10 @@ func fetchWith(cmd *cobra.Command, args []string, fetcher wire.Fetcher) error {
 	}
 
 	if source.Subpath == "" {
-		return wireError(fmt.Errorf("parse %q: %w", args[0], wire.ErrBadURL))
+		return wireError(fmt.Errorf(
+			"parse %q: %w: %s; pass --subfolder <path> to name one",
+			args[0], wire.ErrBadURL, wire.WholeRepositoryGuidance,
+		))
 	}
 
 	target, err := targetFromFlags(cmd, source)

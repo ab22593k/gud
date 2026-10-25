@@ -129,3 +129,81 @@ func TestFetchWithSubfolderRejectsUnsafePath(t *testing.T) {
 		t.Fatalf("err = %v, want ErrBadURL", err)
 	}
 }
+
+// TestFetchWithRepositoryRootURLRejected covers FR-003b end-to-end: the
+// refusal states that whole-repository fetch is unsupported, shows the
+// expected shape, and leaves no target or registry behind.
+func TestFetchWithRepositoryRootURLRejected(t *testing.T) {
+	for _, raw := range []string{
+		"https://github.com/owner/repo/tree/main",
+		"https://github.com/owner/repo/tree/main/",
+	} {
+		t.Run(raw, func(t *testing.T) {
+			run := t.TempDir()
+			t.Chdir(run)
+
+			fake := &subfolderFake{
+				commit:  strings.Repeat("a", 40),
+				refs:    map[string]bool{"main": true},
+				subpath: map[string]bool{"path/sub": true},
+			}
+
+			cmd, out := subfolderCmd(t, fake, raw, "-t", "out")
+
+			err := cmd.Execute()
+			if !errors.Is(err, wire.ErrBadURL) {
+				t.Fatalf("err = %v, want ErrBadURL", err)
+			}
+
+			for _, want := range []string{
+				"whole-repository fetch is not supported",
+				"expected shape:",
+			} {
+				if !strings.Contains(err.Error(), want) {
+					t.Fatalf("err = %q, want it to contain %q", err, want)
+				}
+			}
+
+			// Cobra echoes usage on error; the invariant is that no fetch
+			// success claim was printed.
+			if strings.Contains(out.String(), "Fetched") {
+				t.Fatalf("refused fetch claimed success: %q", out.String())
+			}
+
+			for _, leftover := range []string{"out", wire.RegistryPath(run)} {
+				if _, statErr := os.Stat(leftover); !errors.Is(statErr, os.ErrNotExist) {
+					t.Fatalf("refused fetch left %s behind (stat err = %v)", leftover, statErr)
+				}
+			}
+		})
+	}
+}
+
+// TestFetchWithRootURLSubfolderFlagDoesNotRescue proves FR-003c's no-override
+// rule: --subfolder applies only to reference-less repository URLs.
+func TestFetchWithRootURLSubfolderFlagDoesNotRescue(t *testing.T) {
+	run := t.TempDir()
+	t.Chdir(run)
+
+	fake := &subfolderFake{
+		commit:  strings.Repeat("a", 40),
+		refs:    map[string]bool{"main": true},
+		subpath: map[string]bool{"path/sub": true},
+	}
+
+	cmd, _ := subfolderCmd(t, fake,
+		"https://github.com/owner/repo/tree/main", "--subfolder", "path/sub", "-t", "out")
+
+	err := cmd.Execute()
+	if !errors.Is(err, wire.ErrBadURL) {
+		t.Fatalf("err = %v, want ErrBadURL", err)
+	}
+
+	if !strings.Contains(err.Error(), "whole-repository fetch is not supported") {
+		t.Fatalf("err = %q, want whole-repository guidance", err)
+	}
+
+	if _, statErr := os.Stat(filepath.Join(run, "out")); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("refused fetch left a target behind (stat err = %v)", statErr)
+	}
+}

@@ -226,7 +226,6 @@ func copyOneFile(src, dst string) error {
 
 	if _, err := io.Copy(out, in); err != nil {
 		cerr := out.Close()
-
 		if cerr != nil {
 			return errors.Join(fmt.Errorf("copy file: %w", err), fmt.Errorf("close file: %w", cerr))
 		}

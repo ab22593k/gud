@@ -13,14 +13,14 @@ tracking record excluding fetched contents).
 The identity of _what_ to fetch. Produced solely by `ParseSourceURL`; every
 validation rule below is table-testable without network or git.
 
-| Field       | Type   | Rules                                                                                                                                          |
-| ----------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Host`      | string | Lowercased hostname, e.g. `github.com`. Must be non-empty, no port, no userinfo                                                                |
-| `Owner`     | string | Single path segment. Must be non-empty; reject `.`, `..`, leading `-`, control chars, `/`                                                      |
-| `Repo`      | string | Single path segment; trailing `.git` suffix stripped. Same segment rules as `Owner`                                                            |
-| `Ref`       | string | Greedy first segment after `/tree/`, e.g. `19.0` (or `release` in `.../tree/release/v1.0/...`). Non-empty; reject `..`, leading `-`, control chars, whitespace. Disambiguated to the longest matching remote ref at fetch time (FR-003a) — the *stored* ref below is the resolved one, not this greedy value |
-| `Subpath`   | string | Greedy remaining path joined with `/`, e.g. `auto_backup` (or `v1.0/pkg/util`). Non-empty; no absolute form, no `..` elements, no empty elements, no trailing slash stored. Re-split against the resolved ref at fetch time (FR-003a) |
-| `SourceURL` | string | Original URL verbatim (normalized: trimmed whitespace, default `https` scheme handling per contract)                                           |
+| Field       | Type   | Rules                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ----------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Host`      | string | Lowercased hostname, e.g. `github.com`. Must be non-empty, no port, no userinfo                                                                                                                                                                                                                                                                                                                                                                   |
+| `Owner`     | string | Single path segment. Must be non-empty; reject `.`, `..`, leading `-`, control chars, `/`                                                                                                                                                                                                                                                                                                                                                         |
+| `Repo`      | string | Single path segment; trailing `.git` suffix stripped. Same segment rules as `Owner`                                                                                                                                                                                                                                                                                                                                                               |
+| `Ref`       | string | Greedy first segment after `/tree/`, e.g. `19.0` (or `release` in `.../tree/release/v1.0/...`). Non-empty; reject `..`, leading `-`, control chars, whitespace. Disambiguated to the longest matching remote ref at fetch time (FR-003a) — the _stored_ ref below is the resolved one, not this greedy value                                                                                                                                      |
+| `Subpath`   | string | Greedy remaining path joined with `/`, e.g. `auto_backup` (or `v1.0/pkg/util`). Non-empty; no absolute form, no `..` elements, no empty elements, no trailing slash stored; **depth unbounded** (FR-003c). An empty subpath is unrepresentable for a `/tree/` URL — `ParseSourceURL` returns `ErrBadURL` (FR-003b); `--subfolder` may fill it only for a reference-less repository URL. Re-split against the resolved ref at fetch time (FR-003a) |
+| `SourceURL` | string | Original URL verbatim (normalized: trimmed whitespace, default `https` scheme handling per contract)                                                                                                                                                                                                                                                                                                                                              |
 
 Relationships: one `SourceRef` ↔ zero-or-more checkouts (same repo+ref may
 back several targets; mirrors are shared per Owner/Repo — see `MirrorKey`).
@@ -28,6 +28,26 @@ back several targets; mirrors are shared per Owner/Repo — see `MirrorKey`).
 Canonical display: `{host}/{owner}/{repo}@{ref}:{subpath}` (used in list rows
 and errors; never includes credentials by construction — userinfo is rejected
 at parse).
+
+### Parse-time URL boundary outcomes (FR-003 / FR-003b / FR-003c)
+
+`ParseSourceURL` is pure: every row below is decided before `Fetcher.Resolve`,
+so a rejection creates no mirror, worktree, target, or registry entry.
+
+| Input                                         | Outcome                                                                                                                     |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `.../tree/main/auto_backup`                   | Accepted: `Ref=main`, `Subpath=auto_backup`                                                                                 |
+| `.../tree/main/auto_backup/`                  | Accepted: trailing slash normalized away (same result)                                                                      |
+| `.../tree/main/a/b/c/d/e`                     | Accepted: `Subpath=a/b/c/d/e`; no depth cap (FR-003c)                                                                       |
+| `.../tree/main`                               | `ErrBadURL`: 4 path segments, no subfolder (FR-003b)                                                                        |
+| `.../tree/main/`                              | `ErrBadURL`: same after slash trim (FR-003b)                                                                                |
+| `.../tree/main/` + `--subfolder x`            | `ErrBadURL`: parse fails before the flag is read; no override (FR-003c)                                                     |
+| `.../tree/release/v1.0/pkg/util`              | Greedy `Ref=release`; FR-003a longest match may yield `Ref=release/v1.0`, `Subpath=pkg/util`; empty remainder → `ErrBadURL` |
+| `{host}/{owner}/{repo}`                       | Accepted only with `--subfolder`: `Ref=HEAD`, `Subpath` from flag                                                           |
+| `{host}/{owner}/{repo}` without `--subfolder` | `ErrBadURL`: nothing names a folder                                                                                         |
+
+The empty-subpath rejection is the guard that keeps the mirror sparse: it is
+the single URL shape that would otherwise widen a fetch to the full tree.
 
 ## 2. Registry (run-level `.git-wire.json`, versioned envelope + entries)
 
@@ -45,13 +65,13 @@ Envelope:
 
 Entry fields (byte-identical to the retired per-checkout record):
 
-| Field                                         | Type    | Rules                                                                                                                           |
-| --------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `source_url`                                  | string  | Verbatim URL as given at fetch                                                                                                  |
+| Field                                         | Type    | Rules                                                                                                                                                                                                                     |
+| --------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `source_url`                                  | string  | Verbatim URL as given at fetch                                                                                                                                                                                            |
 | `host` / `owner` / `repo` / `ref` / `subpath` | strings | Denormalized from the **resolved** source (FR-003a): `ref`/`subpath` are the longest-match split against the remote ref listing, not the greedy first-segment parse, so update/list never re-parse and never re-list refs |
-| `resolved_commit`                             | string  | Full 40-hex SHA the ref resolved to at last fetch/update. Lowercase hex, length 40                                              |
-| `export_hash`                                 | string  | `content_sha` aggregate (hex SHA-256) of exactly what was written to the target; recomputed on update for divergence check (D4) |
-| `fetched_at` / `updated_at`                   | strings | RFC 3339 timestamps (informational; never used for freshness — SHAs decide)                                                     |
+| `resolved_commit`                             | string  | Full 40-hex SHA the ref resolved to at last fetch/update. Lowercase hex, length 40                                                                                                                                        |
+| `export_hash`                                 | string  | `content_sha` aggregate (hex SHA-256) of exactly what was written to the target; recomputed on update for divergence check (D4)                                                                                           |
+| `fetched_at` / `updated_at`                   | strings | RFC 3339 timestamps (informational; never used for freshness — SHAs decide)                                                                                                                                               |
 
 Validation on load: malformed JSON, missing `version`, bad keys, or entry
 violations (non-40-hex commit and friends) → invalid-record error naming
@@ -125,16 +145,16 @@ surface at `GUD_LOG_LEVEL=debug` only.
 
 ## 7. Failure taxonomy (sentinel errors — one mapping place, `errors.go`)
 
-| Sentinel            | Triggers                                  | User next action (in message)                                                                |
-| ------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `ErrBadURL`         | Unparseable/unsupported URL shape         | Show expected `{host}/{owner}/{repo}/tree/{ref}/{path}` shape with the received input echoed |
-| `ErrUnknownRef`     | Ref absent on remote                      | Name the ref; suggest checking branch/tag spelling                                           |
-| `ErrMissingPath`    | Ref exists, subpath absent (or is a file) | Echo parsed owner/repo/ref/path; distinguish file-vs-missing                                 |
-| `ErrTargetNotEmpty` | Fetch target non-empty & no `--force`     | State what was found; offer `--force` or `update`                                            |
-| `ErrNotACheckout`   | `update`/`list` on dir without record     | State the record filename; offer fetch with URL                                              |
-| `ErrInvalidRecord`  | Record corrupt/versioned-unknown          | Name file + specific problem; never guess                                                    |
-| `ErrDiverged`       | Local mods on update without `--force`    | Explain keep (`--force` discards) vs. back-up-first options                                  |
-| `ErrUpstream`       | Network/auth/rate-limit/host failure      | Label retryable; affirm local contents left intact                                           |
+| Sentinel            | Triggers                                                                                                                                   | User next action (in message)                                                                                                                                           |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ErrBadURL`         | Unparseable/unsupported URL shape; repository-root URL (empty subfolder, incl. trailing `/`); generic repository URL without `--subfolder` | Show expected `{host}/{owner}/{repo}/tree/{ref}/{path}` shape with the received input echoed; for the root case also state that whole-repository fetch is not supported |
+| `ErrUnknownRef`     | Ref absent on remote                                                                                                                       | Name the ref; suggest checking branch/tag spelling                                                                                                                      |
+| `ErrMissingPath`    | Ref exists, subpath absent (or is a file)                                                                                                  | Echo parsed owner/repo/ref/path; distinguish file-vs-missing                                                                                                            |
+| `ErrTargetNotEmpty` | Fetch target non-empty & no `--force`                                                                                                      | State what was found; offer `--force` or `update`                                                                                                                       |
+| `ErrNotACheckout`   | `update`/`list` on dir without record                                                                                                      | State the record filename; offer fetch with URL                                                                                                                         |
+| `ErrInvalidRecord`  | Record corrupt/versioned-unknown                                                                                                           | Name file + specific problem; never guess                                                                                                                               |
+| `ErrDiverged`       | Local mods on update without `--force`                                                                                                     | Explain keep (`--force` discards) vs. back-up-first options                                                                                                             |
+| `ErrUpstream`       | Network/auth/rate-limit/host failure                                                                                                       | Label retryable; affirm local contents left intact                                                                                                                      |
 
 All wrap with `%w` + operation context (`fetch <display>`, `update <dir>`,
 …); presentation maps sentinels to messages/exit codes in exactly one place

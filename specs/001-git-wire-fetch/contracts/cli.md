@@ -21,6 +21,15 @@ not promised here).
   slashes (e.g. a branch `release/v1.0`) are supported: the command queries
   the remote's live ref listing and treats the longest matching branch/tag
   name as the reference (spec FR-003a); no `--ref` override flag is provided.
+- Repository-root URLs are not fetchable: `.../tree/{ref}` and
+  `.../tree/{ref}/` end at the reference with no folder, so they fail as
+  `ErrBadURL` (exit 1) during parsing — before any network call, mirror,
+  target, or registry write — with a message that shows the expected shape
+  and states that whole-repository fetch is not supported (spec FR-003b).
+- Subfolder depth is unbounded: `.../tree/main/a/b/c/d/e` is valid and fetches
+  the whole subtree under `e`, never its ancestors or siblings (spec
+  FR-003c/FR-004). Depth alone changes neither the accepted inputs nor the
+  transfer scope.
 - `-t, --target-path <dir>`: destination path. Default: `./<subpath-basename>`.
   Created (with parents) when absent.
 - `-n, --target-name <name>`: bare folder name for a folder that does not
@@ -30,7 +39,9 @@ not promised here).
 - `--subfolder <path>`: subfolder path within the repository, used with a
   generic repository URL (`https://{host}/{owner}/{repo}`) that carries no
   `/tree/{ref}/...` segment. The reference defaults to the remote's default
-  branch.
+  branch. It is **not** an override for a `/tree/{ref}/` URL with no path:
+  parsing fails first, so adding the flag cannot rescue a root URL
+  (spec FR-003c).
 - `--force`: permit replacing a non-empty target. Without it, a non-empty
   target fails with `ErrTargetNotEmpty`.
 - Success output (stable key phrases, asserted by tests):

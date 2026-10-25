@@ -30,6 +30,12 @@ var (
 	ErrInternal = errors.New("wire: internal error")
 )
 
+// WholeRepositoryGuidance is the FR-003b refusal sentence. It is appended
+// only where the URL itself names the repository root — never to the shared
+// ErrBadURL mapping, whose other members (scheme, credentials, port) are
+// unrelated defects that must not be described as whole-repository requests.
+const WholeRepositoryGuidance = "whole-repository fetch is not supported"
+
 // NextAction returns the user-facing next step for a wire failure class.
 // It never returns empty; unknown errors yield generic guidance. The
 // registry-invalid case leads: entry validation re-roots parse defects at

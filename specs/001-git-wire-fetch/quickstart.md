@@ -35,9 +35,11 @@ go run ./cmd/git-wire update --help
 go run ./cmd/git-wire list --help
 ```
 
-Expected: each prints usage with the URL shape
+Expected: fetch help prints the URL shape
 `https://{host}/{owner}/{repo}/tree/{ref}/{path}`, the `-t/--target-path`
-flag, and one full example; wording says `git wire`, never `gud`.
+flag, and one full example; update and list print their own usage (update
+takes `-t/--target-path`, list takes a root); wording says `git wire`, never
+`gud`.
 
 ## 3. LIVE: fetch the spec's example (plus `-n` and dual-flag rule)
 
@@ -50,11 +52,17 @@ ls ./auto_backup
 cat .git-wire.json
 /tmp/git-wire https://github.com/OCA/server-tools/tree/19.0/auto_backup -n my_backup
 ls ./my_backup
+/tmp/git-wire https://github.com/OCA/server-tools/tree/19.0/auto_backup/models -t ./models_only
+ls ./models_only
 /tmp/git-wire https://github.com/OCA/server-tools/tree/19.0/auto_backup -t ./auto_backup -n my_backup; echo "exit=$?"
 ```
 
 Expected: each target holds only `auto_backup` contents (no full repo,
-no bookkeeping files inside targets — `ls -a` proves it); success lines
+no bookkeeping files inside targets — `ls -a` proves it); the nested fetch
+(`auto_backup/models`) lands that folder's subtree only — no `auto_backup/`
+parent and no sibling folders beside it (deeper paths, e.g. five segments,
+are covered by `go test ./internal/wire -run TestParseSourceURL` rather than
+by a live fixture); success lines
 `Fetched github.com/OCA/server-tools@19.0:auto_backup at <sha> into ...`;
 the registry validates against [tracking-record v1](contracts/tracking-record.md)
 with one entry per target, each under 10 KB; dual-flag run fails as a
@@ -102,6 +110,27 @@ offering `--force`. (3) `ErrDiverged` refusal, exit 1, upstream files
 untouched; with `--force`, update proceeds after restating what is
 discarded.
 
+### 6a. Root URL refused without network (offline, always runs)
+
+A URL that ends at the reference names the whole repository and must be
+rejected during parsing. No network is touched, so this works disconnected:
+
+```bash
+mkdir -p /tmp/wire-root-check && cd /tmp/wire-root-check
+/tmp/git-wire https://github.com/OCA/web/tree/19.0 -t ./whole; echo "exit=$?"
+/tmp/git-wire https://github.com/OCA/web/tree/19.0/ -t ./whole; echo "exit=$?"
+/tmp/git-wire https://github.com/OCA/web/tree/19.0/ --subfolder auto_backup -t ./whole; echo "exit=$?"
+ls ./whole 2>&1; ls .git-wire.json 2>&1; ls ~/.config/gud/wire/repos/github.com/OCA/web 2>&1
+```
+
+Expected: all three exit `1` with a bad-URL message that shows
+`https://{host}/{owner}/{repo}/tree/{ref}/{path}` and states that
+whole-repository fetch is not supported; `./whole` does not exist; no
+`.git-wire.json` is written; and no new mirror is created for `OCA/web` (if
+one is already cached from an earlier run, its mtime and contents are
+unchanged). The third command proves `--subfolder` is not an override for a
+`/tree/` URL (spec FR-003b/FR-003c).
+
 ## 7. Merge matrix (unit, offline) + diverged refusal (manual)
 
 ```bash
@@ -126,10 +155,11 @@ still refuses; `--force` discards).
 
 ## Troubleshooting
 
-| Symptom                                  | Likely cause                                                    | Check                                                                    |
-| ---------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `unknown ref` on a slashed branch        | no known remote ref is a prefix of the URL path (e.g. typo) | check branch/tag spelling; slashed refs resolve by longest match (spec FR-003a) |
-| `unreachable` for a private repo         | git credentials absent                                          | `git ls-remote <repo-url>` manually; tool reuses env git auth            |
-| Slow first fetch, fast repeats           | expected: mirror warms once (blobless), then SHA-compare no-ops | `GUD_LOG_LEVEL=debug` shows memo hits and skipped exports                |
-| Stale worktrees under cache `worktrees/` | killed run skipped removal                                      | `git -C <mirror> worktree prune`; next fetch/update prunes automatically |
-| Record rejected as invalid               | hand-edited or newer-version record                             | error names file + defect; re-fetch to regenerate                        |
+| Symptom                                  | Likely cause                                                      | Check                                                                                                    |
+| ---------------------------------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `unknown ref` on a slashed branch        | no known remote ref is a prefix of the URL path (e.g. typo)       | check branch/tag spelling; slashed refs resolve by longest match (spec FR-003a)                          |
+| Bad URL on a root-style link             | URL ends at the reference (`.../tree/{ref}` or `.../tree/{ref}/`) | append the folder segment; `--subfolder` only applies to reference-less repo URLs (spec FR-003b/FR-003c) |
+| `unreachable` for a private repo         | git credentials absent                                            | `git ls-remote <repo-url>` manually; tool reuses env git auth                                            |
+| Slow first fetch, fast repeats           | expected: mirror warms once (blobless), then SHA-compare no-ops   | `GUD_LOG_LEVEL=debug` shows memo hits and skipped exports                                                |
+| Stale worktrees under cache `worktrees/` | killed run skipped removal                                        | `git -C <mirror> worktree prune`; next fetch/update prunes automatically                                 |
+| Record rejected as invalid               | hand-edited or newer-version record                               | error names file + defect; re-fetch to regenerate                                                        |

@@ -35,19 +35,35 @@ D12); `list` reads entries instead of walking; `-n/--target-name` creates
 `./NAME` (must not exist, mutually exclusive with `-t`). Entry fields and
 validation unchanged; no new dependencies; `contracts/cli.md` and
 `quickstart.md` updated; `tasks.md` needs regen.
-re-materialized base (research D10). No record-schema change, no new
-dependencies, no contract changes except one merged-success phrase.
+
+**Amendment 2026-10-25 (URL boundary rules)** (clarifications: repository-root
+URL rejected, depth unbounded): a `/tree/{ref}` URL with no subfolder
+(`.../tree/main`, `.../tree/main/`) is a parse-time `ErrBadURL` (exit 1) —
+no network, no mirror, no target, no registry entry — and the message must
+state that whole-repository fetch is not supported (FR-003b). A non-empty
+subfolder of any depth is accepted with no cap and no widening, and
+`--subfolder` cannot supply a missing path for a `/tree/` URL (FR-003c).
+`ParseSourceURL` already produces these outcomes (root URL: 4 path segments
+≠ the 5 required by the `/tree/` branch, so it falls to the generic branch
+and fails its 2-segment check; deep path: `parseSubpath` joins every segment;
+the flag is read only after a successful parse). The root-URL user-facing
+message still needs the "whole-repository fetch is not supported" sentence.
+`contracts/cli.md`, `data-model.md`, and `quickstart.md` updated;
+`tasks.md` needs the two verification cases (research D13).
 
 ## Summary
 
-Add a `git-wire` subcommand to `git message` that fetches a single subfolder
-from a hosted repository URL (e.g.
+Add a standalone `git wire` binary (`cmd/git-wire`) that fetches a single
+subfolder from a hosted repository URL (e.g.
 `https://github.com/OCA/server-tools/tree/19.0/auto_backup`) into a target
 directory, records a run-level registry entry for later updates, and stays
 fast and light via a shared blobless git-object cache plus memoized remote
-lookups. `update` merges upstream changes into locally-modified checkouts
-when conflict-free (FR-009/FR-013; research D10), refusing with a file list
-otherwise. Technical approach (from [research.md](research.md), D1 as amended):
+lookups. URLs that name the repository root are rejected at parse time, and
+subfolder depth is unbounded — the named folder only, never its ancestors or
+siblings (FR-003b/FR-003c). `update` merges upstream changes into
+locally-modified checkouts when conflict-free (FR-009/FR-013; research D10),
+refusing with a file list otherwise. Technical approach (from
+[research.md](research.md), D1 as amended):
 parse the URL into a `SourceRef` domain type; maintain one bare blobless
 mirror per repository under `~/.config/gud/wire/`; materialize the subfolder
 by attaching an ephemeral detached linked worktree, populating ONLY the
@@ -164,6 +180,24 @@ SC-006 per-entry intact); explicit-registry-path threading keeps tests
 hermetic (Principle II); single-entry default avoids inventing batch sync
 (Principle III). All gates still PASS.
 
+**Post-design re-check 2026-10-25 (URL boundary rules)**: rejecting the
+repository root inside the pure parser strengthens Principle IV (a refused
+attempt touches no network, mirror, target, or registry) and Principle II
+(table-driven parse cases, no git required); unbounded depth adds no new
+code path — `parseSubpath` already joins all segments and
+`sparse-checkout set` consumes one path — so Principle III is unaffected and
+no dependency changes. All gates still PASS.
+
+**Post-design re-check 2026-10-25 (ref-resolution determinism)**: live
+quickstart validation exposed the same URL resolving to two commits across
+runs. The mirror's clone-time `refs/heads/*` never advance on fetch, and
+`shortRefs` broke the resulting branch-name collision by map order. Resolution
+now reads the refreshed remote-tracking refs first (research D14); clone shape,
+sparse-checkout path, record schema, and error taxonomy are unchanged, so
+Principle III holds and no dependency moves. Principle V gained evidence:
+four new regression tests plus three live fetches agreeing on one commit. All
+gates still PASS.
+
 **Skill-vs-constitution adjudication** (`@golang-clean-coder` items):
 
 | Skill item                                                          | Verdict     | Reason                                                                                                                                                         |
@@ -189,9 +223,9 @@ specs/001-git-wire-fetch/
 ├── data-model.md        # Phase 1 output (/speckit.plan command)
 ├── quickstart.md        # Phase 1 output (/speckit.plan command)
 ├── contracts/           # Phase 1 output (/speckit.plan command)
-│   ├── cli.md               # Command signatures, flags, exit codes, output phrases (UNCHANGED by amendment)
-│   └── tracking-record.md   # .git-wire.json v1 schema and versioning rules (UNCHANGED by amendment)
-└── tasks.md             # Phase 2 output (/speckit.tasks command - STALE after amendments, needs regen for registry)
+│   ├── cli.md               # Command signatures, flags, exit codes, output phrases (amended 2026-10-25: root-URL rejection, depth, --subfolder scope)
+│   └── tracking-record.md   # .git-wire.json v1 schema and versioning rules (UNCHANGED by amendments)
+└── tasks.md             # Phase 2 output (/speckit.tasks command - STALE after amendments, needs regen for registry + URL boundary cases)
 ```
 
 ### Source Code (repository root)

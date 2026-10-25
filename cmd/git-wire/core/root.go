@@ -20,6 +20,8 @@ var rootCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Long: `Fetch a single subfolder from a hosted repository without cloning it.
 
+Supported URL shape: https://{host}/{owner}/{repo}/tree/{ref}/{path}
+
 The URL names the owner, repository, reference, and folder, for example:
 https://github.com/OCA/server-tools/tree/19.0/auto_backup
 

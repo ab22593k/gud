@@ -53,6 +53,7 @@ func seedWireMirror(t *testing.T) (*Store, string) {
 	if err != nil {
 		t.Fatalf("NewStoreWithDir: %v", err)
 	}
+
 	mirror := store.MirrorDir("example.com", "o", "r")
 
 	if err := localClone(t, remote, mirror); err != nil {
@@ -148,6 +149,126 @@ func TestGitFetcherResolveSlashedRef(t *testing.T) {
 
 	if _, err := fetcher.Resolve(ctx, source("nope", "v1.0/pkg/util")); !errors.Is(err, ErrUnknownRef) {
 		t.Fatalf("err = %v, want ErrUnknownRef", err)
+	}
+
+	// The longest match leaves no path: the URL named the repository root,
+	// so FR-003b's bad-URL rule applies (not a missing subfolder).
+	if _, err := fetcher.Resolve(ctx, source("release", "v1.0")); !errors.Is(err, ErrBadURL) {
+		t.Fatalf("root remainder err = %v, want ErrBadURL", err)
+	} else if !strings.Contains(err.Error(), WholeRepositoryGuidance) {
+		t.Fatalf("root remainder err = %q, want whole-repository guidance", err)
+	}
+}
+
+// TestGitFetcherResolvePrefersRefreshedRefs proves a cache's clone-time refs
+// cannot shadow what the latest fetch brought in. A normal clone never
+// advances refs/heads/* on fetch, so the remote-tracking copy must win for
+// both named and default (HEAD) references; otherwise the same URL resolves
+// to different commits on different runs.
+func TestGitFetcherResolvePrefersRefreshedRefs(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping temp-repo test in short mode")
+	}
+
+	ctx := context.Background()
+
+	remote := t.TempDir() + "/remote"
+	mustInitFixture(t, remote)
+
+	store, err := NewStoreWithDir(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStoreWithDir: %v", err)
+	}
+
+	mirror := store.MirrorDir("example.com", "o", "r")
+	if err := localClone(t, remote, mirror); err != nil {
+		t.Fatalf("seed mirror: %v", err)
+	}
+
+	stale := localHead(t, remote)
+
+	if err := os.WriteFile(filepath.Join(remote, "auto_backup", "b.txt"), []byte("beta"), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	gitOut(t, remote, "add", ".")
+	gitOut(t, remote, "commit", "-m", "advance")
+
+	fresh := localHead(t, remote)
+	if stale == fresh {
+		t.Fatal("fixture did not advance")
+	}
+
+	for _, ref := range []string{"main", headRef} {
+		for range 10 {
+			fetcher := mustFetcher(t, store)
+			source := SourceRef{Host: "example.com", Owner: "o", Repo: "r", Ref: ref, Subpath: "auto_backup"}
+
+			res, err := fetcher.Resolve(ctx, source)
+			if err != nil {
+				t.Fatalf("Resolve(%s): %v", ref, err)
+			}
+
+			if res.Commit != fresh {
+				t.Fatalf("Resolve(%s) = %s, want refreshed %s (stale %s)",
+					ref, ShortSHA(res.Commit), ShortSHA(fresh), ShortSHA(stale))
+			}
+		}
+	}
+}
+
+// TestShortRefsPrefersRemoteTrackingBranch pins the resolution rule behind the
+// test above at the pure-function level, without any git fixture.
+func TestShortRefsPrefersRemoteTrackingBranch(t *testing.T) {
+	t.Parallel()
+
+	refs := map[string]string{
+		"refs/heads/19.0":          "stale",
+		"refs/remotes/origin/19.0": "fresh",
+	}
+
+	for range 50 {
+		_, commits := shortRefs(refs)
+		if commits["19.0"] != "fresh" {
+			t.Fatalf("commits[19.0] = %q, want fresh", commits["19.0"])
+		}
+	}
+}
+
+// TestShortRefsNameCollisionIsStable pins determinism when a branch and a tag
+// share a name: the tag wins, independent of map iteration order.
+func TestShortRefsNameCollisionIsStable(t *testing.T) {
+	t.Parallel()
+
+	refs := map[string]string{
+		"refs/heads/v1": "branch",
+		"refs/tags/v1":  "tag",
+	}
+
+	for range 50 {
+		_, commits := shortRefs(refs)
+		if commits["v1"] != "tag" {
+			t.Fatalf("commits[v1] = %q, want tag", commits["v1"])
+		}
+	}
+}
+
+// TestDefaultBranchSHAPrefersRemoteTrackingHead pins the default-branch rule:
+// the clone-time local HEAD goes stale, the remote-tracking HEAD does not.
+func TestDefaultBranchSHAPrefersRemoteTrackingHead(t *testing.T) {
+	t.Parallel()
+
+	refs := map[string]string{
+		"HEAD":                     "stale",
+		"refs/remotes/origin/HEAD": "fresh",
+	}
+
+	if got := defaultBranchSHA(refs); got != "fresh" {
+		t.Fatalf("defaultBranchSHA = %q, want fresh", got)
+	}
+
+	if got := defaultBranchSHA(map[string]string{"HEAD": "only"}); got != "only" {
+		t.Fatalf("defaultBranchSHA fallback = %q, want only", got)
 	}
 }
 
@@ -249,6 +370,7 @@ func TestGitFetcherMaterializeFromFixture(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStoreWithDir: %v", err)
 	}
+
 	mirror := store.MirrorDir("example.com", "o", "r")
 
 	if err := localClone(t, remote, mirror); err != nil {

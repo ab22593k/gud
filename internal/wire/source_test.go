@@ -53,6 +53,19 @@ func TestParseSourceURL(t *testing.T) {
 		}
 	})
 
+	t.Run("deep nesting has no depth cap", func(t *testing.T) {
+		t.Parallel()
+
+		got, err := ParseSourceURL("https://github.com/o/r/tree/main/a/b/c/d/e")
+		if err != nil {
+			t.Fatalf("ParseSourceURL: %v", err)
+		}
+
+		if got.Ref != "main" || got.Subpath != "a/b/c/d/e" {
+			t.Fatalf("unexpected parse: %+v", got)
+		}
+	})
+
 	t.Run("display", func(t *testing.T) {
 		t.Parallel()
 
@@ -74,6 +87,7 @@ func TestParseSourceURL(t *testing.T) {
 		{name: "port", url: "https://github.com:8443/o/r/tree/main/p"},
 		{name: "missing tree", url: "https://github.com/o/r/blob/main/p"},
 		{name: "missing subpath", url: "https://github.com/o/r/tree/main"},
+		{name: "root subpath trailing slash", url: "https://github.com/o/r/tree/main/"},
 		{name: "missing ref", url: "https://github.com/o/r/tree"},
 		{name: "dotdot subpath", url: "https://github.com/o/r/tree/main/../evil"},
 		{name: "leading dash ref", url: "https://github.com/o/r/tree/-x/p"},
@@ -87,6 +101,30 @@ func TestParseSourceURL(t *testing.T) {
 
 			if _, err := ParseSourceURL(tc.url); !errors.Is(err, ErrBadURL) {
 				t.Fatalf("ParseSourceURL(%q) err = %v, want ErrBadURL", tc.url, err)
+			}
+		})
+	}
+}
+
+func TestParseSourceURLRejectsRepositoryRoot(t *testing.T) {
+	t.Parallel()
+
+	// FR-003b: a URL that stops at the reference names the whole repository.
+	// It must fail as a bad URL and say so, without any network or cache use.
+	for _, raw := range []string{
+		"https://github.com/o/r/tree/main",
+		"https://github.com/o/r/tree/main/",
+	} {
+		t.Run(raw, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := ParseSourceURL(raw)
+			if !errors.Is(err, ErrBadURL) {
+				t.Fatalf("err = %v, want ErrBadURL", err)
+			}
+
+			if !strings.Contains(err.Error(), "whole-repository fetch is not supported") {
+				t.Fatalf("err = %q, want whole-repository guidance", err)
 			}
 		})
 	}

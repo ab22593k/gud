@@ -362,3 +362,94 @@ prune` on mirror ensure. (2) Colocated `.git-wire.json` in each
   entry fields are byte-identical to the v1 record (same validation:
   "`version`: integer, MUST equal `1`", 40-hex commit, 64-hex export hash,
   RFC 3339 timestamps) so existing fixtures migrate by re-keying.
+
+## D13 — URL boundary rules: repository root rejected, depth unbounded (2026-10-25 clarifications)
+
+- **Decision**: `ParseSourceURL` treats the subfolder path as mandatory for a
+  `/tree/{ref}` URL. `.../tree/{ref}` and `.../tree/{ref}/` carry no subfolder
+  (the URL path yields 4 segments, one short of the 5 the `/tree/` branch
+  requires), so they fall through to the generic-repository branch and fail its
+  2-segment check with `ErrBadURL`. Rejection happens in the pure parser,
+  before `Fetcher.Resolve`, so no mirror, worktree, target, or registry entry
+  exists afterwards. `--subfolder` is consulted only after a successful parse,
+  so it cannot rescue a root `/tree/` URL; it stays scoped to reference-less
+  `{host}/{owner}/{repo}` input with the ref defaulting to `HEAD`. Depth is
+  unbounded: `parseSubpath` validates each element and joins them all, and the
+  resolved path is handed to `sparse-checkout set` as one cone path, so depth
+  changes neither the transfer scope nor the code path.
+- **Rationale**: The feature's premise is "one subfolder, never the whole
+  repo" (FR-004, SC-002, and the blobless-mirror assumption). A root URL is
+  the one input that would silently convert a sparse fetch into a full-tree
+  export, so it must fail in the layer that cannot touch the cache. Depth, by
+  contrast, is ordinary repository structure; capping it would reject valid
+  monorepo layouts (the motivating `auto_backup` case is itself nested) while
+  buying no cache protection — the requested folder's size, not its depth,
+  governs transfer.
+- **Alternatives considered**:
+  - _Fetch the repository root on a root URL_: rejected — breaks FR-004 and
+    SC-002 and turns the shared mirror into a full working copy; it also
+    removes the proportional-transfer property the performance goal rests on.
+  - _Treat the root URL as a usage error (exit 2)_: rejected — the product's
+    sentinel taxonomy maps every URL-shape failure to `ErrBadURL` (exit 1),
+    and splitting statically-detectable from remote-detectable URL defects
+    would give scripts two failure classes for one user mistake.
+  - _Let `--subfolder` supply the path for `/tree/{ref}/`_: rejected — two
+    spellings for one target (`/tree/main/pkg` vs `/tree/main/ --subfolder
+pkg`) complicate parser precedence and weaken the root-URL refusal into a
+    rule with an exception.
+  - _Cap depth (e.g. 10 segments)_: rejected — arbitrary threshold with no
+    protective value; valid monorepos exceed it and the resulting failure would
+    be unexplainable to the user.
+  - _Fetch only immediate children (non-recursive)_: rejected — contradicts the
+    `auto_backup` example, which is unusable without `models/`, `views/`, and
+    the rest of its subtree.
+- **Preserved details**: `Display()` and the registry's `subpath` continue to
+  carry the full relative path, so `update`/`list` re-resolve the same folder
+  without re-parsing the URL. `subfolderFake`-style seam tests keep the new
+  cases hermetic. Known gap carried into tasks: the root-URL error text must
+  gain the "whole-repository fetch is not supported" sentence required by
+  FR-003b; `NextAction(ErrBadURL)` currently returns only the expected shape,
+  and the sentence belongs at the empty-subpath call site rather than in the
+  shared mapping (where it would mislead for scheme and userinfo defects).
+
+## D14 — Ref resolution reads the refreshed ref, not the clone-time one (2026-10-25 live validation)
+
+- **Decision**: `shortRefs` collects upstream-derived refs
+  (`refs/remotes/origin/*`, `refs/tags/*`, peeled `^{}` entries) first and only
+  then falls back to local `refs/heads/*`; names are visited in sorted order
+  and an already-recorded name is never overwritten, so a peeled tag beats its
+  tag object and a tag beats a same-named branch. `defaultBranchSHA` reads
+  `refs/remotes/origin/HEAD` and uses the bare `HEAD` entry only when the
+  listing has no remote-tracking symref.
+- **Rationale**: The mirror is created with `git clone --filter=blob:none
+--no-checkout`, which leaves `remote.origin.fetch =
++refs/heads/*:refs/remotes/origin/*`. Local `refs/heads/*` therefore exist
+  from clone time and `git fetch origin` never advances them; only the
+  remote-tracking namespace tracks upstream. `git ls-remote <mirror>` returns
+  both, so the short-name map held two SHAs per branch and Go map iteration
+  order picked one at random — the same URL resolved to `ff085d5` on one run
+  and the true upstream tip `ee3803` on the next. Stale refs also silently
+  defeated `update`'s no-op detection, since every run could look "behind"
+  depending on the draw.
+- **Alternatives considered**:
+  - _Convert the mirror to `git clone --mirror`_: rejected — a mirror clone
+    rewrites every ref namespace and drops the remote-tracking split the
+    resolution code relies on; it also changes the cache layout, invalidating
+    existing mirrors for a defect fixable entirely at read time.
+  - _Add `+refs/heads/*:refs/heads/*` to the fetch refspec_: rejected — it
+    makes local heads authoritative, which is the opposite of what a cache
+    should trust, and it would let a stale cache keep lying after a failed
+    fetch.
+  - _Resolve refs by shelling out to `git rev-parse` per candidate_: rejected —
+    one process per branch on every fetch; the ref listing is already in hand.
+  - _Leave the collision to map order but add a retry_: rejected — hides
+    nondeterminism instead of removing it; tests would remain flaky and the
+    "same input, same commit" guarantee (FR-008, SC-004) would be unprovable.
+- **Preserved details**: the clone shape, sparse-checkout mechanism, mirror
+  path, registry schema, and public error taxonomy are untouched. New unit
+  coverage pins the rule without git (`TestShortRefsPrefersRemoteTrackingBranch`,
+  `TestShortRefsNameCollisionIsStable`,
+  `TestDefaultBranchSHAPrefersRemoteTrackingHead`) plus one local-fixture
+  regression (`TestGitFetcherResolvePrefersRefreshedRefs`) that advances a
+  fixture remote after the mirror is seeded and asserts ten consecutive
+  resolutions return the refreshed SHA for both a named branch and `HEAD`.

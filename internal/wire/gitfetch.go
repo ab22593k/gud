@@ -7,8 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -67,13 +69,8 @@ func (f *gitFetcher) resolvePinned(ctx context.Context, mirror string, source So
 		return Resolution{}, fmt.Errorf("commit %s: %w", ShortSHA(source.Ref), ErrUnknownRef)
 	}
 
-	if !git.TreeExists(tctx, mirror, source.Ref, source.Subpath) {
-		return Resolution{}, fmt.Errorf("%s: %w", source.Display(), ErrMissingPath)
-	}
-
-	if !git.TreeIsDir(tctx, mirror, source.Ref, source.Subpath) {
-		return Resolution{}, fmt.Errorf("%s is a file, not a fetchable folder: %w",
-			source.Display(), ErrMissingPath)
+	if err := verifyFolder(tctx, mirror, source, source.Ref); err != nil {
+		return Resolution{}, err
 	}
 
 	return Resolution{Commit: source.Ref, Ref: source.Ref, Subpath: source.Subpath}, nil
@@ -92,30 +89,8 @@ func (f *gitFetcher) resolveNamed(ctx context.Context, mirror string, source Sou
 
 	// A generic repository URL carries no explicit ref; resolve against
 	// the remote's default branch reported as HEAD.
-	if source.Ref == "HEAD" {
-		commit, ok := refs["HEAD"]
-		if !ok || commit == "" {
-			return Resolution{}, fmt.Errorf("ref %q: %w", source.Ref, ErrUnknownRef)
-		}
-
-		actualPath := source.Subpath
-		if actualPath == "" {
-			return Resolution{}, fmt.Errorf("ref %q points at the repository root: %w", source.Ref, ErrMissingPath)
-		}
-
-		if !git.TreeExists(tctx, mirror, commit, actualPath) {
-			display := source.Host + "/" + source.Owner + "/" + source.Repo + "@" + source.Ref + ":" + actualPath
-
-			return Resolution{}, fmt.Errorf("%s: %w", display, ErrMissingPath)
-		}
-
-		if !git.TreeIsDir(tctx, mirror, commit, actualPath) {
-			display := source.Host + "/" + source.Owner + "/" + source.Repo + "@" + source.Ref + ":" + actualPath
-
-			return Resolution{}, fmt.Errorf("%s is a file, not a fetchable folder: %w", display, ErrMissingPath)
-		}
-
-		return Resolution{Commit: commit, Ref: source.Ref, Subpath: actualPath}, nil
+	if source.Ref == headRef {
+		return resolveDefaultRef(tctx, mirror, refs, source)
 	}
 
 	known, commits := shortRefs(refs)
@@ -126,24 +101,71 @@ func (f *gitFetcher) resolveNamed(ctx context.Context, mirror string, source Sou
 	}
 
 	if actualPath == "" {
-		return Resolution{}, fmt.Errorf("ref %q points at the repository root: %w", actualRef, ErrMissingPath)
+		return Resolution{}, fmt.Errorf(
+			"ref %q: %w: %s; append the subfolder path after the reference",
+			actualRef, ErrBadURL, WholeRepositoryGuidance,
+		)
 	}
+
+	resolved := source
+	resolved.Ref = actualRef
+	resolved.Subpath = actualPath
 
 	commit := commits[actualRef]
-
-	if !git.TreeExists(tctx, mirror, commit, actualPath) {
-		display := source.Host + "/" + source.Owner + "/" + source.Repo + "@" + actualRef + ":" + actualPath
-
-		return Resolution{}, fmt.Errorf("%s: %w", display, ErrMissingPath)
-	}
-
-	if !git.TreeIsDir(tctx, mirror, commit, actualPath) {
-		display := source.Host + "/" + source.Owner + "/" + source.Repo + "@" + actualRef + ":" + actualPath
-
-		return Resolution{}, fmt.Errorf("%s is a file, not a fetchable folder: %w", display, ErrMissingPath)
+	if err := verifyFolder(tctx, mirror, resolved, commit); err != nil {
+		return Resolution{}, err
 	}
 
 	return Resolution{Commit: commit, Ref: actualRef, Subpath: actualPath}, nil
+}
+
+// resolveDefaultRef resolves a reference-less source against the remote's
+// default branch, which the mirror reports as HEAD.
+func resolveDefaultRef(
+	ctx context.Context, mirror string, refs map[string]string, source SourceRef,
+) (Resolution, error) {
+	commit := defaultBranchSHA(refs)
+	if commit == "" {
+		return Resolution{}, fmt.Errorf("ref %q: %w", source.Ref, ErrUnknownRef)
+	}
+
+	if source.Subpath == "" {
+		return Resolution{}, fmt.Errorf(
+			"ref %q: %w: %s; append the subfolder path after the reference",
+			source.Ref, ErrBadURL, WholeRepositoryGuidance,
+		)
+	}
+
+	if err := verifyFolder(ctx, mirror, source, commit); err != nil {
+		return Resolution{}, err
+	}
+
+	return Resolution{Commit: commit, Ref: source.Ref, Subpath: source.Subpath}, nil
+}
+
+// defaultBranchSHA reports the remote's default branch tip. The mirror's
+// local HEAD is frozen at clone time, so the remote-tracking HEAD wins when
+// the listing carries one; a live listing that reports a bare HEAD falls back.
+func defaultBranchSHA(refs map[string]string) string {
+	if sha := refs[remoteTrackingPrefix+headRef]; sha != "" {
+		return sha
+	}
+
+	return refs[headRef]
+}
+
+// verifyFolder confirms source names an existing folder at commit, echoing
+// the parsed identity in either failure.
+func verifyFolder(ctx context.Context, mirror string, source SourceRef, commit string) error {
+	if !git.TreeExists(ctx, mirror, commit, source.Subpath) {
+		return fmt.Errorf("%s: %w", source.Display(), ErrMissingPath)
+	}
+
+	if !git.TreeIsDir(ctx, mirror, commit, source.Subpath) {
+		return fmt.Errorf("%s is a file, not a fetchable folder: %w", source.Display(), ErrMissingPath)
+	}
+
+	return nil
 }
 
 // Materialize populates dir with the resolved subfolder, returning the
@@ -237,27 +259,46 @@ func (f *gitFetcher) ensureMirror(ctx context.Context, source SourceRef) (string
 }
 
 // shortRefs reduces full ref names to branch/tag short names mapped to
-// commit SHAs, preferring peeled (^{}) SHAs for annotated tags and
-// skipping non-branch entries such as HEAD symrefs.
+// commit SHAs. Upstream-derived refs are collected first: a cache's local
+// refs/heads entries are frozen at clone time and never advance, so they
+// must not shadow the remote-tracking copy of the same branch. Sorting the
+// names removes map-order nondeterminism from branch/tag collisions too.
 func shortRefs(refs map[string]string) (known []string, commits map[string]string) {
 	commits = make(map[string]string)
 
-	for full, sha := range refs {
-		short, isPeeled := peelRef(full)
-		if short == "" {
-			continue
-		}
+	fulls := slices.Sorted(maps.Keys(refs))
 
-		if isPeeled || commits[short] == "" {
-			commits[short] = sha
-		}
-	}
+	addRefs(commits, refs, fulls, func(full string) bool {
+		return !strings.HasPrefix(full, "refs/heads/")
+	})
+	addRefs(commits, refs, fulls, func(full string) bool {
+		return strings.HasPrefix(full, "refs/heads/")
+	})
 
 	for short := range commits {
 		known = append(known, short)
 	}
 
 	return known, commits
+}
+
+// addRefs records the refs selected by keep. A peeled (^{}) tag SHA replaces
+// the tag object's SHA; a name recorded earlier is never overwritten.
+func addRefs(commits, refs map[string]string, fulls []string, keep func(string) bool) {
+	for _, full := range fulls {
+		if !keep(full) {
+			continue
+		}
+
+		short, isPeeled := peelRef(full)
+		if short == "" {
+			continue
+		}
+
+		if isPeeled || commits[short] == "" {
+			commits[short] = refs[full]
+		}
+	}
 }
 
 // peelRef strips refs/heads/ or refs/tags/ prefixes, reporting peeled
@@ -270,8 +311,9 @@ func peelRef(full string) (string, bool) {
 		}
 
 		// Remote-tracking HEAD symrefs (refs/remotes/origin/HEAD) are not
-		// branches or tags; the bare HEAD entry covers the default branch.
-		if rest == "HEAD" {
+		// branches or tags; defaultBranchSHA reads that entry directly
+		// because it is the only HEAD a fetch keeps current.
+		if rest == headRef {
 			return "", false
 		}
 

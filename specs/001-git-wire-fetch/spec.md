@@ -18,6 +18,12 @@
 - Q: Where should the `.git-wire.json` tracking record live instead of inside the fetched folder? → A: Option A - single registry file at the run level mapping each target folder to its source.
 - Q: How should the new `--target-name` (`-n`) flag relate to the existing `--target-path` (`-t`) flag? → A: Option A - `-n NAME` creates a new `./NAME` folder and refuses if it exists, while `-t` keeps its full-path meaning; passing both flags together is an error.
 
+### Session 2026-10-25
+
+- Q: When a URL ends at the repository root (`.../tree/main` or `.../tree/main/`), with nothing after the reference, how should `git wire` respond? → A: Option A - reject during URL parsing as a bad-URL failure (exit 1), before any network call or cache/mirror creation, with a message stating that whole-repository fetch is not supported.
+- Q: When the subfolder path is deeply nested (e.g. `.../tree/main/a/b/c/d/e`), should `git wire` accept it, and how much of the tree should it download? → A: Option A - accept any depth with no cap, store the full relative path, materialize that folder's entire subtree recursively, and never fetch ancestors or siblings.
+- Q: If a URL ends at the repository root but the user also passes `--subfolder <path>`, should `git wire` accept it and use the flag's path, or reject it? → A: Option A - reject; a `/tree/{ref}/` URL with an empty path is always a bad-URL error, and `--subfolder` applies only to reference-less repository URLs.
+
 ## User Scenarios & Testing _(mandatory)_
 
 ### User Story 1 - Fetch a single subfolder from a hosted URL (Priority: P1)
@@ -70,6 +76,18 @@ the run-level registry.
    branch/tag as the reference and fetches that folder; the success message
    echoes the resolved reference (`release/v1.0`) and subfolder path
    (`pkg/util`) so the split is visible.
+7. **Given** a URL that ends at the repository root, either
+   `.../tree/main` or `.../tree/main/` with no subfolder after the reference,
+   **When** the user runs the command, **Then** it fails as a bad-URL error
+   before any network access or cache/mirror creation, and the message states
+   that whole-repository fetch is not supported and shows the expected
+   `.../tree/{ref}/{subfolder}` shape with an example.
+8. **Given** a deeply nested subfolder URL such as
+   `.../tree/main/a/b/c/d/e` where `a/b/c/d/e` exists as a directory,
+   **When** the user runs the fetch command, **Then** the target holds the
+   entire subtree under `e` (recursively, including `e`'s own subdirectories)
+   and nothing from `a/b/c/d` above it or from sibling folders beside it; the
+   success message echoes the full `a/b/c/d/e` subfolder path.
 
 ---
 
@@ -154,6 +172,20 @@ observing a fast no-op with bounded cache size.
 - What happens when the URL names a file instead of a folder, or the branch
   reference does not exist? The command rejects it as "not a fetchable folder"
   with the parsed owner/repository/reference/path echoed back.
+- What happens when the URL ends at the repository root
+  (`.../tree/main` or `.../tree/main/`) so the subfolder component is empty or
+  just `/`? The command rejects it as a bad-URL error before any network call
+  or cache/mirror creation, states that whole-repository fetch is not
+  supported, and shows the expected `.../tree/{ref}/{subfolder}` shape with an
+  example. No target directory, registry entry, or cache is created, so a
+  refused attempt leaves no disk footprint. Supplying a subfolder flag
+  alongside such a URL does not change the outcome (see FR-003c).
+- What happens when the subfolder path is deeply nested (e.g.
+  `.../tree/main/a/b/c/d/e`)? Depth is not a limit: the full relative path is
+  the subfolder, its entire subtree is fetched recursively, and the
+  intermediate segments only identify the folder — they are never downloaded,
+  and no ancestor or sibling folder is fetched. A trailing slash on a
+  non-empty path is normalized away and does not change the result.
 - What happens when the reference in the URL contains slashes (e.g.
   `.../tree/release/v1.0/pkg/util`)? Static parsing alone cannot tell whether
   the ref is `release` and the path is `v1.0/pkg/util`, or the ref is
@@ -161,8 +193,9 @@ observing a fast no-op with bounded cache size.
   remote's live ref listing and treat the longest matching known branch/tag
   name as the reference (see FR-003a). When no known ref is a prefix of the
   URL path, it reports an unknown-reference error; when the longest match
-  leaves no remaining subfolder path, it reports a not-a-fetchable-folder
-  error. Slashes in ref names are therefore supported with no extra flag.
+  leaves no remaining subfolder path, the empty-subfolder rule applies
+  (bad-URL error, whole-repository fetch not supported — see FR-003b). Slashes
+  in ref names are therefore supported with no extra flag.
 - What happens when the upstream folder is very large (many files or large
   total size)? The command shows progress, fetches incrementally, and never
   requires downloading the full repository to obtain the folder.
@@ -204,9 +237,26 @@ message` command tree MUST NOT carry git-wire subcommands; the two
   system MUST NOT disallow slashes in ref names and MUST NOT require a flag
   override for them. Behavior when offline follows FR-012 (the listing fetch
   fails as an unreachable-remote error, leaving local state intact).
+- **FR-003b**: The system MUST reject a URL whose subfolder component is empty
+  or `/` — i.e. it names the repository root, e.g. `.../tree/main` or
+  `.../tree/main/` — with a bad-URL error that states whole-repository fetch is
+  not supported and shows the expected shape. The rejection MUST occur before
+  any mirror or cache is created, and before any network call when the URL
+  needs no remote ref resolution, so a refused attempt leaves no target,
+  registry entry, or cache behind. This rule is the guard for FR-004 and
+  FR-010: rejecting it up front is what prevents a blobless mirror from being
+  widened to the full project tree.
+- **FR-003c**: The system MUST accept a non-empty subfolder path of any depth
+  without a depth cap and MUST NOT let depth either restrict the fetch or widen
+  it: the intermediate segments only identify the folder. The `--subfolder`
+  flag MUST NOT supply a missing path for a `/tree/{ref}/` URL; it applies only
+  to reference-less `{host}/{owner}/{repo}` URLs, so FR-003b has no flag
+  override.
 - **FR-004**: The system MUST download only the requested subfolder's contents
-  into the target path; it MUST NOT require or retain a full working copy of
-  the repository to satisfy the fetch.
+  into the target path, including everything beneath that folder recursively
+  (its own subdirectories), and MUST NOT download its ancestor or sibling
+  folders; it MUST NOT require or retain a full working copy of the repository
+  to satisfy the fetch.
 - **FR-005**: The system MUST record, at fetch time, one entry per target in
   a single `.git-wire.json` registry file at the run level (the directory
   the command runs in). Each entry captures the target path, source URL,

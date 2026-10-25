@@ -9,6 +9,10 @@ import (
 
 // Source identity: parsing hosted subfolder URLs and resolving refs.
 
+// headRef is the reference a generic repository URL resolves against: the
+// remote's default branch, as reported by the mirror's HEAD symref.
+const headRef = "HEAD"
+
 // SourceRef is the parsed identity of what to fetch: hosting location,
 // repository, reference as given in the URL, and subfolder path.
 type SourceRef struct {
@@ -83,21 +87,7 @@ func ParseSourceURL(raw string) (SourceRef, error) {
 	// caller supplies the subfolder through --subfolder. The reference
 	// defaults to the remote's default branch (HEAD).
 	if len(parts) < 5 || parts[2] != "tree" {
-		if len(parts) != 2 {
-			return SourceRef{}, fmt.Errorf("parse %q: %w", trimmed, ErrBadURL)
-		}
-
-		owner, err := checkName("owner", parts[0])
-		if err != nil {
-			return SourceRef{}, err
-		}
-
-		repo, err := checkName("repo", strings.TrimSuffix(parts[1], ".git"))
-		if err != nil {
-			return SourceRef{}, err
-		}
-
-		return SourceRef{Host: host, Owner: owner, Repo: repo, Ref: "HEAD", Subpath: "", SourceURL: trimmed}, nil
+		return parseRepositoryURL(host, parts, trimmed)
 	}
 
 	owner, err := checkName("owner", parts[0])
@@ -121,6 +111,36 @@ func ParseSourceURL(raw string) (SourceRef, error) {
 	}
 
 	return SourceRef{Host: host, Owner: owner, Repo: repo, Ref: ref, Subpath: subpath, SourceURL: trimmed}, nil
+}
+
+// parseRepositoryURL handles a URL with no /tree/{ref}/{path} tail: either a
+// reference-less repository URL whose subfolder arrives later through
+// --subfolder, or a /tree/ URL that stops at the reference. The latter names
+// the repository root and is rejected here, in the pure parser, so no caller
+// can widen a sparse fetch into a full tree (FR-003b).
+func parseRepositoryURL(host string, parts []string, raw string) (SourceRef, error) {
+	if len(parts) == 4 && parts[2] == "tree" {
+		return SourceRef{}, fmt.Errorf(
+			"parse %q: %w: %s; append the subfolder path after the reference",
+			raw, ErrBadURL, WholeRepositoryGuidance,
+		)
+	}
+
+	if len(parts) != 2 {
+		return SourceRef{}, fmt.Errorf("parse %q: %w", raw, ErrBadURL)
+	}
+
+	owner, err := checkName("owner", parts[0])
+	if err != nil {
+		return SourceRef{}, err
+	}
+
+	repo, err := checkName("repo", strings.TrimSuffix(parts[1], ".git"))
+	if err != nil {
+		return SourceRef{}, err
+	}
+
+	return SourceRef{Host: host, Owner: owner, Repo: repo, Ref: headRef, SourceURL: raw}, nil
 }
 
 // parseHost validates the URL authority: no port, no leading dot or dash,
@@ -199,6 +219,7 @@ func IsPinnedSHA(ref string) bool {
 		isHexLower := r >= 'a' && r <= 'f'
 		isHexUpper := r >= 'A' && r <= 'F'
 		isHex := isDigit || isHexLower || isHexUpper
+
 		if !isHex {
 			return false
 		}

@@ -109,10 +109,8 @@ func (c *treeCopier) copyFile(src, dst string) error {
 	}
 
 	metered := &budgetWriter{w: out, budget: &c.budget}
-
 	if _, err := io.CopyBuffer(metered, in, c.buf); err != nil {
 		cerr := out.Close()
-
 		if cerr != nil {
 			return errors.Join(fmt.Errorf("copy file: %w", err), fmt.Errorf("close file: %w", cerr))
 		}

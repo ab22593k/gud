@@ -1,116 +1,161 @@
-# Tasks: git-wire Subfolder Fetch — Registry + `--target-name` Round
+# Tasks: git-wire Subfolder Fetch
 
-**Input**: Design documents from `specs/001-git-wire-fetch/` (plan.md fourth amendment, research D12, data-model §2–§3, contracts/cli.md, contracts/tracking-record.md, quickstart.md §3–§6)
+**Input**: Design documents from `/specs/001-git-wire-fetch/`
+**Prerequisites**: plan.md (required), spec.md (required for user stories), research.md, data-model.md, contracts/, quickstart.md
 
-**Prerequisites**: plan.md, spec.md (US1 P1, US2 P2, US3 P3), data-model.md, contracts/, research.md, quickstart.md
+**Tests**: Tests are REQUIRED by Constitution Principle II (Test-First, NON-NEGOTIABLE). Every behavioral task below lands with a failing test first, then implementation, then refactor with the suite green. Unit tests stay deterministic (fake `fetcher` seam, local `git init` fixtures, no network, no credentials); live-network coverage is gated by `RUN_GITWIRE_INTEGRATION` and skipped under `-short`.
 
-**Tests**: Included per story — repo convention (AGENTS.md: focused tests for behavioral changes) and constitution Principle II (deterministic, hermetic, no network; live runs gated by `RUN_GITWIRE_INTEGRATION=1`).
-
-**Organization**: Tasks grouped by user story. Prior rounds landed: sparse-checkout transport, merge engine, standalone `cmd/git-wire` binary. This round re-homes tracking state (colocated `<target>/.git-wire.json` → run-level registry) and adds `-n/--target-name`.
-
-**Current code reality** (verify before editing): `internal/wire/track.go` (`TrackingRecord`, `SaveRecord(dir)`, `LoadRecord(dir)`), `internal/wire/store.go` (`RecordPath(dir)`), `internal/wire/list.go` (`findCheckouts` walk, `maxListDepth = 8`), `internal/wire/fetch.go` (`Fetch`, `recordCheckout`, `RecordPath(target)` in success text), `internal/wire/update.go` (`Update`), `cmd/git-wire/core/wire.go` (`addWireTargetFlags` with `-t` only, `targetFromFlags`, `updateTarget`, `listWith`).
+**Organization**: Tasks are grouped by user story (US1 P1, US2 P2, US3 P3) so each story can be implemented, tested, and delivered independently.
 
 ## Format: `[ID] [P?] [Story] Description`
 
-- **[P]**: Can run in parallel (different files, no dependencies)
+- **[P]**: Can run in parallel (different files, no dependency on incomplete tasks)
 - **[Story]**: Which user story this task belongs to (US1, US2, US3)
+- Include exact file paths in descriptions
+
+## Path Conventions
+
+- Root module (`gud`) holds `cmd/git-wire` and `internal/wire`
+- `internal/git` is a separate module (`gud/internal/git`) — all git subprocess spawning stays there
+- No `go.work` change (both CLIs live in the root module)
+
+---
 
 ## Phase 1: Setup (Shared Infrastructure)
 
-**Purpose**: Baseline verification before the rework
+**Purpose**: Project initialization and baseline verification
 
-- [x] T001 Verify clean baseline: `go build ./cmd/git-wire`, `go test ./... ./internal/git/... ./internal/request/...`, `golangci-lint run`, `git diff --check` from repo root
+- [x] T001 Verify `go.work` resolves root module plus `internal/git`, `internal/request`, and `internal/textwrap` (`go build ./...`)
+- [x] T002 [P] Build both CLIs: `go build ./cmd/git-wire ./cmd/git-message`
+- [x] T003 [P] Baseline lint: `golangci-lint run` (must be clean before feature work) (path: ./ (repository root))
+- [x] T004 [P] Verify wire package compiles in isolation: `go build ./internal/wire`
+
+**Checkpoint**: Both binaries build and lint is green; feature work can begin
 
 ---
 
 ## Phase 2: Foundational (Blocking Prerequisites)
 
-**Purpose**: Run-level registry layer that all three stories depend on (research D12, data-model §2)
+**Purpose**: Core domain, transport, and CLI infrastructure that every user story depends on
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [x] T002 Create `internal/wire/registry.go` with versioned envelope (`version` MUST equal `1`, `entries` map) plus entry type carrying byte-identical fields to the retired record (`source_url`, `host`/`owner`/`repo`/`ref`/`subpath`, `resolved_commit` 40 lowercase hex, `export_hash` 64 lowercase hex, RFC 3339 `fetched_at`/`updated_at`)
-- [x] T003 [P] Implement registry key rules in `internal/wire/registry.go`: registry-relative slash paths (`./auto_backup`); absolute, empty, or `..`-escaping keys rejected as invalid
-- [x] T004 [P] Implement registry I/O in `internal/wire/registry.go`: missing file reads as empty registry; atomic write via temp-file + rename; `Upsert` and single-key lookup; every domain function takes an explicit registry path (only the Cobra layer resolves it from the working directory)
-- [x] T005 Retire colocated persistence: delete `internal/wire/track.go` and `RecordPath` in `internal/wire/store.go`, moving entry-validation helpers (`isLowerHex`, schema checks) into `internal/wire/registry.go`
-- [x] T006 Add registry unit tests in `internal/wire/registry_test.go`: envelope round-trip, key normalization/rejection, missing-file tolerance, atomic write install, maximal-entry under-10-KB bound (SC-006 per folder), one bad entry fails the load naming the file and defect
-- [x] T007 Delete obsolete `internal/wire/track_test.go` cases covering colocated load/save paths (superseded by T006)
+- [x] T005 [P] Define sentinel errors and `NextAction` mapping in `internal/wire/errors.go` (ErrBadURL, ErrUnknownRef, ErrMissingPath, ErrTargetNotEmpty, ErrNotACheckout, ErrInvalidRecord, ErrDiverged, ErrUpstream, ErrBudgetExceeded, ErrInternal)
+- [x] T006 [P] Implement `SourceRef` domain type + `ParseSourceURL` (pure, table-tested) in `internal/wire/source.go` — owner/repo/ref/subpath parsing, `https`-only, no userinfo, no port, segment validation, `parseSubpath`, `IsPinnedSHA`, `ResolveRef`, `ParseSubpath` (FR-003, FR-003a, FR-003b, FR-003c)
+- [x] T007 [P] Implement run-level registry envelope + entries + atomic load/save/validate in `internal/wire/registry.go` (`.git-wire.json`, version 1, relative-path keys, atomic temp+rename, missing-file tolerance, per-entry 40-hex commit / 64-hex hash / RFC 3339 timestamps, SC-006 <10 KB) (FR-005, FR-006)
+- [x] T008 [P] Implement aggregate content-SHA walker in `internal/wire/hash.go` (stdlib sha256, bounded buffers, regular files only)
+- [x] T009 [P] Implement `Store` (mirror/worktree paths) in `internal/wire/store.go` (`~/.config/gud/wire`, `MirrorDir`, `WorktreeDir`, `safeSegment`)
+- [x] T010 [P] Implement sync-state derivation in `internal/wire/status.go` (current / behind / diverged / unreachable)
+- [x] T011 [P] Implement tree copy-out in `internal/wire/copytree.go` (regular files only, zip-slip containment, byte budget)
+- [x] T012 [P] Implement three-way merge classification in `internal/wire/merge.go` (pure classify + apply) (FR-009, FR-013)
+- [x] T013 Implement git transport primitives in `internal/git/wire.go` (CloneMirror, FetchMirror, LsRemoteSHA, TreeExists, AddSparseWorktree, RemoveWorktree, PruneWorktrees) — all git spawning stays in this module
+- [x] T014 Implement `gitFetcher` (mirror ensure + sparse-checkout cone + ephemeral worktree + copy-out) in `internal/wire/gitfetch.go` (D1)
+- [x] T015 Implement `Fetch` orchestration + `-n` name validation/creation in `internal/wire/fetch.go` (FR-001–FR-005, FR-009)
+- [x] T016 Implement `Update` orchestration (re-resolve, no-op, merge, conflict refusal) in `internal/wire/update.go` (FR-006, FR-008, FR-009, FR-012, FR-013)
+- [x] T017 Implement `List` (registry-driven, no walk) in `internal/wire/list.go` (FR-007, FR-012)
+- [x] T018 Implement Cobra root + fetch/update/list handlers and flags in `cmd/git-wire/core/root.go` and `cmd/git-wire/core/wire.go` (`-t/-n`, `--subfolder`, `--force`, registry-path resolution, fetch-by-default root)
+- [x] T019 Implement `cmd/git-wire/main.go` (Execute + stderr + exit 1)
 
-**Checkpoint**: `go test ./internal/wire/` compiles — callers (`fetch.go`, `update.go`, `list.go`) still reference removed symbols, so story phases rewire them; foundation ready means registry API is stable and tested
+**Checkpoint**: Foundation ready — all user stories can now begin
 
 ---
 
-## Phase 3: User Story 1 - Fetch a single subfolder (Priority: P1) 🎯 MVP
+## Phase 3: User Story 1 - Fetch a single subfolder from a hosted URL (Priority: P1) 🎯 MVP
 
-**Goal**: Fetch writes contents-only targets and upserts a registry entry; `-n/--target-name` creates `./NAME` (must-not-exist); `-t` + `-n` together is a usage error before any network use
+**Goal**: Download only the requested subfolder into a chosen target, record a run-level registry entry, and never touch the full repository
 
-**Independent Test**: Fetch the spec example URL into `-t` and `-n` targets from a temp run dir; `ls -a` shows no bookkeeping files in targets, `.git-wire.json` holds one entry per target, dual-flag run exits non-zero creating nothing
+**Independent Test**: Point the command at a public repository subfolder URL with an empty target and confirm only that subfolder's files land in the target plus a tracking entry in the run-level registry (FR-004, SC-001, SC-002)
 
-### Tests for User Story 1
+### Tests for User Story 1 (Constitution II — write first, must fail before implementation)
 
-- [x] T008 [P] [US1] Rework fetch tests in `internal/wire/fetch_test.go` against explicit temp-dir registries: upsert creates entry, re-fetch upserts same key, non-empty target still refused without force, `-t .` self-containment (registry excluded from content hash)
-- [x] T009 [P] [US1] Add Cobra flag tests in `cmd/git-wire/core/wire_test.go`: `-n` creates `./NAME`, existing name refused, `-t` + `-n` fails naming the conflict with no fetch attempted, neither flag keeps `./<subpath-basename>` default
+- [x] T020 [P] [US1] Table-driven parse tests in `internal/wire/source_test.go` — tolerated forms (`auto_backup/`, `.git` suffix, `x/y/z` depth), rejected forms (empty, http, credentials, port, missing subpath, `..`, leading dash, whitespace, control chars), `ResolveRef` longest-match, `IsPinnedSHA`
+- [x] T021 [P] [US1] Command-level fetch tests in `cmd/git-wire/core/wire_test.go` — `-t`/`-n` equivalence, dual-flag usage error, non-empty target refusal, missing subfolder, slashed ref echo, offline degradation
+- [x] T022 [P] [US1] Subfolder-flag tests in `cmd/git-wire/core/wire_subfolder_test.go` — generic URL + `--subfolder`, missing `--subfolder`, unsafe path (`path/../sub`), empty `--subfolder`
+- [x] T023 [P] [US1] Registry round-trip tests in `internal/wire/registry_test.go` — envelope, key normalization/rejection, atomicity, missing-file tolerance, corrupt/versioned-unknown, SC-006 size budget
+- [x] T024 [P] [US1] Hash tests in `internal/wire/hash_test.go` — aggregate SHA, bounded buffers, empty tree
+- [x] T025 [P] [US1] Fetch orchestration tests in `internal/wire/fetch_test.go` — against the fake fetcher (divergence, no-op, missing source, target-name creation)
+- [x] T026 [P] [US1] Transport tests in `internal/wire/gitfetch_test.go` — local fixture repos: `--no-checkout` then `sparse-checkout set` ordering, worktree lifecycle, prune hygiene, memoization
 
 ### Implementation for User Story 1
 
-- [x] T010 [US1] Rework `Fetch` and `recordCheckout` in `internal/wire/fetch.go` to take an explicit registry path, upsert the entry on success, stop writing records into the target, and report `Tracked for future updates (<registry-path>).` in the success summary
-- [x] T011 [US1] Add `-n/--target-name` flag with single-segment validation (non-empty, no separators, no dot elements, no leading dash — same segment discipline as `ParseSourceURL`) and dual-flag usage-error rejection in `cmd/git-wire/core/wire.go` (`addWireTargetFlags`, `targetFromFlags`)
-- [x] T012 [US1] Run live fetch validation per `specs/001-git-wire-fetch/quickstart.md` §3 with `RUN_GITWIRE_INTEGRATION=1` (OCA example via `-t` and `-n`, dual-flag failure, `ls -a` pristine-target proof)
+- [x] T027 [US1] Implement URL parse + validation (FR-003, FR-003a) — already covered by T006; verify table tests pass (path: internal/wire/source.go)
+- [x] T028 [US1] Enforce empty-subfolder rejection at parse time and ensure no network/mirror/target/registry is touched (FR-003b) — verify `ParseSourceURL` returns `ErrBadURL` for `.../tree/{ref}` and `.../tree/{ref}/`
+- [x] T029 [US1] Add the required user-facing sentence to the root-URL error: "whole-repository fetch is not supported" at the empty-subpath call site in `cmd/git-wire/core/wire.go` (FR-003b) — `NextAction(ErrBadURL)` keeps only the expected-shape text so scheme/userinfo defects are not mislabeled
+- [x] T030 [US1] Add a table case in `internal/wire/source_test.go` for the trailing-slash root URL (`.../tree/main/`) and assert `ErrBadURL`
+- [x] T031 [US1] Add a table case for deep nesting (`.../tree/main/a/b/c/d/e`) and assert `Subpath == "a/b/c/d/e"` with no depth cap (FR-003c)
+- [x] T032 [US1] Add a command-level test proving `--subfolder` cannot rescue a root `/tree/` URL (exit 1, `ErrBadURL`) in `cmd/git-wire/core/wire_subfolder_test.go`
+- [x] T033 [US1] Implement fetch flow: parse → resolve → materialize → copy-out → upsert registry → print `Fetched ... into ...` + `Tracked for future updates (...)` (FR-004, FR-005) (path: internal/wire/fetch.go + cmd/git-wire/core/wire.go)
+- [x] T034 [US1] Implement `-t/--target-path` and `-n/--target-name` resolution (default `./<subpath-basename>`, existing-name refusal, mutual exclusion as usage error) in `targetFromFlags` (FR-002)
+- [x] T035 [US1] Implement `--subfolder` handling (generic repo URL only, `Ref=HEAD`, path validation via `ParseSubpath`) in `fetchWith` (FR-003c) (path: cmd/git-wire/core/wire.go)
+- [x] T036 [US1] Ensure fetched folders hold contents only (no bookkeeping files) and registry stays at run level (FR-005, SC-006) (path: internal/wire/fetch.go + .git-wire.json (run level))
 
-**Checkpoint**: US1 fully functional — fetch → pristine target + registry entry; `-n` and conflict rule behave per contract
+**Checkpoint**: User Story 1 fully functional and testable independently (MVP)
 
 ---
 
-## Phase 4: User Story 2 - Update a previously fetched folder (Priority: P2)
+## Phase 4: User Story 2 - Update a previously fetched folder from its tracked source (Priority: P2)
 
-**Goal**: Update resolves its target to exactly one registry entry; bare `update` uses the single-entry shortcut, fails on zero (`ErrNotACheckout`) or multiple (usage error naming candidates); missing target directory reports diverged
+**Goal**: Re-resolve the tracked source and bring the target up to date, merging conflict-free local edits and refusing conflicting ones
 
-**Independent Test**: Fetch, change upstream, run bare `update` with one entry (advances) and with two entries (usage error); delete a target dir and confirm diverged/missing-target behavior with local files untouched
+**Independent Test**: Fetch a folder, change upstream, run update with no URL, confirm target reflects new upstream state; no-op update is fast and rewrites nothing (FR-006, FR-008, SC-004)
 
-### Tests for User Story 2
+### Tests for User Story 2 (Constitution II)
 
-- [x] T013 [P] [US2] Rework update tests in `internal/wire/update_test.go` against explicit temp-dir registries: entry lookup by key, single-entry default resolution, zero-entry `ErrNotACheckout`, multi-entry usage error naming candidates, missing target dir → diverged
-- [x] T014 [P] [US2] Update Cobra tests in `cmd/git-wire/core/wire_test.go` for reworked `updateTarget`: `--target-path` wins, then positional, then single-entry shortcut (zero/multi rules per contract)
+- [x] T037 [P] [US2] Update orchestration tests in `internal/wire/update_test.go` — no-op (`Already up to date`), upstream-only, local-only, convergent, conflict refusal, missing upstream path/ref, missing target
+- [x] T038 [P] [US2] Merge matrix tests in `internal/wire/merge_test.go` — all classification rows (FR-013) including delete-vs-modify
+- [x] T039 [P] [US2] Command-level update tests in `cmd/git-wire/core/wire_test.go` — target resolution (positional / `--target-path` / single-entry default), `--force`, diverged refusal, missing upstream path
 
 ### Implementation for User Story 2
 
-- [x] T015 [US2] Rework `Update` in `internal/wire/update.go` to resolve via explicit registry path + entry key (no `LoadRecord`), keep merge matrix/force semantics untouched
-- [x] T016 [US2] Rework `updateTarget` in `cmd/git-wire/core/wire.go` to implement the single-entry default (resolve registry from cwd, count entries: one → use it, zero → `ErrNotACheckout`, multiple → usage error naming candidates)
-- [x] T017 [US2] Run live no-op update validation per `specs/001-git-wire-fetch/quickstart.md` §4 with `RUN_GITWIRE_INTEGRATION=1` (`Already up to date`, zero file rewrites)
+- [x] T040 [US2] Implement update target resolution and registry lookup (positional, `-t`, single-entry default, `ErrNotACheckout`) in `wire.go`/`update.go`
+- [x] T041 [US2] Implement no-op detection (SHA compare, skip rewrite, `Already up to date (<sha>).`) (FR-008, SC-004) (path: internal/wire/update.go)
+- [x] T042 [US2] Implement conflict-free auto-merge and `Merged ...` output (FR-009, FR-013) (path: internal/wire/merge.go + internal/wire/update.go)
+- [x] T043 [US2] Implement conflict refusal with named paths and `--force` discard (`ErrDiverged`) (FR-009, FR-013) (path: internal/wire/update.go)
+- [x] T044 [US2] Implement missing upstream path/ref error (local files untouched) (FR-011, FR-012)
+- [x] T045 [US2] Implement `--force` re-materialization of upstream state (FR-009) (path: internal/wire/update.go)
+- [x] T046 [US2] Advance registry entry on successful update (resolved_commit, export_hash, updated_at) (FR-006) (path: internal/wire/registry.go + internal/wire/update.go)
 
-**Checkpoint**: US1 + US2 both work — fetch then update (explicit and bare) against the registry
+**Checkpoint**: User Stories 1 AND 2 both work independently
 
 ---
 
-## Phase 5: User Story 3 - Inspect tracked folders, stay fast (Priority: P3)
+## Phase 5: User Story 3 - Inspect tracked folders and stay fast on repeat runs (Priority: P3)
 
-**Goal**: List reads registry entries directly (no filesystem walk, no depth cap); each row shows path, source, ref, subpath, sync state; missing registry reads as empty
+**Goal**: List tracked folders with source/reference/path/state; repeat operations are fast and light (no full clones, minimal re-download, small on-disk state)
 
-**Independent Test**: Fetch two folders, run `list` from the run dir (two `current` rows), delete one target (row flips to diverged), run from a dir with no registry (empty message, exit 0)
+**Independent Test**: Fetch two folders, run list/status, re-run update with no upstream changes, observe fast no-op with bounded cache size (FR-007, SC-003, SC-004, SC-005)
 
-### Tests for User Story 3
+### Tests for User Story 3 (Constitution II)
 
-- [x] T018 [P] [US3] Rework list tests in `internal/wire/list_test.go` for registry-driven `List`: entries straight from registry, missing registry file → empty, missing target dir → `diverged`, no walk/depth-cap behavior
-- [x] T019 [P] [US3] Update Cobra tests in `cmd/git-wire/core/wire_test.go` for `listWith`: default root resolves the cwd registry, empty-registry message preserved
+- [x] T047 [P] [US3] Status derivation tests in `internal/wire/status_test.go`
+- [x] T048 [P] [US3] List tests in `internal/wire/list_test.go` (registry-driven, no walk, unreachable exits 0, empty registry message)
+- [x] T049 [P] [US3] Command-level list tests in `cmd/git-wire/core/wire_test.go` (row fields, unreachable state, empty registry)
 
 ### Implementation for User Story 3
 
-- [x] T020 [US3] Rewrite `List` in `internal/wire/list.go` to iterate registry entries (explicit registry path) with per-entry sync-state derivation; delete `findCheckouts`, `hasRecord`, `depth`, and `maxListDepth`
-- [x] T021 [US3] Rework `Entry` type in `internal/wire/list.go` (registry key + entry instead of colocated `Record`) and update `listSHA`/`describeCheckout`/`resolveSHA` call sites in `internal/wire/list.go` and `cmd/git-wire/core/wire.go`
-- [x] T022 [US3] Run offline degradation validation per `specs/001-git-wire-fetch/quickstart.md` §5 (unreachable rows, exit 0, locals untouched) plus guard-rails §6
+- [x] T050 [US3] Implement `list` (registry read, no filesystem walk, no depth cap) in `internal/wire/list.go` and `wire.go` (FR-007)
+- [x] T051 [US3] Implement per-entry state resolution with memoized remote lookups (FR-007, FR-010, FR-012) (path: internal/wire/status.go + internal/wire/memo.go)
+- [x] T052 [US3] Ensure `list` exits 0 even when remotes are unreachable (FR-012) (path: internal/wire/list.go + cmd/git-wire/core/wire.go)
+- [x] T053 [US3] Ensure offline degradation leaves files and registry intact with structured `slog` records (Principle IV) (path: internal/wire/*.go (slog call sites))
+- [x] T054 [US3] Performance: memoize remote-SHA lookups within a run (`internal/wire/memo.go`) and bound copy buffers (SC-004, SC-005)
 
-**Checkpoint**: All three stories independently functional against the registry
+**Checkpoint**: All user stories independently functional
 
 ---
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-**Purpose**: Gates, hygiene, and contract cross-checks
+**Purpose**: Improvements affecting multiple stories and final validation
 
-- [x] T023 [P] Cross-check user-facing phrases against `specs/001-git-wire-fetch/contracts/cli.md` (`Fetched … at … into …`, `Tracked for future updates (<registry-path>)`, `Already up to date`, conflict/usage-error namings) and fix drift in `internal/wire/fetch.go`, `internal/wire/update.go`, `cmd/git-wire/core/wire.go`
-- [x] T024 [P] Remove remaining colocated-record references (doc comments in `internal/wire/doc.go`, `status.go`, error strings in `internal/wire/errors.go`, stale `Record` mentions) found via `rg -n 'RecordPath|colocated|track\.go|findCheckouts|maxListDepth' internal/wire cmd/git-wire`
-- [x] T025 Full gate run from repo root: `gofmt` on changed files, `go test ./... ./internal/git/... ./internal/request/...`, `golangci-lint run`, `git diff --check`
-- [x] T026 Run `specs/001-git-wire-fetch/quickstart.md` end-to-end (build binary, run-dir fetches, update, list, offline, guard rails) with `RUN_GITWIRE_INTEGRATION=1` and record results
+- [x] T055 [P] Update `contracts/cli.md` if any flag/phrase drift is found during implementation (keep in sync with `wire.go`)
+- [x] T056 [P] Update `contracts/tracking-record.md` only if entry fields change (they must not — byte-identical to v1)
+- [x] T057 [P] Add `GUD_LOG_LEVEL=debug` structured records for degraded paths and memo counters (Principle IV) (path: internal/wire/*.go)
+- [x] T058 Run `gofmt -w` and `goimports` on every changed Go file (Principle I) (path: changed Go files (./))
+- [x] T059 Run `golangci-lint run` and fix any findings (Principle I) (path: ./ (repository root))
+- [x] T060 Run full workspace suite: `go test ./... ./internal/git/... ./internal/request/... ./internal/textwrap/...` (Principle V)
+- [x] T061 Run `git diff --check` and inspect `git diff` for accidental edits (Principle V) (path: ./ (repository root))
+- [x] T062 Validate quickstart.md scenarios end-to-end (steps 1–7 including 6a root-URL check) and record evidence (path: specs/001-git-wire-fetch/quickstart.md)
+- [x] T063 Fix ref resolution to prefer refreshed remote-tracking refs over the mirror's clone-time `refs/heads/*` (found in T062): sort ref names for deterministic collision handling, let peeled tags beat tag objects and tags beat same-named branches, and read `refs/remotes/origin/HEAD` for the default branch; tests in `internal/wire/gitfetch_test.go`, implementation in `internal/wire/gitfetch.go` (research D14) (FR-008, SC-004)
 
 ---
 
@@ -118,39 +163,52 @@
 
 ### Phase Dependencies
 
-- **Setup (Phase 1)**: No dependencies — start immediately
-- **Foundational (Phase 2)**: Depends on Setup — BLOCKS all user stories
-- **User Stories (Phase 3–5)**: All depend on Foundational completion
-  - Run sequentially in priority order (P1 → P2 → P3); US2/US3 both build on registry + fetch paths
-  - T008/T009, T013/T014, T018/T019 test tasks are parallelizable ([P], different files)
-- **Polish (Phase 6)**: Depends on all three stories complete
+- **Setup (Phase 1)**: No dependencies — can start immediately
+- **Foundational (Phase 2)**: Depends on Setup completion — BLOCKS all user stories
+- **User Stories (Phase 3+)**: All depend on Foundational (Phase 2) completion
+  - User stories can proceed in parallel once foundation is ready (if staffed)
+  - Or sequentially in priority order (P1 → P2 → P3)
+- **Polish (Phase 6)**: Depends on all desired user stories being complete
 
 ### User Story Dependencies
 
-- **US1 (P1)**: After Foundational — no story dependencies; MVP scope
-- **US2 (P2)**: After Foundational + US1 implementation (update exercises fetch-produced entries)
-- **US3 (P3)**: After Foundational + US1 implementation (list reads fetch-produced entries); independent of US2
+- **US1 (P1)**: Can start after Foundational — no dependencies on other stories
+- **US2 (P2)**: Can start after Foundational — integrates with US1's registry but independently testable
+- **US3 (P3)**: Can start after Foundational — reads the same registry; independently testable
 
 ### Within Each User Story
 
-- Tests written to the new registry API; fetch/update/list callers rewired after T002–T005 land
-- Dictionary order per phase: tests → implementation → live validation
-- Live validations (T012, T017, T022) require network + `RUN_GITWIRE_INTEGRATION=1`; unit tests never do
+- Tests MUST be written first and FAIL before implementation (Constitution II)
+- Models/domain types before services
+- Services before CLI handlers
+- Core implementation before integration
+- Story complete before moving to next priority
 
 ### Parallel Opportunities
 
-- T003 + T004 (same file, adjacent but independent — same-file edits, run sequentially if tooling requires); T006 test-writing can start once T002–T004 signatures settle
-- T008 ∥ T009, T013 ∥ T014, T018 ∥ T019 (test files per layer)
-- T023 ∥ T024 (different concerns, different files)
+- All Phase 1 tasks marked [P] can run in parallel
+- All Phase 2 tasks marked [P] (T005–T012) can run in parallel; T013–T019 depend on them
+- All tests within a user story marked [P] can run in parallel
+- US1, US2, US3 can be worked on in parallel by different developers once Phase 2 is complete
+- Phase 6 tasks marked [P] can run in parallel
 
----
-
-## Parallel Example: User Story 1
+### Parallel Example: User Story 1
 
 ```bash
-# Launch both US1 test tasks together (different files, no shared state):
-Task: "Rework fetch tests in internal/wire/fetch_test.go against explicit temp-dir registries"
-Task: "Add Cobra flag tests in cmd/git-wire/core/wire_test.go for -n and dual-flag rejection"
+# Launch all US1 tests together (must fail first):
+Task: "T020 [P] [US1] Table-driven parse tests in internal/wire/source_test.go"
+Task: "T021 [P] [US1] Command-level fetch tests in cmd/git-wire/core/wire_test.go"
+Task: "T022 [P] [US1] Subfolder-flag tests in cmd/git-wire/core/wire_subfolder_test.go"
+Task: "T023 [P] [US1] Registry round-trip tests in internal/wire/registry_test.go"
+Task: "T024 [P] [US1] Hash tests in internal/wire/hash_test.go"
+Task: "T025 [P] [US1] Fetch orchestration tests in internal/wire/fetch_test.go"
+Task: "T026 [P] [US1] Transport tests in internal/wire/gitfetch_test.go"
+
+# Then implementation tasks (some parallelizable):
+Task: "T028 [US1] Enforce empty-subfolder rejection (FR-003b)"
+Task: "T030 [US1] Table case for trailing-slash root URL"
+Task: "T031 [US1] Table case for deep nesting"
+Task: "T032 [US1] Command-level root-URL rescue test"
 ```
 
 ---
@@ -159,73 +217,40 @@ Task: "Add Cobra flag tests in cmd/git-wire/core/wire_test.go for -n and dual-fl
 
 ### MVP First (User Story 1 Only)
 
-1. Complete Phase 1: Setup (T001)
-2. Complete Phase 2: Foundational (T002–T007) — registry layer + colocated retirement
-3. Complete Phase 3: US1 (T008–T012)
-4. **STOP and VALIDATE**: fetch via `-t`/`-n`, registry entries, pristine targets, dual-flag error
+1. Complete Phase 1: Setup
+2. Complete Phase 2: Foundational (CRITICAL — blocks all stories)
+3. Complete Phase 3: User Story 1
+4. **STOP and VALIDATE**: Test User Story 1 independently (quickstart steps 1–3 + 6a)
 5. Deploy/demo if ready
 
 ### Incremental Delivery
 
-1. Setup + Foundational → registry API stable
-2. Add US1 → fetch writes registry (MVP!)
-3. Add US2 → update reads registry + single-entry default
-4. Add US3 → list reads registry, walk retired
-5. Polish → gates green, quickstart recorded
+1. Complete Setup + Foundational → Foundation ready
+2. Add User Story 1 → Test independently → Deploy/Demo (MVP!)
+3. Add User Story 2 → Test independently → Deploy/Demo
+4. Add User Story 3 → Test independently → Deploy/Demo
+5. Each story adds value without breaking previous stories
 
 ### Parallel Team Strategy
 
-Single implementer recommended (shared `internal/wire` files across stories); a second person can take Cobra-layer tasks (T009, T014, T019) once registry + domain signatures settle.
+With multiple developers:
+
+1. Team completes Setup + Foundational together
+2. Once Foundational is done:
+   - Developer A: User Story 1 (incl. FR-003b/FR-003c boundary cases)
+   - Developer B: User Story 2
+   - Developer C: User Story 3
+3. Stories complete and integrate independently
 
 ---
 
 ## Notes
 
-- Explicit-registry-path threading is load-bearing for hermetic tests (constitution Principle II): no domain function may call `os.Getwd()`; only Cobra handlers resolve the registry from cwd
-- Entry fields stay byte-identical to the v1 record — no migration logic, fixtures re-key by wrapping in the envelope
-- Merge matrix, sync-state derivation order, `TreeExists` pre-check, hash-exclusion (`-t .` self-containment), and transport (`internal/git/wire.go`) are untouched this round
-- Commit after each task or logical group; `git diff --check` before finishing
-
----
-
-## Phase 7: Convergence
-
-- [x] T027 Detect already-up-to-date on re-fetch and skip re-download/rewrite per FR-008 (missing)
-- [x] T028 Report file-instead-of-folder subpaths as ErrMissingPath with parsed identity echoed per FR-011 (partial)
-
----
-
-## Phase 8: Convergence — Slashed-Ref Disambiguation (FR-003a, amendment 2026-10-25)
-
-**Purpose**: Close the spec amendment applied by `/speckit.specify` 2026-10-25. FR-003a and the
-spec's US1 scenario 6, Edge Cases entry, and Assumptions line 308 require: (1) slashed refs
-are disambiguated by **longest match against the remote's live ref listing** (no flag
-override, slashes allowed); (2) a full 40-hex commit ref needs no listing (verified directly);
-(3) the registry stores the **resolved** ref, not the greedy first URL segment; (4) offline
-behavior falls under FR-012. The implementation already ships `ResolveRef` (longest-match,
-`internal/wire/source.go`), `resolveNamed` (LsRemote → `shortRefs` → `ResolveRef`,
-`internal/wire/gitfetch.go`), `IsPinnedSHA` fast path, and `fetchFresh`/`fetchTracked` writing
-`resolved.Ref = res.Ref` into the registry. Unit-level coverage exists (`TestResolveRef`
-"slashed branch wins longest", `TestShortRefs`, `TestIsPinnedSHA`, `TestFetchUnknownRef`).
-The gaps this round closes: no **end-to-end** fixture test through the real `gitFetcher` for a
-slashed branch, no explicit registry-resolved-ref assertion, and two artifacts that still
-contradict FR-003a (quickstart troubleshooting row, data-model/contract wording).
-
-### Tests (red-first per constitution Principle II)
-
-> **NOTE**: T029 is the one net-new behavioral test; T030 is an assertion alongside existing
-> registry behavior. Write the test first, confirm it FAILS against the current code (currently
-> the fixture has no slashed branch, so resolveNamed is never exercised end-to-end), then
-> implement or extend the fixture.
-
-- [x] T029 [P] [US1] Add an end-to-end slashed-ref resolution test to `internal/wire/gitfetch_test.go`: seed a local remote (extend the `seedWireMirror`/`mustInitFixture` pattern) with branches `main` and `release/v1.0`, where `release/v1.0` holds `pkg/util/tool.go`; resolve `SourceRef{Host: "example.com", Owner: "o", Repo: "r", Ref: "release", Subpath: "v1.0/pkg/util"}` through the real fetcher and assert `Resolution{Ref: "release/v1.0", Subpath: "pkg/util"}` with the `release/v1.0` commit; add a competing case where a shorter branch `release` also exists and assert the longest match (`release/v1.0`) wins; assert `ErrUnknownRef` when no known ref is a prefix. Skip in short mode like the neighbouring temp-repo tests. ✅ green: exposed a real `peelRef` defect (mirror refs under `refs/remotes/origin/` were dropped, so resolveNamed failed; fixed in `internal/wire/gitfetch.go` with `remoteTrackingPrefix` + HEAD-symref skip)
-- [x] T030 [US1] Add/extend a registry assertion that a fetch with a slashed source records the **resolved** ref: in `internal/wire/fetch_test.go`, drive `Fetch` with a fakeFetcher whose `Resolve` performs longest-match (or a fixture with a `release/v1.0` branch) from `SourceRef{Ref: "release", Subpath: "v1.0/pkg/util"}`, then assert the upserted registry entry has `Ref == "release/v1.0"` and `Subpath == "pkg/util"` (not the greedy first segment), and `ResolvedCommit` is the resolved SHA (spec Assumptions line 308; FR-003a(3)). ✅ green via `slashedRefFetcher` (ResolveRef over a canned list, delegating Materialize to the embedded fake); zero deletions to existing assertions
-
-### Implementation (documentation conformance — FR-003a texts)
-
-- [x] T031 [US1] Conform `specs/001-git-wire-fetch/quickstart.md` troubleshooting row to FR-003a: the row "`unknown ref` on a slashed branch … use the first-segment ref form or wait for `--ref` support" contradicts the amendment (slashes in ref names are supported and disambiguated by longest-match against the remote; no flag exists or is planned). Rewrite the row and its Check column to describe the FR-003a behavior and point at the spec amendment; keep the `git ls-remote` private-repo row unchanged.
-- [x] T032 [P] Align `specs/001-git-wire-fetch/data-model.md` §1/§2 and `specs/001-git-wire-fetch/contracts/cli.md` with FR-003a: (a) annotate the registry-entry `ref`/`subpath` fields (data-model §2 entry rows) that they store the **resolved** longest-match ref, not the first URL segment; (b) add one sentence to `contracts/cli.md` (Commands → fetch/URL shape or Non-goals) stating slashed refs are supported and resolved by longest-match against the remote ref listing, and that no `--ref` override is provided. Do not add any new flag or surface.
-- [x] T033 [US1] Gate run for the amendment from repo root: `gofmt -l` on changed files, `go test ./... ./internal/git/... ./internal/request/...` (including the new T029/T030 tests), `golangci-lint run`, `git diff --check`. All green. Run `go run ./cmd/git-wire --help` to confirm no flag surface changed. ✅ full workspace suite green; gofmt clean; diff clean; help smoke confirms no new flags; lint shows only pre-existing findings (verified via stash baseline — the one new lll was fixed)
-- [x] T034 [P] Optional live validation with `RUN_GITWIRE_INTEGRATION=1` per `specs/001-git-wire-fetch/quickstart.md` §3/§7 against a public repo URL whose ref contains a slash (fallback: the T029 fixture is the deterministic proof if no stable public slashed-branch URL is available; record which was used and the observed success line echoing the resolved ref, e.g. `@release/v1.0:pkg/util`). ✅ live run 2026-10-26: `git wire https://github.com/github/gitignore/tree/copilot/research-github-gitignore-repository/Global -t ./copilotprobe` → `Fetched github.com/github/gitignore@copilot/research-github-gitignore-repository:Global at 1046d8f into /tmp/wirelive/copilotprobe (75 files).` Registry entry ref=`copilot/research-github-gitignore-repository`, subpath=`Global`, commit `1046d8f` (matches ls-remote). Caveat: copilot/* branches are ephemeral — T029 stays the durable proof.
-
-**Checkpoint**: FR-003a is closed — slashed refs resolve deterministically (T029), the registry proves the resolved ref (T030), and every artifact agrees with the amended spec (T031, T032, T033).
+- [P] tasks = different files, no dependencies
+- [Story] label maps task to specific user story for traceability
+- Each user story should be independently completable and testable
+- Verify tests fail before implementing (Constitution II)
+- Commit after each task or logical group
+- Stop at any checkpoint to validate story independently
+- Avoid: vague tasks, same file conflicts, cross-story dependencies that break independence
+- **Amendment-derived tasks**: T028–T032 and T029 (the FR-003b message sentence) exist solely because of the 2026-10-25 clarification round; they are the delta over the pre-amendment plan. T029 is the one implementation change not yet present in code.

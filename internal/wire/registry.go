@@ -425,6 +425,7 @@ func isLowerHex(s string, n int) bool {
 		isDigit := r >= '0' && r <= '9'
 		isHexLower := r >= 'a' && r <= 'f'
 		isHex := isDigit || isHexLower
+
 		if !isHex {
 			return false
 		}
