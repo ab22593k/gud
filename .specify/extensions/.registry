@@ -8,6 +8,11 @@
       "enabled": true,
       "priority": 10,
       "registered_commands": {
+        "pi": [
+          "speckit.bug.assess",
+          "speckit.bug.fix",
+          "speckit.bug.test"
+        ],
         "opencode": [
           "speckit.bug.assess",
           "speckit.bug.fix",
@@ -15,7 +20,7 @@
         ]
       },
       "registered_skills": [],
-      "installed_at": "2026-10-19T13:14:42.468665+00:00"
+      "installed_at": "2026-10-25T11:07:17.091034+00:00"
     }
   }
 }

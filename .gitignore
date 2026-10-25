@@ -12,3 +12,4 @@ target/
 !.agents/types/
 .env
 .specify/bugs/
+.pi/prompts/
