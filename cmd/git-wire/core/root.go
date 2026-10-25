@@ -23,6 +23,9 @@ var rootCmd = &cobra.Command{
 The URL names the owner, repository, reference, and folder, for example:
 https://github.com/OCA/server-tools/tree/19.0/auto_backup
 
+A generic repository URL (https://github.com/owner/repo) may be used with
+--subfolder path/sub to name the folder to fetch.
+
 The folder is tracked for future updates (see 'git wire update').
 Run 'git wire list' to see tracked folders.`,
 	Example: `  git wire https://github.com/OCA/server-tools/tree/19.0/auto_backup -t ./auto_backup`,
@@ -69,6 +72,7 @@ func setupLogLevel() {
 func init() {
 	addWireTargetFlags(rootCmd, fetchForceUsage)
 	addWireTargetNameFlag(rootCmd)
+	addWireSubfolderFlag(rootCmd)
 	rootCmd.AddCommand(gitWireUpdateCmd)
 	addWireTargetFlags(gitWireUpdateCmd, updateForceUsage)
 	rootCmd.AddCommand(gitWireListCmd)

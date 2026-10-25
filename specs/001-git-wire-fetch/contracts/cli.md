@@ -9,7 +9,7 @@ product-vocabulary constraint. All user-facing writes go to
 
 ## Commands
 
-### `git wire <url> [-t|--target-path <dir> | -n|--target-name <name>] [--force]`
+### `git wire <url> [-t|--target-path <dir> | -n|--target-name <name>] [--subfolder <path>] [--force]`
 
 Fetch a subfolder (default action; `fetch` accepted as an explicit alias
 spelling `git wire fetch <url> ...` only if routing needs it —
@@ -24,6 +24,10 @@ not promised here).
   exist yet; created as `./<name>` under the working directory. An existing
   name fails with `ErrTargetNotEmpty`. Passing both `-t` and `-n` fails as
   a usage error naming the conflict, before any network use.
+- `--subfolder <path>`: subfolder path within the repository, used with a
+  generic repository URL (`https://{host}/{owner}/{repo}`) that carries no
+  `/tree/{ref}/...` segment. The reference defaults to the remote's default
+  branch.
 - `--force`: permit replacing a non-empty target. Without it, a non-empty
   target fails with `ErrTargetNotEmpty`.
 - Success output (stable key phrases, asserted by tests):

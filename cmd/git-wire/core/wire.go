@@ -58,6 +58,12 @@ func addWireTargetFlags(cmd *cobra.Command, forceUsage string) {
 	cmd.Flags().Bool("force", false, forceUsage)
 }
 
+// addWireSubfolderFlag registers --subfolder on fetch: a path within the
+// repository, used with generic repository URLs that carry no /tree/ ref.
+func addWireSubfolderFlag(cmd *cobra.Command) {
+	cmd.Flags().String("subfolder", "", "Subfolder path within the repository (use with a generic repository URL)")
+}
+
 // addWireTargetNameFlag registers --target-name on fetch: a bare folder
 // name for a folder that does not exist yet, created under the working
 // directory. It is fetch-only and mutually exclusive with --target-path.
@@ -76,6 +82,31 @@ func fetchWith(cmd *cobra.Command, args []string, fetcher wire.Fetcher) error {
 	source, err := wire.ParseSourceURL(args[0])
 	if err != nil {
 		return wireError(err)
+	}
+
+	// --subfolder lets a generic repository URL (host/owner/repo) name the
+	// folder to fetch instead of requiring a /tree/{ref}/{path} URL.
+	if cmd.Flags().Lookup("subfolder") != nil && cmd.Flags().Changed("subfolder") {
+		sub, err := cmd.Flags().GetString("subfolder")
+		if err != nil {
+			return err
+		}
+
+		sub = strings.Trim(sub, "/")
+		if sub == "" {
+			return wireError(fmt.Errorf("empty --subfolder: %w", wire.ErrBadURL))
+		}
+
+		parts := strings.Split(sub, "/")
+		if _, err := wire.ParseSubpath(parts); err != nil {
+			return wireError(err)
+		}
+
+		source.Subpath = sub
+	}
+
+	if source.Subpath == "" {
+		return wireError(fmt.Errorf("parse %q: %w", args[0], wire.ErrBadURL))
 	}
 
 	target, err := targetFromFlags(cmd, source)

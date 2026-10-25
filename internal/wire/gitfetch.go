@@ -90,6 +90,34 @@ func (f *gitFetcher) resolveNamed(ctx context.Context, mirror string, source Sou
 		return Resolution{}, upstream("list refs", err)
 	}
 
+	// A generic repository URL carries no explicit ref; resolve against
+	// the remote's default branch reported as HEAD.
+	if source.Ref == "HEAD" {
+		commit, ok := refs["HEAD"]
+		if !ok || commit == "" {
+			return Resolution{}, fmt.Errorf("ref %q: %w", source.Ref, ErrUnknownRef)
+		}
+
+		actualPath := source.Subpath
+		if actualPath == "" {
+			return Resolution{}, fmt.Errorf("ref %q points at the repository root: %w", source.Ref, ErrMissingPath)
+		}
+
+		if !git.TreeExists(tctx, mirror, commit, actualPath) {
+			display := source.Host + "/" + source.Owner + "/" + source.Repo + "@" + source.Ref + ":" + actualPath
+
+			return Resolution{}, fmt.Errorf("%s: %w", display, ErrMissingPath)
+		}
+
+		if !git.TreeIsDir(tctx, mirror, commit, actualPath) {
+			display := source.Host + "/" + source.Owner + "/" + source.Repo + "@" + source.Ref + ":" + actualPath
+
+			return Resolution{}, fmt.Errorf("%s is a file, not a fetchable folder: %w", display, ErrMissingPath)
+		}
+
+		return Resolution{Commit: commit, Ref: source.Ref, Subpath: actualPath}, nil
+	}
+
 	known, commits := shortRefs(refs)
 
 	actualRef, actualPath, ok := ResolveRef(known, source.Ref, source.Subpath)

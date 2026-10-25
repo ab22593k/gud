@@ -78,8 +78,26 @@ func ParseSourceURL(raw string) (SourceRef, error) {
 	}
 
 	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
+
+	// Generic repository URL (no /tree/{ref}/...): accepted when the
+	// caller supplies the subfolder through --subfolder. The reference
+	// defaults to the remote's default branch (HEAD).
 	if len(parts) < 5 || parts[2] != "tree" {
-		return SourceRef{}, fmt.Errorf("parse %q: %w", trimmed, ErrBadURL)
+		if len(parts) != 2 {
+			return SourceRef{}, fmt.Errorf("parse %q: %w", trimmed, ErrBadURL)
+		}
+
+		owner, err := checkName("owner", parts[0])
+		if err != nil {
+			return SourceRef{}, err
+		}
+
+		repo, err := checkName("repo", strings.TrimSuffix(parts[1], ".git"))
+		if err != nil {
+			return SourceRef{}, err
+		}
+
+		return SourceRef{Host: host, Owner: owner, Repo: repo, Ref: "HEAD", Subpath: "", SourceURL: trimmed}, nil
 	}
 
 	owner, err := checkName("owner", parts[0])
@@ -218,4 +236,10 @@ func ResolveRef(known []string, ref, subpath string) (actualRef, actualPath stri
 	}
 
 	return best, strings.TrimPrefix(full[len(best):], "/"), true
+}
+
+// ParseSubpath validates and joins subpath segments supplied by callers
+// (e.g. --subfolder), returning the canonical slash form.
+func ParseSubpath(segs []string) (string, error) {
+	return parseSubpath(segs)
 }
