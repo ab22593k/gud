@@ -1,5 +1,17 @@
 # gud Constitution
 
+<!--
+  Sync Impact Report — amendment 2026-10-28
+  Version change: 1.0.1 → 1.1.0 (MINOR: new Core Principle VI)
+  Modified principles: none renamed or redefined
+  Added principles: VI. Grade Every Attempt on Tests and Trajectory (NON-NEGOTIABLE)
+  Added sections: none
+  Removed sections: none
+  Deferred: the request was truncated after "flags for looking up the solution,";
+            the disposition is recorded as "MUST be rejected". Confirm or amend.
+  Templates and commands: unchanged — they resolve this file at runtime.
+-->
+
 ## Core Principles
 
 ### I. Gated Code Quality
@@ -93,6 +105,28 @@
   do not re-run the suite. False certainty is a correctness defect in the
   workflow itself.
 
+### VI. Grade Every Attempt on Tests and Trajectory (NON-NEGOTIABLE)
+
+- Every attempt at a task MUST be graded by executing that task's own tests. A
+  self-report, a diff review alone, or a model's claim of success is not a grade.
+- Every attempt MUST also be graded against a rubric whose checks are classified
+  as **blocking** or **non-blocking**. The classification MUST be fixed before
+  the attempt is graded, never chosen after its result is known.
+- An attempt that fails any blocking check MUST be rejected.
+- An attempt whose trajectory scanner flags solution lookup MUST be rejected,
+  even when every test passes. Solution lookup means consulting the reference
+  patch, the test oracle, or an external copy of the answer instead of deriving
+  the change from the task.
+- A non-blocking failure MUST be recorded and reported with its rubric item. It
+  MUST NOT be dropped, and it MUST NOT by itself reject an attempt.
+- The verdict MUST name the tests executed, each rubric check with its blocking
+  status and result, and the scanner's finding or its explicit absence. A verdict
+  without that evidence is a claim, not a grade.
+- Rationale: a green test proves the output matches the oracle, not that the
+  attempt derived it. Grading on tests alone rewards retrieval and overfitting;
+  grading on trajectory alone misses incorrect output. Both gates are required,
+  and blocking checks keep rejection mechanical instead of a judgment call.
+
 ## Additional Constraints
 
 - **Toolchain**: Go workspace on go 1.27.2, built from the repository root so
@@ -150,9 +184,9 @@ Run from the repository root. No Makefile is used by design.
   - MINOR — a new principle or section, or materially expanded obligations.
   - PATCH — clarification, wording, typo, or non-semantic refinement.
 - **Compliance review**: every completed change is reviewed against Core
-  Principles I-V. Unverifiable claims reported as verified are treated as a
+  Principles I-VI. Unverifiable claims reported as verified are treated as a
   Principle V violation, not a documentation defect.
 - **Ratified**: 2026-09-27, the date the template scaffold was first populated
   with governed principles.
 
-**Version**: 1.0.1 | **Ratified**: 2026-09-27 | **Last Amended**: 2026-10-18
+**Version**: 1.1.0 | **Ratified**: 2026-09-27 | **Last Amended**: 2026-10-28
