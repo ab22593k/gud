@@ -78,7 +78,7 @@ func TestBuildHistoryContext_GraphRelative(t *testing.T) {
 
 	app := &AppContext{cfg: config.Config{History: config.Ptr(5)}}
 
-	got := buildHistoryContext(context.Background(), app, "")
+	got := buildHistoryContext(context.Background(), app, "", historyPresent)
 	if !strings.Contains(got, "Commits on topic since diverging from origin/main:") {
 		t.Errorf("history should be labelled by branch and upstream, got: %q", got)
 	}
@@ -108,7 +108,7 @@ func TestBuildHistoryContext_GraphRelative_StagedPaths(t *testing.T) {
 	// A staged diff touching only file1.txt must limit the topic history.
 	diff := "diff --git a/file1.txt b/file1.txt\n--- a/file1.txt\n+++ b/file1.txt\n"
 
-	got := buildHistoryContext(context.Background(), app, diff)
+	got := buildHistoryContext(context.Background(), app, diff, historyPresent)
 	if !strings.Contains(got, "(staged files)") {
 		t.Errorf("history limited to staged files should say so, got: %q", got)
 	}
@@ -160,7 +160,7 @@ func TestBuildHistoryContext_FallsBackToRecent(t *testing.T) {
 
 	app := &AppContext{cfg: config.Config{History: config.Ptr(5)}}
 
-	got := buildHistoryContext(context.Background(), app, "")
+	got := buildHistoryContext(context.Background(), app, "", historyPresent)
 	if !strings.Contains(got, "Recent commits:") {
 		t.Errorf("without an upstream the history should fall back to recent commits, got: %q", got)
 	}

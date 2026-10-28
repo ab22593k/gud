@@ -1,6 +1,6 @@
 # Data Model: Commit Message Description — Spec Conformance Closure
 
-**Feature**: `specs/002-commit-message/spec.md` | **Date**: 2026-10-15
+**Feature**: `specs/002-commit-message/spec.md` | **Date**: 2026-10-15, revised 2026-10-28
 
 Entities, value shapes, invariants, and state transitions for the description feature.
 Field names match the shipped Go types so the model is directly checkable against the code;
@@ -122,19 +122,58 @@ Repository-provided guidance mounted into the request.
 
 ---
 
-## 6. Repository context (prompt fragments) — unchanged
+## 6. Repository context (prompt fragments) — CHANGED (D8)
 
-Assembled concurrently; each fragment degrades to `""` on failure rather than blocking.
+Assembled concurrently **after** the commit state is resolved once; each fragment degrades to
+`""` on failure rather than blocking. D8 adds one fragment (repository state) and one
+conditional: in a repository with no commits the history family is not probed at all.
 
-| Fragment      | Content                                                    | Degradation                         | Source                 |
-| ------------- | ---------------------------------------------------------- | ----------------------------------- | ---------------------- |
-| Repo overview | File/extension shape of the repository                     | omitted on failure                  | FR-010, FR-030         |
-| History       | Upstream/topic commit subjects, bounded ≤ 50, `0` disables | omitted when unresolved or disabled | FR-010, FR-014, FR-030 |
-| Submodule     | Sub-project identity and subjects backing a gitlink change | falls back to the opaque hashes     | FR-008, FR-030         |
-| Operation     | The in-progress git operation the commit completes         | `OperationNone`                     | FR-009, FR-030         |
+| Fragment         | Content                                                                     | Degradation                                                                           | Source                 |
+| ---------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ---------------------- |
+| Repository state | The first-commit statement, or nothing in the normal case                   | n/a (pure construction)                                                               | FR-010, D8             |
+| Repo overview    | File/extension shape of the repository                                      | omitted on failure                                                                    | FR-010, FR-030         |
+| History          | Upstream/topic commit subjects, bounded ≤ 50, `0` disables history evidence | omitted when unresolved or disabled; the first-commit statement is state, not history | FR-010, FR-014, FR-030 |
+| Submodule        | Sub-project identity and subjects backing a gitlink change                  | falls back to the opaque hashes                                                       | FR-008, FR-030         |
+| Operation        | The in-progress git operation the commit completes                          | `OperationNone`                                                                       | FR-009, FR-030         |
 
 **Invariant**: every degraded path emits a structured `slog` record carrying the cause
 (FR-030, FR-028).
+
+### 6.1 Commit state (`historyState`) — NEW (D8)
+
+The repository fact that decides whether the history family is meaningful. Resolved **once**
+per invocation in `buildPromptContextParallel` before the builders start; the builders receive
+the value and never probe. One `rev-parse --verify --quiet HEAD^{commit}`:
+
+| Value            | Probe result                           | History behaviour                                                                                                             | Submodule behaviour                                         |
+| ---------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `historyAbsent`  | exit 1 (unborn branch, no HEAD commit) | **not probed**: no upstream/branch discovery, no recent, no topic query; the first-commit statement occupies the history slot | identity and pointer range only; commit subjects suppressed |
+| `historyPresent` | exit 0                                 | unchanged from today                                                                                                          | unchanged from today                                        |
+| `historyUnknown` | any other failure (not exit 1)         | unchanged from today: attempt, degrade on failure, never claim a first commit                                                 | unchanged from today                                        |
+
+**First-commit statement** (exact text in
+[contracts/verification.md](contracts/verification.md) §4):
+`Repository state: no commits yet; the staged change is the repository's first commit.`
+
+**Invariants**
+
+- The statement is emitted **even when `--history 0`**: it frames the position of the described
+  change, not prior-commit evidence, so FR-014's explicit zero does not suppress it (D8).
+- Exit 1 is the only "absence" answer. Any other failure is `historyUnknown`, because a corrupt
+  repo, a permission problem, or a broken `git` must never be described to the model as a first
+  commit (FR-010 truthfulness; Principle V).
+- The staged root index still reaches the model unchanged: `git diff --cached` is the evidence,
+  and it works in an unborn repository (FR-006). The repository **overview** keeps its
+  working-tree walk (Q2); "staged root index" binds only the described change.
+- `--amend` in this state is refused **before** any revision is resolved, with
+  `cannot amend: the repository has no commits yet` (FR-029). The default target is `HEAD~1`;
+  resolving it first produces git's `fatal: Needed a single revision`, which names nothing.
+  The refusal fires only when the state is `historyAbsent`; a probe **error** falls through to
+  the existing resolution path rather than asserting that the repository has no commits.
+- The skip is diagnostics-only: one `slog.Debug` record, no user-facing notice (Q3). It is
+  **not** the FR-007 truncation notice, because nothing the developer expected is missing.
+- The value is not memoised on `AppContext`: `buildPromptContextParallel` is the single
+  resolution point, so adding a second cache would create a second source of truth.
 
 ---
 

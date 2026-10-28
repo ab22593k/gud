@@ -1,7 +1,7 @@
 # Tasks: Commit Message Description — Spec Conformance Closure
 
 **Input**: Design documents from `specs/002-commit-message/`
-(plan.md, spec.md US1–US4, research.md D1–D7, data-model.md, contracts/cli.md, contracts/verification.md, quickstart.md)
+(plan.md, spec.md US1–US4, research.md D1–D8, data-model.md, contracts/cli.md, contracts/verification.md, quickstart.md)
 
 **Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/, quickstart.md — all present.
 
@@ -13,23 +13,24 @@ credentials), git is a temp repo, and paths are injected. Live-model checks stay
 skipped under `-short`.
 
 **Organization**: Tasks grouped by user story. This feature is a **conformance closure**: the
-spec was reverse-derived from the shipped code, so the work closes six confirmed divergences
+spec was reverse-derived from the shipped code, so the work closes seven confirmed divergences
 (plan.md, research.md) rather than adding capability. No new third-party dependency, config knob,
 or CLI flag is introduced. One workspace module (`internal/textwrap`, T032) is introduced by the
 post-analysis decision D7 so the display-cell measure has a single implementation across the
-root module, the verifier module, and the TUI.
+root module, the verifier module, and the TUI. The 2026-10-28 clarification adds divergence (g)
+and decision D8; its tasks are appended as Phase 9 so the completed T001–T040 record is preserved.
 
 ## Requirement → story mapping
 
 The specification does not label FRs by story; this mapping follows the specification's own
 requirement groups so every fix lands in the story that owns its behavior.
 
-| Story                                                  | Priority | Requirements                                                           | Owns divergence                                             |
-| ------------------------------------------------------ | -------- | ---------------------------------------------------------------------- | ----------------------------------------------------------- |
-| US1 Get a description of the staged change             | P1       | FR-001–FR-010 (Description content; Evidence and grounding)            | (b) FR-001 body-less; (e) FR-007 truncation disclosure      |
-| US2 Shape the description to the project's conventions | P2       | FR-011–FR-016 (Shape and controls)                                     | (a) FR-013 width; (c) FR-011 README                         |
-| US3 Trust the description before it enters history     | P3       | FR-017–FR-029 (Quality verification; Review; Unattended; Regeneration) | (d) FR-018 feedback/notice; (f) FR-029 root commit          |
-| US4 Keep generation safe, bounded, predictable         | P4       | FR-030–FR-036 (Degradation, safety, resource bounds; Configuration)    | none — audit found these satisfied; verification-only phase |
+| Story                                                  | Priority | Requirements                                                           | Owns divergence                                                                                |
+| ------------------------------------------------------ | -------- | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| US1 Get a description of the staged change             | P1       | FR-001–FR-010 (Description content; Evidence and grounding)            | (b) FR-001 body-less; (e) FR-007 truncation disclosure; (g) FR-010 no-commits history state    |
+| US2 Shape the description to the project's conventions | P2       | FR-011–FR-016 (Shape and controls)                                     | (a) FR-013 width; (c) FR-011 README; (g) FR-014 `--history 0` keeps the first-commit statement |
+| US3 Trust the description before it enters history     | P3       | FR-017–FR-029 (Quality verification; Review; Unattended; Regeneration) | (d) FR-018 feedback/notice; (f) FR-029 root commit; (g) FR-029 unborn-repo refusal             |
+| US4 Keep generation safe, bounded, predictable         | P4       | FR-030–FR-037 (Degradation, safety, resource bounds; Configuration)    | (g) FR-030 diagnostics-only skip; audit found the rest satisfied                               |
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -46,19 +47,24 @@ beside their source (`foo.go` → `foo_test.go`).
 
 ## Current code reality (verify before editing)
 
-| Symbol                                                       | Location                                   | Role                                                                                                                                                                                                                                                                                                                           |
-| ------------------------------------------------------------ | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `VerifyMessage(msg, diff string, wrapLine int) []Finding`    | `internal/request/verify.go`               | Pure checks: `empty`, `empty-body`, `subject-length`, `fence-remnant`, `file-grounding`                                                                                                                                                                                                                                        |
-| `displaywidth.String(subject)`                               | `internal/request/verify.go:50,53`         | **Second measure call site** — evaluated twice in one expression; D7 replaces it with `textwrap.Columns`, hoisted to one local (**done, T033**)                                                                                                                                                                                |
-| `github.com/clipperhouse/displaywidth`                       | `internal/request/go.mod` (require block)  | Direct dependency held **only** for that one call; D7 removes it (**done, T033** — the require is gone; the library is a direct dependency of `internal/textwrap` alone)                                                                                                                                                       |
-| `textwrap.Columns` / `textwrap.Wrap`                         | `internal/textwrap/width.go`               | Intended single measure home; the package doc claimed "one measure, one wrapper, no copies" — untrue until D7, because the verifier measured separately (**now true, T033/T034**)                                                                                                                                              |
-| `generateVerified(...)` / `maxVerifyAttempts = 2`            | `internal/request/client.go:188-226`       | Bounded retry; today it re-sends the **same** request                                                                                                                                                                                                                                                                          |
-| `GenerateCommitMessage` / `GenerateCommitMessageWithContent` | `internal/request/client.go:132,142`       | Return `(string, error)` — no findings channel                                                                                                                                                                                                                                                                                 |
-| `getStagedDiffAndDeleted` / `getStagedDiffOrError`           | `cmd/git-message/core/generate.go:158,173` | `Truncated` is read at `generate.go:179` and only `slog.Debug`-logged                                                                                                                                                                                                                                                          |
-| `assembleTrailers(ctx, msg, issues, model)`                  | `cmd/git-message/core/interact.go:253`     | **Now has a single production caller** — `finalizeMessage` at `interact.go:286`. The five prior call sites described by T016 (`interact.go:71,110,137`, `hook.go:203`, `amend.go:188`) all funnel through it; `contracts/verification.md`'s "four" and `tasks.md`'s "five" are both historical counts of that pre-change state |
-| `wrapText(text, limit)`                                      | `internal/tui/commit.go:331`               | Private display-cell wrapper; T015 replaced it with `textwrap.Wrap` — this row is pre-change only                                                                                                                                                                                                                              |
-| `resolveAmendCommit`                                         | `cmd/git-message/core/amend.go`            | Root guard reachable only on the non-HEAD path                                                                                                                                                                                                                                                                                 |
-| `checkHasParent`                                             | `internal/git/amend.go:71`                 | Root-commit refusal, used by `RewordCommit` only                                                                                                                                                                                                                                                                               |
+| Symbol                                                       | Location                                         | Role                                                                                                                                                                                                                                                                                                                           |
+| ------------------------------------------------------------ | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `VerifyMessage(msg, diff string, wrapLine int) []Finding`    | `internal/request/verify.go`                     | Pure checks: `empty`, `empty-body`, `subject-length`, `fence-remnant`, `file-grounding`                                                                                                                                                                                                                                        |
+| `displaywidth.String(subject)`                               | `internal/request/verify.go:50,53`               | **Second measure call site** — evaluated twice in one expression; D7 replaces it with `textwrap.Columns`, hoisted to one local (**done, T033**)                                                                                                                                                                                |
+| `github.com/clipperhouse/displaywidth`                       | `internal/request/go.mod` (require block)        | Direct dependency held **only** for that one call; D7 removes it (**done, T033** — the require is gone; the library is a direct dependency of `internal/textwrap` alone)                                                                                                                                                       |
+| `textwrap.Columns` / `textwrap.Wrap`                         | `internal/textwrap/width.go`                     | Intended single measure home; the package doc claimed "one measure, one wrapper, no copies" — untrue until D7, because the verifier measured separately (**now true, T033/T034**)                                                                                                                                              |
+| `generateVerified(...)` / `maxVerifyAttempts = 2`            | `internal/request/client.go:188-226`             | Bounded retry; today it re-sends the **same** request                                                                                                                                                                                                                                                                          |
+| `GenerateCommitMessage` / `GenerateCommitMessageWithContent` | `internal/request/client.go:132,142`             | Return `(string, error)` — no findings channel                                                                                                                                                                                                                                                                                 |
+| `getStagedDiffAndDeleted` / `getStagedDiffOrError`           | `cmd/git-message/core/generate.go:158,173`       | `Truncated` is read at `generate.go:179` and only `slog.Debug`-logged                                                                                                                                                                                                                                                          |
+| `assembleTrailers(ctx, msg, issues, model)`                  | `cmd/git-message/core/interact.go:253`           | **Now has a single production caller** — `finalizeMessage` at `interact.go:286`. The five prior call sites described by T016 (`interact.go:71,110,137`, `hook.go:203`, `amend.go:188`) all funnel through it; `contracts/verification.md`'s "four" and `tasks.md`'s "five" are both historical counts of that pre-change state |
+| `wrapText(text, limit)`                                      | `internal/tui/commit.go:331`                     | Private display-cell wrapper; T015 replaced it with `textwrap.Wrap` — this row is pre-change only                                                                                                                                                                                                                              |
+| `resolveAmendCommit`                                         | `cmd/git-message/core/amend.go:83`               | Resolves the target first; root guard reachable only on the non-HEAD path; D8 adds a no-commits refusal before resolution                                                                                                                                                                                                      |
+| `checkHasParent`                                             | `internal/git/amend.go:71`                       | Root-commit refusal, used by `RewordCommit` only                                                                                                                                                                                                                                                                               |
+| `buildHistoryContext`                                        | `cmd/git-message/core/generate.go:310`           | Probes upstream and `git log` unconditionally; D8 must make it return before either probe in the absent state                                                                                                                                                                                                                  |
+| `SubmoduleContext` / `submoduleSubjects`                     | `internal/git/submodule.go:146,216`              | Always renders commit subjects; D8 splits identity/range from subjects as `SubmodulePointerContext`                                                                                                                                                                                                                            |
+| `HasCommits`                                                 | `internal/git/state.go` (**absent**)             | D8 adds `rev-parse --verify --quiet HEAD^{commit}`: exit 1 = unborn, exit 0 = present, anything else = error                                                                                                                                                                                                                   |
+| `historyState` / `resolveHistoryState`                       | `cmd/git-message/core/promptctx.go` (**absent**) | D8 adds the once-per-invocation state value and resolution before the parallel builders                                                                                                                                                                                                                                        |
+| `SubmodulePointerContext`                                    | `internal/git/submodule.go` (**absent**)         | D8 adds the identity/range-only renderer used when the parent repository has no commits                                                                                                                                                                                                                                        |
 
 ---
 
@@ -160,13 +166,13 @@ beside their source (`foo.go` → `foo_test.go`).
 
 ## Phase 6: User Story 4 — Keep generation safe, bounded, and predictable (Priority: P4)
 
-**Goal**: confirm that the safety, bounds, and configuration requirements still hold after the US1–US3 changes. The conformance audit found no defect in FR-030–FR-036, so this phase is **verification only** — no implementation tasks, and no test is added that the existing suite does not already provide.
+**Goal**: confirm that the safety, bounds, and configuration requirements still hold after the US1–US3 changes. The conformance audit found no defect in FR-030–FR-037, so this phase is **verification only** — no implementation tasks, and no test is added that the existing suite does not already provide.
 
 **Independent Test**: the degradation, untrusted-content, instruction-bound, and configuration-precedence suites pass unchanged, and regeneration benchmarks show no added per-pass repository probing.
 
-- [x] T025 [P] [US4] Collect FR-030/FR-034/SC-008 evidence: run `go test ./cmd/git-message/core -run 'TestContext|TestAgents' -v` and `go test -run xxx -bench 'Benchmark(RegenerateLoop|ContextBuild)' ./cmd/git-message/core`; confirm every degraded enrichment path logs a structured record with its cause and that a regeneration pass re-walks no tree and spawns no new probe. ✅ ran the real suites instead (guessed names matched nothing): `TestBuildPromptContextParallel_PreservesOrderAndDegrades`, `TestBuildHistoryContext_*`, `TestBuildSubmoduleContext`, `TestAgentFiles/Branch/OperationMemoises*`, `TestTimedBuildPromptContext_EmitsNoError` — 10/10 PASS; `BenchmarkRegenerateLoop` memoised vs unmemoised gap confirms no per-pass re-discovery
-- [x] T026 [P] [US4] Collect FR-031/FR-032/FR-033 evidence: run `go test ./cmd/git-message/core -run 'TestAgents|TestUntrusted' -v` and `go test ./internal/request -run TestPrompt -v`; confirm repository-supplied text is framed as untrusted data, generation is told not to use tools or the network, instruction files are bounded (≤32 files, ≤64 KiB each, ≤256 KiB total) with symlinks/oversized files skipped rather than followed or truncated, and no credential or out-of-repository absolute path appears in output, diagnostics, or fixtures. ✅ real suites green: `TestBuildPrompt_DelimitsUntrustedRegions`, `TestBuildPrompt_DirectsNoToolUse`, `TestResolveAgentFiles_BudgetCaps*`, `TestResolveAgentFiles_RejectsSymlinkExfiltration`, `TestResolveAgentFiles_SkipsIgnoredAndVendorTrees`, `TestInteractionsModel_Disables*` (core + request)
-- [x] T027 [P] [US4] Collect FR-036 evidence: run `go test ./cmd/git-message/core -run 'TestConfig|TestFlag' -v` and `go test ./internal/config/...`; confirm precedence is CLI → environment → project-local file → user-level file and that an unset option's default never overrides a lower-precedence source that set it (including the explicit `history: 0` case). ✅ `TestConfigFromCmd*` (incl. `HistoryZero`), `TestConfigFromEnv*`, `TestDefaultConfig`, `TestSaveAndLoad*`, full `./internal/config/...` — all green
+- [x] T025 [P] [US4] Collect FR-030/FR-034/SC-008 evidence: run `go test ./cmd/git-message/core -run 'TestContext|TestAgents' -v` and `go test -run xxx -bench 'Benchmark(RegenerateLoop|ContextBuild)' ./cmd/git-message/core`; confirm every degraded enrichment path logs a structured record with its cause and that a regeneration pass re-walks no tree and spawns no new probe. Record the suite names and outcomes in `specs/002-commit-message/tasks.md`. ✅ ran the real suites instead (guessed names matched nothing): `TestBuildPromptContextParallel_PreservesOrderAndDegrades`, `TestBuildHistoryContext_*`, `TestBuildSubmoduleContext`, `TestAgentFiles/Branch/OperationMemoises*`, `TestTimedBuildPromptContext_EmitsNoError` — 10/10 PASS; `BenchmarkRegenerateLoop` memoised vs unmemoised gap confirms no per-pass re-discovery
+- [x] T026 [P] [US4] Collect FR-031/FR-032/FR-033 evidence: run `go test ./cmd/git-message/core -run 'TestAgents|TestUntrusted' -v` and `go test ./internal/request -run TestPrompt -v`; confirm repository-supplied text is framed as untrusted data, generation is told not to use tools or the network, instruction files are bounded (≤32 files, ≤64 KiB each, ≤256 KiB total) with symlinks/oversized files skipped rather than followed or truncated, and no credential or out-of-repository absolute path appears in output, diagnostics, or fixtures. Record the suite names and outcomes in `specs/002-commit-message/tasks.md`. ✅ real suites green: `TestBuildPrompt_DelimitsUntrustedRegions`, `TestBuildPrompt_DirectsNoToolUse`, `TestResolveAgentFiles_BudgetCaps*`, `TestResolveAgentFiles_RejectsSymlinkExfiltration`, `TestResolveAgentFiles_SkipsIgnoredAndVendorTrees`, `TestInteractionsModel_Disables*` (core + request)
+- [x] T027 [P] [US4] Collect FR-036 evidence: run `go test ./cmd/git-message/core -run 'TestConfig|TestFlag' -v` and `go test ./internal/config/...`; confirm precedence is CLI → environment → project-local file → user-level file and that an unset option's default never overrides a lower-precedence source that set it (including the explicit `history: 0` case). Record the suites and outcomes in `specs/002-commit-message/tasks.md`. ✅ `TestConfigFromCmd*` (incl. `HistoryZero`), `TestConfigFromEnv*`, `TestDefaultConfig`, `TestSaveAndLoad*`, full `./internal/config/...` — all green
 
 **Checkpoint**: all four stories are independently functional; US4 records evidence that the untouched requirements were not regressed.
 
@@ -176,131 +182,13 @@ beside their source (`foo.go` → `foo_test.go`).
 
 **Purpose**: Whole-change gates and end-to-end validation.
 
-- [x] T028 [P] Run the full workspace suite from the repository root: `go test ./... ./internal/git/... ./internal/request/...`. ✅ all packages ok (incl. non-short flow tests)
-- [x] T029 [P] Run the change gates: `golangci-lint run`, `gofmt -l` over changed files, and `git diff --check`; all must be clean. ✅ 0 lint issues (11 introduced mid-work, all fixed), gofmt clean, diff clean
+- [x] T028 [P] Run the full workspace suite from the repository root: `go test ./... ./internal/git/... ./internal/request/...`. Record the result in `specs/002-commit-message/tasks.md`. ✅ all packages ok (incl. non-short flow tests)
+- [x] T029 [P] Run the change gates: `golangci-lint run`, `gofmt -l` over changed files, and `git diff --check`; all must be clean. Record the result in `specs/002-commit-message/tasks.md`. ✅ 0 lint issues (11 introduced mid-work, all fixed), gofmt clean, diff clean
 - [x] T030 Execute the `specs/002-commit-message/quickstart.md` scenarios (§0–§7) end to end and record the observed outcome for each, naming the test that produced it (SC-003, SC-009, FR-018 evidence). ✅ all green: §1 `TestVerifyMessage` + 4× `TestGenerate_*` (incl. `PersistsBodyLessFinding`, `FeedsFindingsBack`); §2 textwrap 3 + tui 3 (`ReviewWrapsLikeTextwrap`, `EditConfirmReappliesTextwrap`, `CommitReviewRespectsWrapLine`) + `TestFinalizeMessage*` 3; §3 `TestPresentFindings` + `TestLogResidualFindings` (quickstart's `TestInteractive.*Notice` does not exist — intent covered); §4 `TestTruncationNotice`; §5 `TestResolveAmendCommitRefusals` + 5 subtests (quickstart's `TestAmendRefusesRoot` does not exist — intent covered); §6 `--detail-level` in help + README, no stale spelling; §7 full suite 14 pkgs ok, benchmarks within envelope (memoised ≈11.6ms vs unmemoised ≈25.3ms)
 
 ---
 
-## Dependencies & Execution Order
-
-### Phase dependencies
-
-- **Setup (Phase 1)**: no dependencies; can start immediately.
-- **Foundational (Phase 2)**: depends on Setup; **blocks every user story** (the findings channel is consumed by US1 and US3).
-- **US1 (Phase 3)**: after Foundational.
-- **US2 (Phase 4)**: after Foundational; independent of US1 (different files except `hook.go`, see below).
-- **US3 (Phase 5)**: after Foundational; its notice task consumes the US1 `empty-body` finding for end-to-end coverage but does not depend on US1's code.
-- **US4 (Phase 6)**: after US1–US3 so the evidence reflects the final change set.
-- **Polish (Phase 7)**: after all desired stories.
-
-### Cross-story file touches (sequence, do not parallelize)
-
-| File                                                     | Stories                                           | Note                                                                                        |
-| -------------------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `cmd/git-message/core/hook.go`                           | US1 (T009), US2 (T016), US3 (T023, T020)          | truncation diagnostics, `finalizeMessage`, finding notice                                   |
-| `cmd/git-message/core/interact.go`                       | US2 (T016), US3 (T023)                            | `finalizeMessage`, finding notice                                                           |
-| `internal/request/verify_test.go`                        | Foundational (T003), US1 (T004, T005), US3 (T018) | one file, sequential                                                                        |
-| `README.md`                                              | US2 only                                          | —                                                                                           |
-| `go.work` + `internal/textwrap/go.mod`                   | Convergence (T032)                                | the only structural change in this feature; no story owns it                                |
-| `internal/request/verify.go` + `internal/request/go.mod` | Convergence (T033)                                | the duplicate measure is removed here; `internal/request` stops depending on `displaywidth` |
-
-### Within each story
-
-- Tests are written first and MUST fail before the implementation tasks in that story.
-- `internal/textwrap` (T014) precedes the TUI switch (T015) and `finalizeMessage` (T016).
-- The `empty-body` check (T007) precedes the US1 persistence assertion passing (T005).
-
-### Convergence dependencies (Phase 8, added by D7)
-
-- T032 (module promotion) precedes T033 (verifier imports the one measure); T034 documents both
-  and MUST land with T033.
-- T035, T036, T037 are characterization tests: they can run at any time and need no production
-  change.
-- T039 (evidence tasks) is independent of T032–T038 and is the only Phase 8 task that expands the
-  change set materially.
-- T040 (re-run `/speckit.analyze`) is last, after every other task in this phase.
-
-### Parallel opportunities
-
-- **Phase 1**: T002 alongside T001.
-- **Phase 4 tests**: T010, T011, T012, T013 touch four different files — launch together.
-- **Phase 5 tests**: T018, T019, T020, T021 touch four different files — launch together.
-- **Phase 6**: T025, T027, T026 are read-only suites; run together.
-- **Phase 6 + Phase 7** are the only places where independent verification can overlap with remaining story work.
-
----
-
-## Parallel Example: User Story 2 tests
-
-```bash
-# Launch the four US2 test tasks together (distinct files):
-Task: "T010 table tests for textwrap in internal/textwrap/width_test.go"
-Task: "T011 TestFinalizeMessage in cmd/git-message/core/finalize_test.go"
-Task: "T012 TUI wrap/edit-confirm cases in internal/tui/commit_test.go"
-Task: "T013 README flag inspection in README.md"
-```
-
-## Parallel Example: User Story 3 tests
-
-```bash
-Task: "T018 corrective-block assertion in internal/request/verify_test.go"
-Task: "T019 persistent-finding notice in cmd/git-message/core/interact_test.go"
-Task: "T020 unattended finding diagnostics in cmd/git-message/core/hook_test.go"
-Task: "T021 root-commit amend refusal in cmd/git-message/core/amend_test.go"
-```
-
----
-
-## Implementation Strategy
-
-### MVP first (User Story 1 only)
-
-1. Phase 1 Setup → Phase 2 Foundational (T001–T003): baseline frozen, findings channel in place.
-2. Phase 3 US1 (T004–T009): body-less results are never presented as clean; truncation is disclosed.
-3. **STOP and VALIDATE**: run the US1 independent test and the Phase 7 suite; the description contract (FR-001) and evidence disclosure (FR-007/SC-009) hold without US2–US4.
-
-### Incremental delivery
-
-1. Foundational → foundation ready.
-2. US1 → validate independently → the description is trustworthy in content and provenance.
-3. US2 → validate independently → output is convention-shaped on every path, docs match the command.
-4. US3 → validate independently → quality feedback, disclosure, and refusal semantics hold.
-5. US4 → record evidence that safety, bounds, and configuration did not regress.
-6. Polish → full suite, lint gates, quickstart walkthrough.
-
-### Rationale for the phase order
-
-US1 is first because it closes the requirement the specification calls the whole product
-(FR-001). US2 follows because width conformance is a measurable 100% (SC-003, subject to
-D7's one named exception) that the finalization choke point fixes once for every path. US3
-follows because its disclosure depends on the same findings channel US1 introduced. US4 is
-verification-only because the audit found no defect there.
-
----
-
-## Notes
-
-- `[P]` means different files and no dependency on incomplete work.
-- Every behavioral fix carries a failing test first (constitution Principle II); no test asserts
-  behavior the specification does not require. The Phase 8 tasks T035–T037 are the exception and
-  say so: they are characterization tests that pin existing behaviour as the **evidence** for a
-  documented claim, and they are green on first run by design.
-- Notices (truncation, residual findings) are presentational: they never change the exit status
-  and never suppress the result (constitution Principle IV).
-- One workspace module is introduced (`internal/textwrap`, T032) with three present callers —
-  the TUI, the finalization step, and the verifier. It is the only construct that removes the
-  duplicated measure without a layering regression (D7, plan Complexity Tracking).
-- Commit after each task or logical group; stop at any checkpoint to validate a story alone.
-- Avoid: implementing FR-030–FR-036 work (none is needed — US4 is evidence only), re-deriving
-  findings in `core` instead of consuming the returned ones, and **any second measure or second
-  width owner**. D7 is the record of what happens when the last one is left implicit: the first
-  pass of this plan shipped a duplicate measure, described the width rule as jointly owned, and
-  claimed a 100% width guarantee its own wrapper could not deliver. If a future change needs the
-  cell width, it calls `textwrap.Columns`; if it needs width enforced, it goes through
-  `finalizeMessage`.
-
-## Phase 8: Convergence
+## Phase 8: Convergence (D7)
 
 - [x] T031 Align the validation regexes in `specs/002-commit-message/quickstart.md` (section 3's `TestInteractive.*Notice` and section 5's `TestAmendRefusesRoot`) to the test names that actually implement them: the FR-018 notice helper tests are `TestPresentFindings` and `TestLogResidualFindings` (interactive and unattended respectively), and the FR-029 refusal behavior is covered by `TestResolveAmendCommitRefusals` with its five subtests (root HEAD, root by revision, merge commit, dirty tree, in-progress operation) per specs/002-commit-message/quickstart.md §3, §5 (partial) ✅ commands now select real tests and pass
 
@@ -326,7 +214,7 @@ side; the documentation side is already applied.
 - [x] T036 [P] Pin the ownership split (I1) — characterization: a test proving a draft subject over the limit yields a residual `subject-length` finding **while** the finalized subject is within the limit, and that the notice wording does not claim the presented subject is too long. Extend `TestPresentFindings` (`cmd/git-message/core/interact_test.go`) and `TestLogResidualFindings` (`hook_test.go`) rather than adding a parallel helper. ✅ both tests gained a "subject-length … describes the draft, not the presented subject" subtest: `VerifyMessage(draft)` yields exactly one `subject-length` finding, `finalizeMessage(draft)` brings the presented subject within the limit, and neither the interactive notice nor the structured record contains "too long".
 - [x] T037 [P] Pin the whitespace rewrite (I5) — characterization: a `finalize_test.go` case where a body line carries an internal run of spaces, asserting the committed line uses single spaces and every word survives, matching the sentence added to `contracts/verification.md` §2. ✅ `TestFinalizeMessageNormalizesWhitespace`; green on first run.
 - [x] T038 Amend `spec.md` for the over-claims found by `/speckit.analyze` (A1, A2, I2, I4): FR-017's enumeration gains the body-presence check so the spec's list matches the taxonomy's five codes; FR-013/SC-003 gain the unbreakable-token exception in `## Assumptions`; FR-034/SC-008's "spawns no additional repository-context probes per pass" is made measurable by naming the evidence that establishes it (the memoised-vs-unmemoised benchmark T025 already runs) instead of asserting a probe count nothing measures; `## Assumptions` points at `research.md`'s divergence register so a reader of `spec.md` alone no longer sees three divergences where six are known. ✅ applied — `spec.md` is no longer "unmodified"; `plan.md`'s structure listing was updated in the same pass
-- [x] T039 [P] Close the evidence gap for requirements resting only on the audit assertion (G1): add one evidence-collection task per uncovered group, mirroring the T025–T027 pattern — FR-002–FR-006 (content: imperative subject, no trailing period, plain text, verbatim usability), FR-008–FR-010 (submodule identity and degrade-to-hashes, mid-operation message, repo overview/history omitted rather than fatal), FR-012/FR-014/FR-015 (hint constrains emphasis only, history clamp including explicit `0`, issue dedup and `interpret-trailers` placement), FR-021–FR-023 (accept/edit/regenerate/abort, edit path including the trailer step, terminal detection with plain-text default and end-of-input as abort), FR-025–FR-027 (unattended write, pre-existing message untouched, install/uninstall including the conflicting global hook), FR-035 (caller deadline honoured, default timeout when none supplied). Each names the existing test it runs, or adds one where none exists; a requirement with neither a test nor a task is a Principle V defect, not an accepted gap. ✅ evidence collected; four gaps had no test and were closed first:
+- [x] T039 [P] Close the evidence gap for requirements resting only on the audit assertion (G1): add one evidence-collection task per uncovered group, mirroring the T025–T027 pattern — FR-002–FR-006 (content: imperative subject, no trailing period, plain text, verbatim usability), FR-008–FR-010 (submodule identity and degrade-to-hashes, mid-operation message, repo overview/history omitted rather than fatal), FR-012/FR-014/FR-015 (hint constrains emphasis only, history clamp including explicit `0`, issue dedup and `interpret-trailers` placement), FR-021–FR-023 (accept/edit/regenerate/abort, edit path including the trailer step, terminal detection with plain-text default and end-of-input as abort), FR-025–FR-027 (unattended write, pre-existing message untouched, install/uninstall including the conflicting global hook), FR-035 (caller deadline honoured, default timeout when none supplied). Each names the existing test it runs, or adds one where none exists; a requirement with neither a test nor a task is a Principle V defect, not an accepted gap. Record each command and its result in `specs/002-commit-message/tasks.md`. ✅ evidence collected; four gaps had no test and were closed first:
   - **FR-002–FR-006 (content)** — `go test ./internal/request -run 'TestBuildCommitMessagePrompt|TestSanitizeOutput'`: `TestBuildCommitMessagePrompt_ContainsDeterministicRules` (imperative subject, "never end the subject", blank separator, names appear in the diff), `TestSanitizeOutput` (fences/backticks/preamble/sign-off stripped → plain-text, verbatim-usable output). Green.
   - **FR-008–FR-010 (submodule / mid-operation / non-fatal context)** — `go test ./internal/git -run 'TestSubmoduleContext|TestExtractSubmoduleChanges'` and `go test ./cmd/git-message/core -run 'TestBuildSubmoduleContext|TestBuildOperationContext|TestInteractiveCommit|TestBuildPromptContextParallel|TestTimedBuildPromptContext|TestBuildHistoryContext'`. `TestSubmoduleContext` covers identity (name/url/range/subjects) **and** the degrade-to-hashes path (checkout removed → subjects dropped, SHA range kept); `TestInteractiveCommit_UsesPreparedMessage` / `_PreparedMessageWithIssues` cover the mid-operation prepared message; `TestBuildPromptContextParallel_PreservesOrderAndDegrades` / `TestTimedBuildPromptContext_EmitsNoError` cover context omitted rather than fatal. Green.
   - **FR-012/FR-014/FR-015 (hint / history / issues)** — `TestBuildCommitMessagePrompt_HintCannotOverrideChangeFidelity` **added** (`internal/request/prompt_test.go`): with an adversarial hint the deterministic rules, the untrusted-data framing, and the delimited diff survive. History clamp incl. explicit `0`: `TestValidateHistory`, `TestConfigFromCmdHistoryZero`, `TestMediatorCliHistoryZeroOverridesGudJSON`, `TestMergeHistoryZeroOverridesBase`. Issue dedup/order/placement: `TestFinalizeMessageIssueTrailersDeduplicated` **added** (duplicate `--issue` values collapse to one `Fixes:` per distinct issue, given order preserved, git's placement) alongside `internal/git` `TestAppendTrailers`. Green.
@@ -334,3 +222,192 @@ side; the documentation side is already applied.
   - **FR-025–FR-027 (unattended)** — `TestHasMeaningfulContent` (comment-only template treated as empty), `TestGenerateAndWriteMsg_PreservesExistingMessage` **added** (a user-supplied message is left untouched and generation is not attempted) and `TestGenerateAndWriteMsg_RefusesSymlink` **added** (write cannot be redirected through a symlink); `TestHookTimeout_BoundsGeneration`; install/uninstall and the conflicting global hook: `TestHookInstallUninstallGlobalHooksPath`, `TestHookInstallKeepsForeignHooksPath`, and `internal/git` `TestInstallHook` / `TestUninstallHook` / `TestGlobalHooksPathRoundtrip`. Green.
   - **FR-035 (timeout)** — `TestWithDefaultTimeout_AppliesDefaultWhenNoDeadline`, `TestWithDefaultTimeout_PreservesCallerDeadline`, `TestGenerateCommitMessageWithContent_RespectsCallerDeadline`, `TestHookTimeout_BoundsGeneration`. Green.
 - [x] T040 Re-run `/speckit.analyze` over the amended set and confirm the resolution held: D1, I1, I2, D2, I3, I5, A1, A2 drop out; duplication count 0; no artifact describes a different ownership split from `data-model.md` §12; and the full-suite command in `AGENTS.md` and the constitution includes `./internal/textwrap/...`. ✅ ran the analyzer's detection passes over the amended artifacts. **Duplication**: `rg -n 'displaywidth' --glob '*.go'` resolves only in `internal/textwrap/width.go` — the duplicated measure is gone (D2). **Ownership split**: `contracts/verification.md` §1/§2, `plan.md`, `research.md` D7, `data-model.md` §12, and `quickstart.md` all state the same advisory-draft / authoritative-result split; no artifact diverges. **D1** (empty-body) present in verifier + spec FR-017 five-item enumeration. **I2** (token exception) stated in FR-013, SC-003, contract §2.1 and pinned by T035. **I5** (whitespace rewrite) stated in contract §2 and pinned by T037. **A1** (FR-017 enumeration) now five checks. **A2** (SC-008) made measurable by naming the memoisation tests and the regeneration benchmark (already run in T025). Full-suite command carries `./internal/textwrap/...` in both `AGENTS.md:42` and `constitution.md:123`. No CRITICAL/HIGH findings remain.
+
+---
+
+## Phase 9: Convergence — repository with no commits (D8, 2026-10-28)
+
+**Purpose**: close divergence (g) from the 2026-10-28 clarification. The work is a state
+change, not a new capability: one commit-state probe, one first-commit statement, one
+history-free submodule renderer, and one amend refusal. Everything else (repository overview,
+operation detection, staged root index) keeps running. Requirements: FR-010, FR-014, FR-029,
+FR-030, SC-011; contracts/verification.md §4.
+
+**Independent test**: create a fresh `git init -b main` repo with one staged file; run the
+default flow with a scripted model and confirm the prompt carries the first-commit statement,
+the debug log carries one skip record and no failed-history record, and the description is
+produced from `git diff --cached`; run `--amend` and confirm the named no-commits refusal
+appears instead of git's `fatal: Needed a single revision`.
+
+### Tests for D8
+
+> **NOTE: write these tests first and confirm they FAIL before T047–T051.**
+
+- [x] T041 [P] [US1] Add `TestHasCommits` to `internal/git/state_test.go`: a temp repo with one commit returns `(true, nil)`; a fresh `git init` with no commit returns `(false, nil)`; a non-repository (or a forced probe failure) returns a non-nil error and is **not** reported as absence. Skip in short mode like the other temp-repo tests; assert the exit-code contract, never the stderr text.
+- [x] T042 [P] [US1] Add `TestBuildHistoryContext_RepositoryState` to `cmd/git-message/core/core_test.go`: `historyAbsent` returns exactly `Repository state: no commits yet; the staged change is the repository's first commit.` before any history probe, even when `AppContext.Config().History` is 5; `historyPresent` and `historyUnknown` do not emit that statement. In a non-repository directory, capture the default `slog` handler (non-parallel, restore in cleanup) and assert no `failed to get recent commits` record — the absence of a failed lookup is part of SC-011.
+- [x] T043 [US2] Extend `TestBuildHistoryContext_RepositoryState` in `cmd/git-message/core/core_test.go` (same file as T042, so sequential): with `History: config.Ptr(0)` and `historyAbsent`, the first-commit statement is still returned; with `History: config.Ptr(0)` and `historyPresent`/`historyUnknown`, no history fragment and no statement is returned. This pins the D8 interpretation that FR-014's zero disables history evidence, not repository-state framing.
+- [x] T044 [P] [US1] Extend `TestBuildSubmoduleContext` in `cmd/git-message/core/submodule_test.go`: call the builder with `historyAbsent` in the existing staged-gitlink fixture and assert the fragment still names the sub-project, path, URL, and `sha1..sha2` range but contains no `> fix: v2` subject line; call it again with `historyPresent` and assert the subject line is present. This pins FR-008's identity requirement without history.
+- [x] T045 [P] [US4] Add `TestRepositoryStateDiagnostics` to `cmd/git-message/core/promptctx_test.go` (new file): in a fresh unborn temp repo with a staged file, capture `slog` output and call `buildPromptContextParallel`; assert exactly one `commit-history context skipped: repository has no commits` record with `reason=unborn branch`, no record containing `failed to get recent commits`, and that the returned context contains the first-commit statement plus the repository-overview fragment. Assert no notice is written to `cmd.OutOrStdout()`/`cmd.ErrOrStderr()` on a default run in the same repo (FR-030, Q3).
+- [x] T046 [P] [US3] Extend `TestResolveAmendCommitRefusals` in `cmd/git-message/core/amend_test.go` with a `no commits refused before resolution` subtest: using `amendRefusalTestRepo` without creating a commit, call `resolveAmendCommit(context.Background(), &AppContext{}, "HEAD")`; assert the error names `no commits`, does not contain `Needed a single revision`, and is returned before any diff or model work (no staged file is required). Keep the existing root/merge/dirty/in-progress subtests unchanged.
+
+### Implementation for D8
+
+- [x] T047 [US1] Add `HasCommits(ctx context.Context) (bool, error)` to a new `internal/git/state.go`, backed by `runGit`/`rev-parse --verify --quiet HEAD^{commit}`: exit code 1 returns `(false, nil)`; exit code 0 returns `(true, nil)`; any other failure returns `(false, err)` wrapped with the operation and `%w` using `isGitExitCode(err, 1)`. Add the exported-symbol doc comment (constitution Principle I). Do not add a memo or a second probe site.
+- [x] T048 [US1] Add `historyState` (`historyAbsent`, `historyPresent`, `historyUnknown`) and `resolveHistoryState(ctx) historyState` in `cmd/git-message/core/promptctx.go`; call it **once** in `buildPromptContextParallel` before starting the builders and pass the value into `buildHistoryContext` and `buildSubmoduleContext` through their signatures. Map `(false, nil)` to absent, `(true, nil)` to present, and any error to unknown; unknown must never claim a first commit. Keep the existing join order (repo, history, submodule, operation).
+- [x] T049 [US1] Implement the absent branch in `buildHistoryContext` (`cmd/git-message/core/generate.go`): return the byte-exact first-commit statement before `GetUpstreamBranch`, `GetRecentCommits`, or `GetTopicHistory`, and emit exactly one `slog.Debug` record `commit-history context skipped: repository has no commits` with `reason=unborn branch`. The branch must run even when `--history 0` (T043). In the present/unknown states, keep today's history behavior and degradation unchanged.
+- [x] T050 [US1] Split the submodule renderer in `internal/git/submodule.go`: add `SubmodulePointerContext(ctx context.Context, root string, changes []SubmoduleChange) string` that renders the existing identity, path, URL, and pointer range but never calls `submoduleSubjects`; keep `SubmoduleContext` as the full renderer by delegating to the shared loop or an internal helper. Select `SubmodulePointerContext` from `buildSubmoduleContext` (`cmd/git-message/core/generate.go`) when the state is `historyAbsent`, and keep `SubmoduleContext` in the present/unknown states. Do not drop the fragment (FR-008).
+- [x] T051 [US3] Refuse an amend request in an unborn repository in `resolveAmendCommit` (`cmd/git-message/core/amend.go`): after the in-progress-operation guard and **before** `git.ResolveRevision`, call `git.HasCommits(ctx)`; on `(false, nil)` return `cannot amend: the repository has no commits yet`; on probe error fall through to the existing resolution path (do not assert absence); on `(true, nil)` continue unchanged. The refusal must fire before any diff, message, or model work and must not print git's `fatal:` line.
+- [x] T052 Execute the D8 validation and gates: run `go test ./... ./internal/git/... ./internal/request/... ./internal/textwrap/...`, `golangci-lint run`, `gofmt -l` over the changed Go files, and `git diff --check`; then execute `specs/002-commit-message/quickstart.md` §5b end to end in a fresh temp repo and record the observed outcome (statement present, one skip record, no failed-history record, named amend refusal). Also re-run `go test ./cmd/git-message/core -run 'TestBuildHistoryContext|TestBuildSubmoduleContext|TestResolveAmendCommitRefusals' -v`. All must be green before the divergence is reported closed.
+
+**Checkpoint**: D8 is independently testable — a repository with no commits generates from its staged root index, the model is told this is the first commit, diagnostics record the skip with its cause, and amend refuses with a named reason before resolution.
+
+---
+
+## Dependencies & Execution Order
+
+### Phase dependencies
+
+- **Setup (Phase 1)**: no dependencies; can start immediately.
+- **Foundational (Phase 2)**: depends on Setup; **blocks every user story** (the findings channel is consumed by US1 and US3).
+- **US1 (Phase 3)**: after Foundational.
+- **US2 (Phase 4)**: after Foundational; independent of US1 (different files except `hook.go`, see below).
+- **US3 (Phase 5)**: after Foundational; its notice task consumes the US1 `empty-body` finding for end-to-end coverage but does not depend on US1's code.
+- **US4 (Phase 6)**: after US1–US3 so the evidence reflects the final change set.
+- **Polish (Phase 7)**: after all desired stories.
+- **D7 convergence (Phase 8)**: after T001–T030; T040 re-ran the analyzer before D8.
+- **D8 convergence (Phase 9)**: after Phase 8. T047–T051 depend on their tests T041–T046; T052 is last.
+
+### Cross-story file touches (sequence, do not parallelize)
+
+| File                                                     | Stories                                           | Note                                                                                        |
+| -------------------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `cmd/git-message/core/hook.go`                           | US1 (T009), US2 (T016), US3 (T023, T020)          | truncation diagnostics, `finalizeMessage`, finding notice                                   |
+| `cmd/git-message/core/interact.go`                       | US2 (T016), US3 (T023)                            | `finalizeMessage`, finding notice                                                           |
+| `internal/request/verify_test.go`                        | Foundational (T003), US1 (T004, T005), US3 (T018) | one file, sequential                                                                        |
+| `README.md`                                              | US2 only                                          | —                                                                                           |
+| `go.work` + `internal/textwrap/go.mod`                   | Convergence (T032)                                | the only structural change in this feature; no story owns it                                |
+| `internal/request/verify.go` + `internal/request/go.mod` | Convergence (T033)                                | the duplicate measure is removed here; `internal/request` stops depending on `displaywidth` |
+| `cmd/git-message/core/core_test.go`                      | D8: US1 (T042), US2 (T043)                        | one file, sequential: statement first, then the `--history 0` case                          |
+| `cmd/git-message/core/generate.go`                       | D8: US1 (T049, T050)                              | history absent-branch and submodule renderer selection, sequential                          |
+
+### Within each story
+
+- Tests are written first and MUST fail before the implementation tasks in that story.
+- `internal/textwrap` (T014) precedes the TUI switch (T015) and `finalizeMessage` (T016).
+- The `empty-body` check (T007) precedes the US1 persistence assertion passing (T005).
+
+### Convergence dependencies (Phase 8, added by D7)
+
+- T032 (module promotion) precedes T033 (verifier imports the one measure); T034 documents both
+  and MUST land with T033.
+- T035, T036, T037 are characterization tests: they can run at any time and need no production
+  change.
+- T039 (evidence tasks) is independent of T032–T038 and is the only Phase 8 task that expands the
+  change set materially.
+- T040 (re-run `/speckit.analyze`) is last, after every other task in this phase.
+
+### Convergence dependencies (Phase 9, added by D8)
+
+- T047 (`HasCommits`) precedes T048 (`resolveHistoryState`) and T051 (amend refusal).
+- T048 precedes T049 and T050: both builders consume the resolved `historyState`.
+- T049 precedes T052; T050 precedes T052; T051 precedes T052.
+- T042/T043 share `cmd/git-message/core/core_test.go` and MUST be sequential (T043 after T042);
+  all other D8 test tasks touch distinct files.
+- T052 (full gates + quickstart §5b) is last, after T041–T051.
+
+### Parallel opportunities
+
+- **Phase 1**: T002 alongside T001.
+- **Phase 4 tests**: T010, T011, T012, T013 touch four different files — launch together.
+- **Phase 5 tests**: T018, T019, T020, T021 touch four different files — launch together.
+- **Phase 6**: T025, T027, T026 are read-only suites; run together.
+- **Phase 6 + Phase 7** are the only places where independent verification can overlap with remaining story work.
+- **Phase 9 tests**: T041, T042, T044, T045, T046 touch five different files — launch together;
+  T043 follows T042 in the same file.
+
+---
+
+## Parallel Example: User Story 2 tests
+
+```bash
+# Launch the four US2 test tasks together (distinct files):
+Task: "T010 table tests for textwrap in internal/textwrap/width_test.go"
+Task: "T011 TestFinalizeMessage in cmd/git-message/core/finalize_test.go"
+Task: "T012 TUI wrap/edit-confirm cases in internal/tui/commit_test.go"
+Task: "T013 README flag inspection in README.md"
+```
+
+## Parallel Example: User Story 3 tests
+
+```bash
+Task: "T018 corrective-block assertion in internal/request/verify_test.go"
+Task: "T019 persistent-finding notice in cmd/git-message/core/interact_test.go"
+Task: "T020 unattended finding diagnostics in cmd/git-message/core/hook_test.go"
+Task: "T021 root-commit amend refusal in cmd/git-message/core/amend_test.go"
+```
+
+## Parallel Example: D8 tests
+
+```bash
+# Distinct files; T043 must wait for T042 because both edit core_test.go.
+Task: "T041 TestHasCommits in internal/git/state_test.go"
+Task: "T042 repository-state history cases in cmd/git-message/core/core_test.go"
+Task: "T044 history-free submodule cases in cmd/git-message/core/submodule_test.go"
+Task: "T045 diagnostics-only skip in cmd/git-message/core/promptctx_test.go"
+Task: "T046 unborn amend refusal in cmd/git-message/core/amend_test.go"
+```
+
+---
+
+## Implementation Strategy
+
+### MVP first (User Story 1 only)
+
+1. Phase 1 Setup → Phase 2 Foundational (T001–T003): baseline frozen, findings channel in place.
+2. Phase 3 US1 (T004–T009): body-less results are never presented as clean; truncation is disclosed.
+3. **STOP and VALIDATE**: run the US1 independent test and the Phase 7 suite; the description contract (FR-001) and evidence disclosure (FR-007/SC-009) hold without US2–US4.
+
+### Incremental delivery
+
+1. Foundational → foundation ready.
+2. US1 → validate independently → the description is trustworthy in content and provenance.
+3. US2 → validate independently → output is convention-shaped on every path, docs match the command.
+4. US3 → validate independently → quality feedback, disclosure, and refusal semantics hold.
+5. US4 → record evidence that safety, bounds, and configuration did not regress.
+6. Polish → full suite, lint gates, quickstart walkthrough.
+7. D7 convergence → one width measure and one owner across three callers.
+8. D8 convergence → unborn repositories generate from the staged root index and amend refuses
+   with a named reason before resolution.
+
+### Rationale for the phase order
+
+US1 is first because it closes the requirement the specification calls the whole product
+(FR-001). US2 follows because width conformance is a measurable 100% (SC-003, subject to
+D7's one named exception) that the finalization choke point fixes once for every path. US3
+follows because its disclosure depends on the same findings channel US1 introduced. US4 is
+verification-only because the audit found no defect there.
+
+---
+
+## Notes
+
+- `[P]` means different files and no dependency on incomplete work.
+- Every behavioral fix carries a failing test first (constitution Principle II); no test asserts
+  behavior the specification does not require. The Phase 8 tasks T035–T037 are the exception and
+  say so: they are characterization tests that pin existing behaviour as the **evidence** for a
+  documented claim, and they are green on first run by design.
+- Notices (truncation, residual findings) are presentational: they never change the exit status
+  and never suppress the result (constitution Principle IV).
+- The no-commits history skip is **not** a notice: it is one `slog.Debug` record with its cause
+  (FR-030, D8). Do not promote it to stdout/stderr.
+- One workspace module is introduced (`internal/textwrap`, T032) with three present callers —
+  the TUI, the finalization step, and the verifier. It is the only construct that removes the
+  duplicated measure without a layering regression (D7, plan Complexity Tracking).
+- Commit after each task or logical group; stop at any checkpoint to validate a story alone.
+- Avoid: implementing FR-030–FR-037 work (none is needed — US4 is evidence only), re-deriving
+  findings in `core` instead of consuming the returned ones, and **any second measure or second
+  width owner**. D7 is the record of what happens when the last one is left implicit: the first
+  pass of this plan shipped a duplicate measure, described the width rule as jointly owned, and
+  claimed a 100% width guarantee its own wrapper could not deliver. If a future change needs the
+  cell width, it calls `textwrap.Columns`; if it needs width enforced, it goes through
+  `finalizeMessage`.

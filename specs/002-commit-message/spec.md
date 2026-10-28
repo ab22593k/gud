@@ -14,6 +14,14 @@
 
 - Q: What should the footer-suppression flag be called, and how should it behave by default? → A: Use `--no-assisted-by` as a boolean flag with no value; the `Assisted-by` footer remains on by default and is omitted only when the flag is passed.
 
+### Session 2026-10-28
+
+- Q: In a repository with no commits, which prompt-context fragments must be skipped entirely rather than attempted and allowed to fail? (FR-010) → A: Skip the whole commit-history family — upstream and branch discovery, recent and topic-local history, and submodule commit ranges — behind one HEAD check. The repository overview, in-progress operation detection, and the staged root index still run.
+- Q: In a repository with no commits, should the repository overview describe the working tree or only the staged root index? (FR-006, FR-010) → A: Keep the working-tree walk used in every other state. "Staged root index" binds only the described change, not the repository overview.
+- Q: When commit history is skipped because the repository has no commits, should the developer see a notice, or is a diagnostics record enough? (FR-030) → A: Diagnostics only — a debug-level record carrying the cause, with no user-facing notice.
+- Q: What should `git message --amend` report in a repository that has no commits? (FR-029) → A: A named refusal stating the repository has no commits, emitted before any revision resolution.
+- Q: In a repository with no commits, should the model be told that this is the first commit, or should history simply be absent from the prompt? (FR-010) → A: Tell the model this is the repository's first commit, so the description can be framed as an initial commit.
+
 ## User Scenarios & Testing _(mandatory)_
 
 ### User Story 1 - Get a description of the staged change (Priority: P1)
@@ -52,6 +60,10 @@ syntax; confirm it can be committed as-is.
 5. **Given** a file with both staged and further unstaged modifications,
    **When** the description is generated, **Then** it describes the staged
    content only and does not mention the unstaged work.
+6. **Given** a newly initialized repository whose branch has no commits and a
+   staged root index, **When** the developer runs the command, **Then** a
+   description is presented from the staged changes alone, no commit history is
+   requested, and it can be committed as the repository's first commit.
 
 ---
 
@@ -212,6 +224,13 @@ configuration value at a low-precedence source only and confirm it survives.
   sub-project identity and the subjects of the commits in the updated range,
   resolved from local history only, and degrades to hashes when that history is
   not present.
+- What happens when the repository has no commits yet (freshly initialized,
+  unborn branch)? Generation proceeds from the staged root index alone: the
+  whole commit-history family is skipped behind one state check rather than
+  probed and failed, its absence is recorded in diagnostics, the history slot
+  states this is the repository's first commit so the description is framed as
+  an initial commit, and the description is still produced so it can become that
+  commit.
 - What happens when git is mid-operation (merge, cherry-pick, revert, rebase,
   squash, fixup)? The message git already prepared is presented instead of a
   fresh standalone description, because it preserves or combines prior intent;
@@ -240,7 +259,8 @@ configuration value at a low-precedence source only and confirm it survives.
   The most recent commit is regenerated in place; an earlier commit is reworded,
   which requires a clean working tree, and merge commits, the root commit, and
   regeneration attempted during an in-progress operation are all refused with
-  the specific reason named.
+  the specific reason named; a repository with no commits at all is refused
+  before any revision is resolved.
 
 ## Requirements _(mandatory)_
 
@@ -266,7 +286,9 @@ configuration value at a low-precedence source only and confirm it survives.
 
 - **FR-006**: The system MUST derive the description from the staged change
   and MUST NOT silently substitute unstaged, committed, or working-tree content
-  for it.
+  for it. This binds the described change: the repository overview (FR-010) is
+  repository-level context and continues to reflect the working tree, including
+  in a repository with no commits.
 - **FR-007**: Before generation, the system MUST bound the size of the change
   it submits; when the bound is reached, the submitted evidence MUST be marked
   as truncated and the developer MUST be informed that the description came
@@ -282,7 +304,14 @@ configuration value at a low-precedence source only and confirm it survives.
 - **FR-010**: The system MUST supply evidence beyond the raw change where it
   measurably improves the description — at minimum a repository overview and,
   when enabled, recent or topic-local commit history. Any such evidence MUST be
-  omitted rather than fatal when unavailable.
+  omitted rather than fatal when unavailable. In a repository with no commits,
+  the whole commit-history family (upstream and branch discovery, recent and
+  topic-local history, and submodule commit ranges) MUST be skipped behind a
+  single state check rather than attempted and allowed to fail; the repository
+  overview, the in-progress operation, and the staged root index MUST still be
+  used. The history slot MUST then carry an explicit statement that this is the
+  repository's first commit, so the description is framed as an initial commit
+  rather than as an incremental change.
 
 **Shape and controls**
 
@@ -304,7 +333,8 @@ configuration value at a low-precedence source only and confirm it survives.
   meet the width in that case.
 - **FR-014**: The system MUST accept a number of history entries to draw on,
   clamped to a supported maximum, where an explicit zero disables history
-  evidence entirely.
+  evidence entirely. A repository with no commits yields no history evidence
+  regardless of the requested count, and MUST NOT be treated as an error.
 - **FR-015**: The system MUST accept issue numbers and MUST add one reference
   per distinct issue to the finalized message, deduplicated, ordered as given,
   and placed and formatted using git's own trailer conventions (including for
@@ -376,14 +406,20 @@ configuration value at a low-precedence source only and confirm it survives.
   only — never from a range spanning other commits — and MUST apply the issues
   requested in the same invocation. It MUST refuse, naming the specific reason,
   to regenerate a merge commit, the root commit, an earlier commit while the
-  working tree is dirty, or any commit while a git operation is in progress.
+  working tree is dirty, or any commit while a git operation is in progress. It
+  MUST also refuse, naming the specific reason and before resolving any
+  revision, any regeneration request in a repository with no commits.
 
 **Degradation, safety, and resource bounds**
 
 - **FR-030**: Optional enrichment (repository overview, history, submodule
   evidence, instructions) MUST degrade to its documented absence and MUST NEVER
   prevent a description from being produced or a commit from completing; every
-  degraded path MUST be observable through diagnostics with its cause.
+  degraded path MUST be observable through diagnostics with its cause. Skipping
+  history in a repository with no commits is such a degradation: it is recorded
+  in diagnostics and requires no user-facing notice, because no evidence the
+  developer expected is missing — unlike the truncation notice of FR-007, where
+  the described change itself is partial.
 - **FR-031**: All repository-supplied text mounted into generation (change,
   context, instructions) MUST be treated as untrusted data to describe, not as
   instructions to obey, and generation MUST be told not to use tools or the
@@ -471,6 +507,10 @@ configuration value at a low-precedence source only and confirm it survives.
 - **SC-010**: 90% of first attempts with staged changes and configured
   credentials yield an acceptable description without the developer consulting
   documentation beyond the command's own help and error text.
+- **SC-011**: In a repository with no commits, a staged root index yields a
+  presentable description in 100% of runs, and no failed commit-history lookup is
+  attempted (observed from diagnostics, which record the absence with its cause
+  and no history-lookup failure).
 
 ## Assumptions
 
@@ -487,11 +527,16 @@ configuration value at a low-precedence source only and confirm it survives.
   the body to be non-empty, so a subject-only reply passes them (FR-001); and
   (c) the project README documents a verbosity option spelling that differs from
   the one the command registers. Planning confirmed all three and found three
-  more; the full register of six — (d) regeneration does not feed findings back
-  (FR-018), (e) truncation is disclosed to the model but not the developer
-  (FR-007, SC-009), and (f) the root commit is not refused for an amend of
-  `HEAD` (FR-029) — lives in `research.md`, whose decision record is the
-  authority when this section and the implementation disagree.
+  more; the 2026-10-28 clarification added a fourth, (g) — a repository with no
+  commits has its commit-history family probed and allowed to fail instead of
+  skipped behind one state check, the prompt carries no first-commit statement,
+  and an amend request leaks git's revision error instead of a named refusal
+  (FR-010, FR-014, FR-029, SC-011). The full register of seven — (d) regeneration
+  does not feed findings back (FR-018), (e) truncation is disclosed to the model
+  but not the developer (FR-007, SC-009), (f) the root commit is not refused for
+  an amend of `HEAD` (FR-029), and (g) above — lives in `research.md`, whose
+  decision record is the authority when this section and the implementation
+  disagree.
 - **Width ownership and its one exception.** Verified descriptions are produced
   by two layers with one owner each: a check that reports the draft's subject
   width and drives regeneration, and a normalization step that produces the

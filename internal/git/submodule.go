@@ -137,6 +137,56 @@ func parseSubprojectLine(line string) (sha string, marker byte, ok bool) {
 	return strings.TrimSpace(strings.TrimPrefix(rest, "Subproject commit ")), marker, true
 }
 
+// SubmodulePointerContext builds the history-free variant of the staged
+// gitlink fragment used in a repository with no commits (D8): each
+// submodule's name, path, URL, and the old→new commit range, without the
+// commit-subject lookup the unborn parent repository cannot support. It is
+// best-effort and local-only like SubmoduleContext, and never drops the
+// fragment — FR-008's identity requirement is not history. Returns "" when
+// there are no changes.
+func SubmodulePointerContext(ctx context.Context, root string, changes []SubmoduleChange) string {
+	if len(changes) == 0 {
+		return ""
+	}
+
+	names, urls := readGitmodules(ctx, root)
+
+	var b strings.Builder
+	b.WriteString("Submodule (gitlink) changes:\n")
+
+	for _, ch := range changes {
+		b.WriteString(renderSubmodulePointer(names, urls, ch))
+		b.WriteString("\n")
+	}
+
+	return b.String()
+}
+
+// renderSubmodulePointer renders one gitlink entry's identity and range
+// line, shared by both submodule renderers so the two cannot drift apart on
+// naming, URL placement, or range formatting.
+func renderSubmodulePointer(names, urls map[string]string, ch SubmoduleChange) string {
+	name := names[ch.Path]
+	if name == "" {
+		name = ch.Path
+	}
+
+	var b strings.Builder
+	b.WriteString("- ")
+	b.WriteString(name)
+
+	if url := urls[ch.Path]; url != "" {
+		b.WriteString(" (")
+		b.WriteString(url)
+		b.WriteString(")")
+	}
+
+	b.WriteString(": ")
+	b.WriteString(shortRange(ch))
+
+	return b.String()
+}
+
 // SubmoduleContext builds a prompt-context fragment describing staged gitlink
 // changes: each submodule's name, path, URL, the old→new commit range, and —
 // when the submodule is checked out with locally available history — the
@@ -154,22 +204,7 @@ func SubmoduleContext(ctx context.Context, root string, changes []SubmoduleChang
 	b.WriteString("Submodule (gitlink) changes:\n")
 
 	for _, ch := range changes {
-		name := names[ch.Path]
-		if name == "" {
-			name = ch.Path
-		}
-
-		b.WriteString("- ")
-		b.WriteString(name)
-
-		if url := urls[ch.Path]; url != "" {
-			b.WriteString(" (")
-			b.WriteString(url)
-			b.WriteString(")")
-		}
-
-		b.WriteString(": ")
-		b.WriteString(shortRange(ch))
+		b.WriteString(renderSubmodulePointer(names, urls, ch))
 
 		for _, subject := range submoduleSubjects(ctx, root, ch) {
 			b.WriteString("\n  > ")

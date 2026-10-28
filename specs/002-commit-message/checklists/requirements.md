@@ -64,7 +64,8 @@
   so the exception and its disclosure are now stated in both places; (c) SC-008
   asserted a probe count nothing measures, so it now names the two signals that
   establish it. Assumptions also gained a pointer to `research.md`'s divergence
-  register, which holds six confirmed divergences where this section describes
-  three. Iterations 1 and 2 above still hold; no new `NEEDS CLARIFICATION` marker
-  was required, since all three amendments resolve to behaviour the code already
-  has or explicitly does not have.
+  register, which holds seven confirmed divergences (the seventh added by the
+  2026-10-28 clarification) where this section describes three. Iterations 1 and
+  2 above still hold; no new `NEEDS CLARIFICATION` marker was required, since
+  all three amendments resolve to behaviour the code already has or explicitly
+  does not have.

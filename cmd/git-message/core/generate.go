@@ -144,9 +144,11 @@ func buildOperationContext(op git.Operation) string {
 // (submodule pointer) changes. A raw 160000 mode change shows the model nothing
 // but two opaque hashes, so the fragment identifies each submodule (name, path,
 // URL) and — when local history is available — the commit subjects in the
-// old→new range. Best-effort and local-only: returns "" when there are no
-// gitlink changes or the repo root cannot be resolved.
-func buildSubmoduleContext(ctx context.Context, app *AppContext, diff string) string {
+// old→new range. In the unborn state only identity and the pointer range are
+// rendered: the parent repository has no history to resolve subjects against
+// (D8). Best-effort and local-only: returns "" when there are no gitlink
+// changes or the repo root cannot be resolved.
+func buildSubmoduleContext(ctx context.Context, app *AppContext, diff string, state historyState) string {
 	changes := git.ExtractSubmoduleChanges(diff)
 	if len(changes) == 0 {
 		return ""
@@ -157,6 +159,10 @@ func buildSubmoduleContext(ctx context.Context, app *AppContext, diff string) st
 		slog.Debug("submodule context skipped: no repo root", "error", err)
 
 		return ""
+	}
+
+	if state == historyAbsent {
+		return git.SubmodulePointerContext(ctx, root, changes)
 	}
 
 	return git.SubmoduleContext(ctx, root, changes)
@@ -298,8 +304,18 @@ func joinContexts(a, b string) string {
 	}
 }
 
+// firstCommitStatement frames the described change as the repository's
+// first commit. It is repository-state framing, not prior-commit evidence,
+// so it is emitted even when --history 0; see contracts/verification.md §4.
+const firstCommitStatement = "Repository state: no commits yet; the staged change is the repository's first commit."
+
 // buildHistoryContext returns commit-history context for the prompt, or empty
 // string if --history is disabled or no history is available.
+//
+// In the unborn state the function returns before any upstream or log
+// probe: there is no history to query, so probing would fail noisily. The
+// history slot carries the first-commit statement instead; the statement is
+// emitted even when --history is disabled for history evidence.
 //
 // History is graph-relative when possible: with a configured upstream it lists
 // commits on the current topic since divergence (merge-base .. HEAD), limited
@@ -307,7 +323,11 @@ func joinContexts(a, b string) string {
 // back to the n most recent commits. Errors are logged at debug level and
 // silently discarded — history is optional context and should never block
 // generation.
-func buildHistoryContext(ctx context.Context, app *AppContext, diff string) string {
+func buildHistoryContext(ctx context.Context, app *AppContext, diff string, state historyState) string {
+	if state == historyAbsent {
+		return firstCommitStatement
+	}
+
 	n := app.Config().HistoryValue()
 	if n <= 0 {
 		return ""

@@ -3,6 +3,7 @@ package core
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"log/slog"
 	"strings"
@@ -71,7 +72,7 @@ func TestBuildHistoryContext_Disabled(t *testing.T) {
 
 			ctx := context.Background()
 
-			got := buildHistoryContext(ctx, tt.app, "")
+			got := buildHistoryContext(ctx, tt.app, "", historyPresent)
 			if got != "" {
 				t.Errorf("buildHistoryContext(%+v) = %q, want empty string", tt.app.Config(), got)
 			}
@@ -208,6 +209,84 @@ func TestMustGetFlagsRegistered(t *testing.T) {
 }
 
 // discardWriter is an io.Writer that discards all writes.
+// TestBuildHistoryContext_RepositoryState pins the D8 state contract: the
+// unborn state yields the first-commit statement before any history probe
+// (so no upstream or git log call runs), while the present and unknown
+// states never emit that statement. It runs in a non-repository directory
+// so a stray history probe would fail loudly; the absence of a failed-lookup
+// record is the SC-011 evidence that historyAbsent probes nothing.
+//
+// Non-parallel: chdirs and replaces the process-wide default slog logger.
+func TestBuildHistoryContext_RepositoryState(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	var buf bytes.Buffer
+
+	prev := slog.Default()
+
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	ctx := context.Background()
+
+	t.Run("historyAbsent returns the first-commit statement", func(t *testing.T) {
+		app := &AppContext{cfg: config.Config{History: config.Ptr(5)}}
+
+		if got := buildHistoryContext(ctx, app, "", historyAbsent); got != firstCommitStatement {
+			t.Errorf("buildHistoryContext(historyAbsent) = %q, want %q", got, firstCommitStatement)
+		}
+	})
+
+	t.Run("historyAbsent probes nothing", func(t *testing.T) {
+		buf.Reset()
+
+		app := &AppContext{cfg: config.Config{History: config.Ptr(5)}}
+
+		_ = buildHistoryContext(ctx, app, "diff --git a/a.txt b/a.txt", historyAbsent)
+
+		if strings.Contains(buf.String(), "failed to get recent commits") {
+			t.Errorf("historyAbsent logged a failed history lookup, want no probe:\n%s", buf.String())
+		}
+	})
+
+	t.Run("historyPresent does not emit the statement", func(t *testing.T) {
+		app := &AppContext{cfg: config.Config{History: config.Ptr(5)}}
+
+		if got := buildHistoryContext(ctx, app, "", historyPresent); strings.Contains(got, firstCommitStatement) {
+			t.Errorf("buildHistoryContext(historyPresent) = %q, want no first-commit statement", got)
+		}
+	})
+
+	t.Run("historyUnknown does not emit the statement", func(t *testing.T) {
+		app := &AppContext{cfg: config.Config{History: config.Ptr(5)}}
+
+		if got := buildHistoryContext(ctx, app, "", historyUnknown); strings.Contains(got, firstCommitStatement) {
+			t.Errorf("buildHistoryContext(historyUnknown) = %q, want no first-commit statement", got)
+		}
+	})
+
+	// The D8 decision that FR-014's explicit zero disables history evidence,
+	// not repository-state framing: the absent state still yields the
+	// statement, while present/unknown yield no fragment at all.
+	t.Run("history 0 keeps the absent statement", func(t *testing.T) {
+		app := &AppContext{cfg: config.Config{History: config.Ptr(0)}}
+
+		if got := buildHistoryContext(ctx, app, "", historyAbsent); got != firstCommitStatement {
+			t.Errorf("buildHistoryContext(historyAbsent, history 0) = %q, want %q", got, firstCommitStatement)
+		}
+	})
+
+	t.Run("history 0 yields no present or unknown fragment", func(t *testing.T) {
+		app := &AppContext{cfg: config.Config{History: config.Ptr(0)}}
+
+		for _, state := range []historyState{historyPresent, historyUnknown} {
+			if got := buildHistoryContext(ctx, app, "", state); got != "" {
+				t.Errorf("buildHistoryContext(%v, history 0) = %q, want empty", state, got)
+			}
+		}
+	})
+}
+
 type discardWriter struct{}
 
 func (discardWriter) Write(p []byte) (int, error) { return len(p), nil }

@@ -1,6 +1,6 @@
 # Quickstart: Commit Message Description — Spec Conformance Closure
 
-**Feature**: `specs/002-commit-message/spec.md` | **Date**: 2026-10-15
+**Feature**: `specs/002-commit-message/spec.md` | **Date**: 2026-10-15, revised 2026-10-28
 
 Validation/run guide proving each confirmed divergence is closed end-to-end. Implementation
 detail lives in `tasks.md` and code; this file contains only runnable checks with expected
@@ -113,6 +113,59 @@ go test ./cmd/git-message/core -run TestResolveAmendCommitRefusals -v
   is rewritten. (A merge commit, a dirty tree for an earlier commit, and an in-progress
   operation remain refused as before.)
 
+## 5b. A repository with no commits generates from its root index (FR-010, FR-014, FR-029, SC-011)
+
+This is the 2026-10-28 clarification (divergence (g), decision D8). Reproduce the state first:
+
+```bash
+rm -rf /tmp/gud-unborn && mkdir /tmp/gud-unborn && cd /tmp/gud-unborn
+git init -q -b main && printf 'hello\n' > a.txt && git add a.txt
+git rev-parse --verify --quiet 'HEAD^{commit}'; echo "head_exit=$?"   # expect 1
+```
+
+```bash
+go test ./internal/git -run TestHasCommits -v
+go test ./cmd/git-message/core -run 'TestHistoryState|TestBuildHistoryContext|TestResolveAmendCommitRefusals' -v
+```
+
+- `HasCommits` returns `(false, nil)` for exit 1, `(true, nil)` for exit 0, and an error for
+  any other outcome — a non-repository must not be reported as an unborn one.
+- The history family is **not probed**: with a probe stub/recorded invocations, no upstream or
+  `git log` call occurs; exactly one state resolution happens per invocation, including across
+  regeneration passes (FR-034, SC-008).
+- The assembled context contains the byte-exact first-commit statement (contract §4.2) and
+  still contains the repository overview and operation fragment. With `--history 0` the
+  statement remains and no history fragment is added.
+- A staged gitlink in this state renders sub-project identity and pointer range but no commit
+  subjects (FR-008).
+- Diagnostics: exactly one debug record naming the unborn state; **no** user-facing notice on
+  stdout or stderr (FR-030).
+
+Interactive run (fake model; no network or credentials):
+
+```bash
+cd /tmp/gud-unborn
+GUD_LOG_LEVEL=debug /path/to/git-message < /dev/null
+```
+
+- Expected: generation succeeds from the staged root index and the prompt contains the
+  first-commit statement; the debug log shows the skip once and does **not** show
+  `failed to get recent commits`.
+- Note: the unattended hook path passes an empty `commitContext`, so this scenario does not
+  exercise FR-010 there. That pre-existing gap is deferred observation (h) in
+  [research.md](research.md) and is out of scope for this feature.
+
+Amend refusal:
+
+```bash
+cd /tmp/gud-unborn
+/path/to/git-message --amend
+```
+
+- Expected: exit `1` with `cannot amend: the repository has no commits yet`; no
+  `fatal: Needed a single revision`, no diff, no model call. The refusal precedes revision
+  resolution (the default target is `HEAD~1`).
+
 ## 6. Documented flag matches the command (FR-011, Constitution III)
 
 ```bash
@@ -136,12 +189,14 @@ go test -bench . ./internal/request
 
 ## Troubleshooting
 
-| Symptom                                              | Likely cause                                                                   | Action                                                                                                                                     |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `plugin ... no such file` / missing module           | run from repo root so `go.work` resolves `internal/git` and `internal/request` | `cd` to the repository root                                                                                                                |
-| Generation test tries the network                    | a real `Client` was built instead of the scripted `model.LLM`                  | use `request.NewClientWithGenerator`; keep `GOOGLE_API_KEY` empty                                                                          |
-| Width test fails only for CJK/emoji                  | bytes measured instead of display cells                                        | measure via `textwrap.Columns` — the single implementation — never `len` and never `displaywidth` directly                                 |
-| `rg -n 'displaywidth' internal/request` prints a hit | the verifier regressed to a second measure                                     | import `gud/internal/textwrap` and call `textwrap.Columns`; the library belongs to one module only (D7)                                    |
-| A line is over the configured width                  | a single unbreakable token longer than the limit                               | expected and documented (contract §2.1): the token is never split; if it is on the subject line the residual `subject-length` notice fires |
-| Body-less test flaky                                 | the scripted model returned a body on attempt 2                                | pin the script to return it on every attempt                                                                                               |
-| Notice assertion fails in the hook path              | the notice was printed to stdout instead of logged                             | unattended information goes to `slog` (FR-028)                                                                                             |
+| Symptom                                                                 | Likely cause                                                                   | Action                                                                                                                                     |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `plugin ... no such file` / missing module                              | run from repo root so `go.work` resolves `internal/git` and `internal/request` | `cd` to the repository root                                                                                                                |
+| Generation test tries the network                                       | a real `Client` was built instead of the scripted `model.LLM`                  | use `request.NewClientWithGenerator`; keep `GOOGLE_API_KEY` empty                                                                          |
+| Width test fails only for CJK/emoji                                     | bytes measured instead of display cells                                        | measure via `textwrap.Columns` — the single implementation — never `len` and never `displaywidth` directly                                 |
+| `rg -n 'displaywidth' internal/request` prints a hit                    | the verifier regressed to a second measure                                     | import `gud/internal/textwrap` and call `textwrap.Columns`; the library belongs to one module only (D7)                                    |
+| A line is over the configured width                                     | a single unbreakable token longer than the limit                               | expected and documented (contract §2.1): the token is never split; if it is on the subject line the residual `subject-length` notice fires |
+| Body-less test flaky                                                    | the scripted model returned a body on attempt 2                                | pin the script to return it on every attempt                                                                                               |
+| `fatal: your current branch ... does not have any commits yet` in a run | history was probed in an unborn repository instead of reading the state (D8)   | resolve `HasCommits` once and skip the history family; the log must not contain `failed to get recent commits`                             |
+| `--amend` prints `fatal: Needed a single revision`                      | the revision was resolved before the no-commits guard                          | refuse with `cannot amend: the repository has no commits yet` before `ResolveRevision` (D8)                                                |
+| Notice assertion fails in the hook path                                 | the notice was printed to stdout instead of logged                             | unattended information goes to `slog` (FR-028)                                                                                             |

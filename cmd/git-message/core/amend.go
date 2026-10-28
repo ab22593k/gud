@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os/exec"
@@ -83,6 +84,17 @@ func resolveAmendCommit(ctx context.Context, app *AppContext, rev string) (amend
 
 	if op := app.Operation(ctx); op != git.OperationNone {
 		return job, fmt.Errorf("cannot amend during an in-progress %s; finish it first", op)
+	}
+
+	// FR-029 (D8): a repository with no commits has no revision to amend.
+	// The refusal sits before resolution because the default target is
+	// HEAD~1: resolving it first would surface git's
+	// "fatal: Needed a single revision" instead of the reason. A probe
+	// error falls through to the existing resolution path rather than
+	// asserting an absence the probe could not establish.
+	has, err := git.HasCommits(ctx)
+	if err == nil && !has {
+		return job, errors.New("cannot amend: the repository has no commits yet")
 	}
 
 	sha, err := git.ResolveRevision(ctx, rev)

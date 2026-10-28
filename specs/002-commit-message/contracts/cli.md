@@ -1,6 +1,6 @@
 # Contract: `git message` CLI Surface
 
-**Feature**: `specs/002-commit-message/spec.md` | **Date**: 2026-10-15
+**Feature**: `specs/002-commit-message/spec.md` | **Date**: 2026-10-15, revised 2026-10-28
 
 Authoritative command/flag/output contract for implementation and tests. Help text, errors,
 and documentation MUST say `git message`; `gud` is the product name used only in version
@@ -19,6 +19,13 @@ Generate a description of the staged change.
 
 - Reads the staged (indexed) diff only. Unstaged, working-tree, and committed state MUST NOT
   silently substitute for it (FR-006).
+- In a repository with **no commits yet** (unborn branch), the command still generates: the
+  staged root index is the described change, the repository overview and operation detection
+  still run, and the commit-history family is **skipped without being probed** (FR-010,
+  FR-014, D8). The model is told this is the repository's first commit. The skip is
+  diagnostics-only and MUST NOT produce a user-facing notice (FR-030, Q3); it is not the
+  truncation notice. The exact statement and the state rule are in
+  [verification.md](verification.md) §4.
 - When nothing is staged and no operation is in progress: stop immediately with guidance and
   do **not** open the review flow or call the model.
 - During an in-progress operation with git's prepared message: present git's message first,
@@ -67,6 +74,11 @@ result.
 | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- | ------------------ |
 | Staged diff hit the byte bound                | One line stating the description came from a partial (truncated) change, naming the bound                                                    | Structured `slog` record with the bound and cause         | FR-007, SC-009, D4 |
 | Check failures persisted through regeneration | One line stating the message is presented with the listed failing checks (`empty-body`, `subject-length`, `fence-remnant`, `file-grounding`) | Structured `slog` record with the check codes and details | FR-018, D3         |
+| Repository has no commits yet                 | **None** — diagnostics only: one debug record naming the unborn state and the reason the history was skipped                                 | Same diagnostic record                                    | FR-010, FR-030, D8 |
+
+The no-commits row is deliberately **not** a notice: nothing the developer expected is
+missing, so FR-007's disclosure rule does not apply (Q3). Implementations MUST NOT promote it
+to stdout or stderr.
 
 ### Errors
 
@@ -93,11 +105,17 @@ The abort path commits nothing and leaves the working tree unchanged (FR-021).
 `git message --amend [rev]` regenerates **one** commit from that commit's own change and
 applies any `--issue` values from the same invocation. It MUST refuse, naming the reason:
 
+- a repository with **no commits yet** — refused before any revision is resolved, with
+  `cannot amend: the repository has no commits yet` (NEW, D8; the default target `HEAD~1` does
+  not resolve, and git's `fatal: Needed a single revision` names nothing);
 - a merge commit;
 - **the root commit, for `HEAD` as well as any revision** (CHANGED — the HEAD case was
   accepted before, D5);
 - an earlier (non-HEAD) commit while the working tree is dirty;
 - any commit while a git operation is in progress.
+
+Refusals fire before any diff, message, or model work, so a refused invocation changes nothing
+and produces no partial output (FR-029).
 
 ## Vocabulary
 

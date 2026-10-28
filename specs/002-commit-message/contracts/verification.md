@@ -1,11 +1,12 @@
 # Contract: Output-Quality Verification and Width Conformance
 
-**Feature**: `specs/002-commit-message/spec.md` | **Date**: 2026-10-15
+**Feature**: `specs/002-commit-message/spec.md` | **Date**: 2026-10-15, revised 2026-10-28
 
 The contract for checking a generated description before presentation, the bounded
-regeneration protocol, and the guarantee that every presented line fits the configured
-width (with the single exception defined in §2.1). Implementation detail lives in `tasks.md`
-and code; this file fixes the observable behaviour.
+regeneration protocol, the guarantee that every presented line fits the configured width
+(with the single exception defined in §2.1), and the repository-state rule that governs
+history context in a repository with no commits (§4). Implementation detail lives in
+`tasks.md` and code; this file fixes the observable behaviour.
 
 Two layers cooperate, with **one owner each** — they do not enforce the same rule twice:
 
@@ -171,5 +172,77 @@ alternatives: [research.md](../research.md) D2 and D7.
 | Whitespace normalization documented                           | FR-013, FR-022         | Test                | a body line with a run of internal spaces is committed with single spaces (`finalize_test.go`)                                                                                |
 | Truncation disclosed to developer                             | FR-007, SC-009         | Test                | temp repo with an oversized staged file; interactive notice and `slog` record                                                                                                 |
 | Root-commit amend refused                                     | FR-029                 | Test                | temp repo with a single commit; `--amend` exits with a named refusal                                                                                                          |
+| Commit state resolved once, three outcomes                    | FR-010, FR-034         | Test                | `HasCommits` table: exit 0 → present, exit 1 → absent (temp `git init`), non-repo/failure → unknown-with-error; one probe per invocation (D8)                                 |
+| History family not probed when HEAD is unborn                 | FR-010, FR-014         | Test                | unborn temp repo with a staged file: no `git log`/upstream invocation, first-commit statement present, overview/operation still built (D8)                                    |
+| First-commit statement survives `--history 0`                 | FR-010, FR-014         | Test                | same repo with `--history 0`: statement still in the context, no history fragment (D8)                                                                                        |
+| No user-facing no-commits notice                              | FR-030                 | Test                | interactive run in an unborn repo: exactly one debug record; stdout/stderr carry no skip notice (D8)                                                                          |
+| Submodule identity kept without commit subjects               | FR-008, FR-010         | Test                | staged gitlink in an unborn repo: identity/pointer range rendered, subject lookup suppressed (D8)                                                                             |
+| `--amend` refused before revision resolution                  | FR-029, SC-011         | Test                | unborn temp repo: named refusal, no `fatal: Needed a single revision`, no diff or model call (D8)                                                                             |
 | README/help flag spelling                                     | FR-011, Const. III     | Inspection          | README matches `go run ./cmd/git-message --help`                                                                                                                              |
 | No regression to existing checks                              | FR-017, FR-019, FR-020 | Test + benchmark    | existing `verify_test.go` table and the `internal/request` benchmarks stay green                                                                                              |
+
+## 4. Repository-state contract (D8) — NEW
+
+The rule that keeps a repository with no commits from being treated as a repository whose
+history probes failed. Requirements: FR-010, FR-014, FR-029, FR-030; scenario SC-011.
+
+### 4.1 The state value
+
+`buildPromptContextParallel` resolves the state **once** per invocation, before starting the
+repository, history, submodule, and operation builders:
+
+| `historyState`   | Probe answer                                           | Meaning                              |
+| ---------------- | ------------------------------------------------------ | ------------------------------------ |
+| `historyAbsent`  | `rev-parse --verify --quiet HEAD^{commit}` exits **1** | unborn branch; no commit to describe |
+| `historyPresent` | the same probe exits **0**                             | at least one commit exists           |
+| `historyUnknown` | any other outcome (nonzero ≠ 1, spawn failure)         | state cannot be established          |
+
+**Rule**: exit 1 is the only absence answer. Treating any failure as `historyAbsent` is
+forbidden: a corrupt repository, a permission problem, or a broken `git` would then be
+presented to the model as a first commit, which is a false statement about the repository.
+No builder issues its own state probe (FR-034, SC-008).
+
+### 4.2 Behaviour in `historyAbsent`
+
+1. **Skipped, not attempted.** `buildHistoryContext` returns before `GetUpstreamBranch`,
+   `GetRecentCommits`, or `GetTopicHistory`. No history probe runs.
+2. **The history slot carries a factual statement**, byte-exact:
+
+   ```text
+   Repository state: no commits yet; the staged change is the repository's first commit.
+   ```
+
+   The statement is repository-state framing, not prior-commit evidence, so it is emitted even
+   when `--history 0` (FR-014's zero suppresses history, not the state of the change).
+
+3. **Everything else still runs.** The repository overview keeps its working-tree walk (the
+   Q2 decision), the operation detection still runs, and the described change is still the
+   staged root index (`git diff --cached`), which succeeds in an unborn repository (FR-006,
+   FR-010).
+4. **Submodule identity is not history.** For a staged gitlink, the identity and pointer range
+   are rendered by `SubmodulePointerContext`; only the commit-subject lookup is suppressed
+   (FR-008). The fragment is not dropped.
+5. **Diagnostics only.** One `slog.Debug` record,
+   `commit-history context skipped: repository has no commits`, with
+   `reason=unborn branch`. There is **no** user-facing notice: this is a documented
+   degradation with its cause (FR-030), not the FR-007 truncation disclosure.
+6. **`--amend` refuses first.** `resolveAmendCommit` returns
+   `cannot amend: the repository has no commits yet` before `git.ResolveRevision`. The default
+   target is `HEAD~1`, so resolving first would surface `fatal: Needed a single revision`
+   instead of the reason (FR-029). A probe **error** does not produce this refusal: the flow
+   falls through to revision resolution, so an unreadable repository is never reported as
+   commit-less.
+
+### 4.3 Behaviour in `historyPresent` / `historyUnknown`
+
+Unchanged from today: the existing history and submodule logic runs, and failures degrade with
+a recorded cause. `historyUnknown` never claims a first commit — the statement in §4.2(2) is
+emitted only for `historyAbsent`.
+
+### 4.4 Scope limitation (recorded, not fixed)
+
+The unattended hook path calls the generator with an empty `commitContext`
+(`cmd/git-message/core/hook.go:215`), so FR-010's overview and history are absent from
+hook-generated descriptions in every repository. That pre-existing gap is **deferred
+observation (h)** in [research.md](../research.md); this contract verifies the interactive and
+amend paths only and MUST NOT be cited as evidence for the hook path.

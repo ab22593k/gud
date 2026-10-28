@@ -257,4 +257,21 @@ func TestResolveAmendCommitRefusals(t *testing.T) {
 			t.Errorf("error = %v, want the in-progress reason named", err)
 		}
 	})
+
+	t.Run("no commits refused before resolution", func(t *testing.T) {
+		amendRefusalTestRepo(t)
+
+		_, err := resolveAmendCommit(context.Background(), &AppContext{}, "HEAD")
+		if err == nil {
+			t.Fatal("resolveAmendCommit(HEAD, unborn repo): expected error, got nil")
+		}
+
+		if !strings.Contains(err.Error(), "no commits") {
+			t.Errorf("error = %v, want the no-commits reason named", err)
+		}
+
+		if strings.Contains(err.Error(), "Needed a single revision") {
+			t.Errorf("error = %v, want the refusal before revision resolution, not git's fatal", err)
+		}
+	})
 }
