@@ -1,6 +1,6 @@
 # Research: Commit Message Description — Spec Conformance Closure
 
-**Feature**: `specs/002-message-description/spec.md` | **Date**: 2026-10-15
+**Feature**: `specs/002-commit-message/spec.md` | **Date**: 2026-10-15
 
 All unknowns in Technical Context were resolvable from the specification, the constitution,
 and direct inspection of the shipped code. No external unknowns remained; no

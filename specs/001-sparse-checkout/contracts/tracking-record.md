@@ -1,6 +1,6 @@
 # Contract: Tracking Registry (`.git-wire.json`, v1)
 
-**Feature**: `specs/001-git-wire-fetch/spec.md` | **Date**: 2026-10-05
+**Feature**: `specs/001-sparse-checkout/spec.md` | **Date**: 2026-10-05
 
 The run-level registry that maps fetched targets to their sources. One file
 per run directory, written atomically (write temp + rename) by fetch

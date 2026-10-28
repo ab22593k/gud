@@ -1,6 +1,6 @@
 # Tasks: Commit Message Description — Spec Conformance Closure
 
-**Input**: Design documents from `specs/002-message-description/`
+**Input**: Design documents from `specs/002-commit-message/`
 (plan.md, spec.md US1–US4, research.md D1–D7, data-model.md, contracts/cli.md, contracts/verification.md, quickstart.md)
 
 **Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/, quickstart.md — all present.
@@ -178,7 +178,7 @@ beside their source (`foo.go` → `foo_test.go`).
 
 - [x] T028 [P] Run the full workspace suite from the repository root: `go test ./... ./internal/git/... ./internal/request/...`. ✅ all packages ok (incl. non-short flow tests)
 - [x] T029 [P] Run the change gates: `golangci-lint run`, `gofmt -l` over changed files, and `git diff --check`; all must be clean. ✅ 0 lint issues (11 introduced mid-work, all fixed), gofmt clean, diff clean
-- [x] T030 Execute the `specs/002-message-description/quickstart.md` scenarios (§0–§7) end to end and record the observed outcome for each, naming the test that produced it (SC-003, SC-009, FR-018 evidence). ✅ all green: §1 `TestVerifyMessage` + 4× `TestGenerate_*` (incl. `PersistsBodyLessFinding`, `FeedsFindingsBack`); §2 textwrap 3 + tui 3 (`ReviewWrapsLikeTextwrap`, `EditConfirmReappliesTextwrap`, `CommitReviewRespectsWrapLine`) + `TestFinalizeMessage*` 3; §3 `TestPresentFindings` + `TestLogResidualFindings` (quickstart's `TestInteractive.*Notice` does not exist — intent covered); §4 `TestTruncationNotice`; §5 `TestResolveAmendCommitRefusals` + 5 subtests (quickstart's `TestAmendRefusesRoot` does not exist — intent covered); §6 `--detail-level` in help + README, no stale spelling; §7 full suite 14 pkgs ok, benchmarks within envelope (memoised ≈11.6ms vs unmemoised ≈25.3ms)
+- [x] T030 Execute the `specs/002-commit-message/quickstart.md` scenarios (§0–§7) end to end and record the observed outcome for each, naming the test that produced it (SC-003, SC-009, FR-018 evidence). ✅ all green: §1 `TestVerifyMessage` + 4× `TestGenerate_*` (incl. `PersistsBodyLessFinding`, `FeedsFindingsBack`); §2 textwrap 3 + tui 3 (`ReviewWrapsLikeTextwrap`, `EditConfirmReappliesTextwrap`, `CommitReviewRespectsWrapLine`) + `TestFinalizeMessage*` 3; §3 `TestPresentFindings` + `TestLogResidualFindings` (quickstart's `TestInteractive.*Notice` does not exist — intent covered); §4 `TestTruncationNotice`; §5 `TestResolveAmendCommitRefusals` + 5 subtests (quickstart's `TestAmendRefusesRoot` does not exist — intent covered); §6 `--detail-level` in help + README, no stale spelling; §7 full suite 14 pkgs ok, benchmarks within envelope (memoised ≈11.6ms vs unmemoised ≈25.3ms)
 
 ---
 
@@ -302,7 +302,7 @@ verification-only because the audit found no defect there.
 
 ## Phase 8: Convergence
 
-- [x] T031 Align the validation regexes in `specs/002-message-description/quickstart.md` (section 3's `TestInteractive.*Notice` and section 5's `TestAmendRefusesRoot`) to the test names that actually implement them: the FR-018 notice helper tests are `TestPresentFindings` and `TestLogResidualFindings` (interactive and unattended respectively), and the FR-029 refusal behavior is covered by `TestResolveAmendCommitRefusals` with its five subtests (root HEAD, root by revision, merge commit, dirty tree, in-progress operation) per specs/002-message-description/quickstart.md §3, §5 (partial) ✅ commands now select real tests and pass
+- [x] T031 Align the validation regexes in `specs/002-commit-message/quickstart.md` (section 3's `TestInteractive.*Notice` and section 5's `TestAmendRefusesRoot`) to the test names that actually implement them: the FR-018 notice helper tests are `TestPresentFindings` and `TestLogResidualFindings` (interactive and unattended respectively), and the FR-029 refusal behavior is covered by `TestResolveAmendCommitRefusals` with its five subtests (root HEAD, root by revision, merge commit, dirty tree, in-progress operation) per specs/002-commit-message/quickstart.md §3, §5 (partial) ✅ commands now select real tests and pass
 
 ### Convergence added by `/speckit.analyze` (2026-10-17) — resolves D7 and the analysis findings
 

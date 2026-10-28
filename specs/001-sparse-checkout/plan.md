@@ -2,7 +2,7 @@
 
 **Branch**: `001-git-wire-fetch` | **Date**: 2026-10-05 | **Spec**: [spec.md](spec.md)
 
-**Input**: Feature specification from `/specs/001-git-wire-fetch/spec.md`
+**Input**: Feature specification from `/specs/001-sparse-checkout/spec.md`
 
 **Active skill**: `@golang-clean-coder` — Stepdown/newspaper layout, dozen-line
 functions, one abstraction level per function, SRP, intention-revealing domain
@@ -251,7 +251,7 @@ records keep working via the documented default. All gates still PASS.
 ### Documentation (this feature)
 
 ```text
-specs/001-git-wire-fetch/
+specs/001-sparse-checkout/
 ├── plan.md              # This file (/speckit.plan command output)
 ├── research.md          # Phase 0 output (/speckit.plan command)
 ├── data-model.md        # Phase 1 output (/speckit.plan command)

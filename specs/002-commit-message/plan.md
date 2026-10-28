@@ -2,7 +2,7 @@
 
 **Branch**: `002-message-description` | **Date**: 2026-10-15 | **Spec**: [spec.md](spec.md)
 
-**Input**: Feature specification from `/specs/002-message-description/spec.md`
+**Input**: Feature specification from `/specs/002-commit-message/spec.md`
 
 **Active skill**: `@golang-clean-coder` — Stepdown/newspaper layout, small functions,
 one abstraction level per function, SRP, intention-revealing domain types, isolated
@@ -182,7 +182,7 @@ verified and name the one unexecuted-by-design exception instead of claiming an 
 ### Documentation (this feature)
 
 ```text
-specs/002-message-description/
+specs/002-commit-message/
 ├── plan.md                    # This file (/speckit.plan command output)
 ├── research.md                # Phase 0 output — divergence register + decisions
 ├── data-model.md              # Phase 1 output — entities, checks, contracts of types

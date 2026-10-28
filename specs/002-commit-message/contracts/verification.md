@@ -1,6 +1,6 @@
 # Contract: Output-Quality Verification and Width Conformance
 
-**Feature**: `specs/002-message-description/spec.md` | **Date**: 2026-10-15
+**Feature**: `specs/002-commit-message/spec.md` | **Date**: 2026-10-15
 
 The contract for checking a generated description before presentation, the bounded
 regeneration protocol, and the guarantee that every presented line fits the configured

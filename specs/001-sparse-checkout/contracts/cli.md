@@ -1,6 +1,6 @@
 # Contract: `git-wire` CLI Surface
 
-**Feature**: `specs/001-git-wire-fetch/spec.md` | **Date**: 2026-10-05
+**Feature**: `specs/001-sparse-checkout/spec.md` | **Date**: 2026-10-05
 
 Authoritative command/flag/output contract for implementation and tests.
 Help text, errors, and docs MUST say `git wire` (never `gud`) per the

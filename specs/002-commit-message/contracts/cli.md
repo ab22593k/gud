@@ -1,6 +1,6 @@
 # Contract: `git message` CLI Surface
 
-**Feature**: `specs/002-message-description/spec.md` | **Date**: 2026-10-15
+**Feature**: `specs/002-commit-message/spec.md` | **Date**: 2026-10-15
 
 Authoritative command/flag/output contract for implementation and tests. Help text, errors,
 and documentation MUST say `git message`; `gud` is the product name used only in version

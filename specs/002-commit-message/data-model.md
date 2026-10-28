@@ -1,6 +1,6 @@
 # Data Model: Commit Message Description — Spec Conformance Closure
 
-**Feature**: `specs/002-message-description/spec.md` | **Date**: 2026-10-15
+**Feature**: `specs/002-commit-message/spec.md` | **Date**: 2026-10-15
 
 Entities, value shapes, invariants, and state transitions for the description feature.
 Field names match the shipped Go types so the model is directly checkable against the code;

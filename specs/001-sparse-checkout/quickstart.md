@@ -1,6 +1,6 @@
 # Quickstart: git-wire Subfolder Fetch
 
-**Feature**: `specs/001-git-wire-fetch/spec.md` | **Date**: 2026-10-05
+**Feature**: `specs/001-sparse-checkout/spec.md` | **Date**: 2026-10-05
 
 Validation/run guide proving the feature end-to-end. Implementation detail
 lives in `tasks.md` and code; this file contains only runnable checks with

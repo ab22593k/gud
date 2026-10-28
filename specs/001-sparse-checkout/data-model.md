@@ -1,6 +1,6 @@
 # Data Model: git-wire Subfolder Fetch
 
-**Feature**: `specs/001-git-wire-fetch/spec.md` | **Date**: 2026-10-05
+**Feature**: `specs/001-sparse-checkout/spec.md` | **Date**: 2026-10-05
 
 Derived from spec Key Entities + [research.md](research.md) decisions.
 Field presence uses explicit value semantics (a field is meaningful only when

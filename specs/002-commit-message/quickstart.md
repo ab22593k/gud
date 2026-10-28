@@ -1,6 +1,6 @@
 # Quickstart: Commit Message Description — Spec Conformance Closure
 
-**Feature**: `specs/002-message-description/spec.md` | **Date**: 2026-10-15
+**Feature**: `specs/002-commit-message/spec.md` | **Date**: 2026-10-15
 
 Validation/run guide proving each confirmed divergence is closed end-to-end. Implementation
 detail lives in `tasks.md` and code; this file contains only runnable checks with expected

@@ -1,6 +1,6 @@
 # Tasks: git-wire Subfolder Fetch
 
-**Input**: Design documents from `/specs/001-git-wire-fetch/`
+**Input**: Design documents from `/specs/001-sparse-checkout/`
 **Prerequisites**: plan.md (required), spec.md (required for user stories), research.md, data-model.md, contracts/, quickstart.md
 
 **Tests**: Tests are REQUIRED by Constitution Principle II (Test-First, NON-NEGOTIABLE). Every behavioral task below lands with a failing test first, then implementation, then refactor with the suite green. Unit tests stay deterministic (fake `fetcher` seam, local `git init` fixtures, no network, no credentials); live-network coverage is gated by `RUN_GITWIRE_INTEGRATION` and skipped under `-short`.
@@ -188,14 +188,14 @@ Implementation:
 - [x] T059 Run `golangci-lint run` and fix any findings (Principle I) (path: ./ (repository root))
 - [x] T060 Run full workspace suite: `go test ./... ./internal/git/... ./internal/request/... ./internal/textwrap/...` (Principle V)
 - [x] T061 Run `git diff --check` and inspect `git diff` for accidental edits (Principle V) (path: ./ (repository root))
-- [x] T062 Validate quickstart.md scenarios end-to-end (steps 1–7 including 6a root-URL check) and record evidence (path: specs/001-git-wire-fetch/quickstart.md)
+- [x] T062 Validate quickstart.md scenarios end-to-end (steps 1–7 including 6a root-URL check) and record evidence (path: specs/001-sparse-checkout/quickstart.md)
 - [x] T063 Fix ref resolution to prefer refreshed remote-tracking refs over the mirror's clone-time `refs/heads/*` (found in T062): sort ref names for deterministic collision handling, let peeled tags beat tag objects and tags beat same-named branches, and read `refs/remotes/origin/HEAD` for the default branch; tests in `internal/wire/gitfetch_test.go`, implementation in `internal/wire/gitfetch.go` (research D14) (FR-008, SC-004)
-- [x] T074 [P] Re-verify `contracts/cli.md` and `contracts/tracking-record.md` against the pinned-ref implementation (docs already amended in the plan round; fix any phrase/schema drift surfaced by T070/T072 tests) (path: specs/001-git-wire-fetch/contracts/)
+- [x] T074 [P] Re-verify `contracts/cli.md` and `contracts/tracking-record.md` against the pinned-ref implementation (docs already amended in the plan round; fix any phrase/schema drift surfaced by T070/T072 tests) (path: specs/001-sparse-checkout/contracts/)
 - [x] T075 [P] Run `gofmt -w` and `goimports` on every changed Go file (Principle I) (path: changed Go files (./))
 - [x] T076 [P] Run `golangci-lint run` and fix any findings (Principle I) (path: ./ (repository root))
 - [x] T077 Run full workspace suite: `go test ./... ./internal/git/... ./internal/request/... ./internal/textwrap/...` (Principle V)
 - [x] T078 [P] Run `git diff --check` and inspect `git diff` for accidental edits (Principle V) (path: ./ (repository root))
-- [x] T079 [P] Validate quickstart.md scenario 6b end-to-end (pinned fetch → `Pinned to commit <sha>` update, exit 0, `.git-wire.json` `cmp` clean; offline `go test ./internal/wire -run 'TestUpdatePinned|TestIsPinnedSHA'`) and record evidence (path: specs/001-git-wire-fetch/quickstart.md)
+- [x] T079 [P] Validate quickstart.md scenario 6b end-to-end (pinned fetch → `Pinned to commit <sha>` update, exit 0, `.git-wire.json` `cmp` clean; offline `go test ./internal/wire -run 'TestUpdatePinned|TestIsPinnedSHA'`) and record evidence (path: specs/001-sparse-checkout/quickstart.md)
 
 ---
 

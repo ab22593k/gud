@@ -1,6 +1,6 @@
 # Research: git-wire Subfolder Fetch
 
-**Feature**: `specs/001-git-wire-fetch/spec.md` | **Date**: 2026-10-05
+**Feature**: `specs/001-sparse-checkout/spec.md` | **Date**: 2026-10-05
 
 All unknowns in Technical Context were resolvable from the spec, the
 constitution, and direct codebase inspection (Cobra layout in
