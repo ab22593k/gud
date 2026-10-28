@@ -166,6 +166,52 @@ cd /tmp/gud-unborn
   `fatal: Needed a single revision`, no diff, no model call. The refusal precedes revision
   resolution (the default target is `HEAD~1`).
 
+## 5c. Rename paths are grounded from git's records (FR-020, D9)
+
+This is the second 2026-10-28 clarification (divergence (i), decision D9). Reproduce the state
+and the probe first:
+
+```bash
+rm -rf /tmp/gud-rename && mkdir /tmp/gud-rename && cd /tmp/gud-rename
+git init -q -b main && git config user.email t@example.com && git config user.name T
+printf 'package old\n' > old_name.go && printf 'package keep\n' > keep.go
+git add . && git commit -qm init
+git mv old_name.go new_name.go && printf '// edit\n' >> keep.go && git add -A
+git diff --cached --name-status -z -M -C | od -c
+# expect M\0keep.go\0R100\0old_name.go\0new_name.go\0
+```
+
+```bash
+go test ./internal/git -run 'TestParseChangePaths|TestStagedChangePaths|TestCommitChangePaths|TestRunGitOutput' -v
+go test ./internal/request -run 'TestVerifyMessage|TestGenerateCommitMessageWithContent_CarriesChange' -v
+go test ./cmd/git-message/core -run 'TestResolveChangePaths|TestStagedChangeProbeOnce|TestStagedChangeEvidenceBelowThresholdRename|TestHookMode_ResolvesChangePathsOnce|TestAmendChangePaths' -v
+```
+
+- A description naming both `old_name.go` and `new_name.go` passes when `git mv` recorded the
+  rename, **even if** the submitted diff is crafted as a plain delete+add or is cut before the
+  `rename from` line (the reproduced failure).
+- A copy from a modified source (`C100 src dst`) grounds both names; a pure copy is reported by
+  git as an add and grounds only the added path — the documented limit.
+- The set is additive: a path present only in the diff still passes when `Change.Paths` omits
+  it, and the diff is still scanned once (FR-019).
+- The probe is resolved once per invocation — normal, hook, and amend paths each probe once;
+  regeneration repeats none (FR-034, SC-008).
+- `Paths` records with spaces and non-ASCII names are parsed byte-exactly; a malformed record
+  returns a wrapped error naming the shape, never a partially applied set.
+
+Probe-failure fallback (diagnostics only):
+
+```bash
+go test ./cmd/git-message/core -run 'TestHookMode_ProbeFailureIsDiagnosticsOnly' -v
+go test ./internal/request -run TestVerifyMessage -v   # the Paths == nil cases
+```
+
+- Expected: with a probe seam returning an error, the hook proceeds past diff acquisition
+  (failing later only because no API key is configured), exactly one `slog.Debug` record carries
+  the cause, and no notice is emitted. At the request layer, `Paths == nil` reproduces today's
+  diff-only grounding — the probe never contributes an error, never changes the exit status, and
+  `nil` means "unavailable", never "no paths" (Q3, FR-030).
+
 ## 6. Documented flag matches the command (FR-011, Constitution III)
 
 ```bash
@@ -199,4 +245,9 @@ go test -bench . ./internal/request
 | Body-less test flaky                                                    | the scripted model returned a body on attempt 2                                | pin the script to return it on every attempt                                                                                               |
 | `fatal: your current branch ... does not have any commits yet` in a run | history was probed in an unborn repository instead of reading the state (D8)   | resolve `HasCommits` once and skip the history family; the log must not contain `failed to get recent commits`                             |
 | `--amend` prints `fatal: Needed a single revision`                      | the revision was resolved before the no-commits guard                          | refuse with `cannot amend: the repository has no commits yet` before `ResolveRevision` (D8)                                                |
+| `file-grounding` on a rename's old path                                 | the allowed set was built from the diff text only (D9)                         | union `Change.Paths` and its basenames with the diff-derived set; `--name-only` cannot supply the pre-image                                |
+| Rename record parsed as one path or skipped                             | NUL records read with `bytes.Split`-style logic that assumes one path          | `R`/`C` records carry two paths; every other status carries one; reject short records instead of guessing                                  |
+| A git warning appears inside a path                                     | stderr folded into stdout for a machine-readable command                       | use `runGitOutput`, which captures stderr into the error and leaves NUL stdout intact (D9)                                                 |
+| `git diff --cached --name-status` reports nothing for a rename          | user/repository config set `diff.renames=false`                                | pass `-M` (and `-C`) explicitly; the probe must not depend on configuration (D9)                                                           |
+| Generation fails when the change-path probe fails                       | the optional probe was treated as required                                     | return `nil` paths, log one `slog.Debug` with the cause, continue with the diff-derived set (Q3/D9)                                        |
 | Notice assertion fails in the hook path                                 | the notice was printed to stdout instead of logged                             | unattended information goes to `slog` (FR-028)                                                                                             |

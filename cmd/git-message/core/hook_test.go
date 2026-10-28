@@ -3,11 +3,15 @@ package core
 import (
 	"bytes"
 	"context"
+	"errors"
 	"iter"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"gud/internal/config"
@@ -186,7 +190,7 @@ func TestLogResidualFindings(t *testing.T) {
 
 		// The advisory finding is raised against the draft subject...
 		draft := strings.TrimSpace(strings.Repeat("alpha ", 20)) + "\n\nExplain the change."
-		findings := request.VerifyMessage(draft, "", wrapLine)
+		findings := request.VerifyMessage(draft, request.Change{Diff: ""}, wrapLine)
 
 		if len(findings) != 1 || findings[0].Check != "subject-length" {
 			t.Fatalf("VerifyMessage(draft) = %v, want one subject-length finding", findings)
@@ -219,6 +223,128 @@ func TestLogResidualFindings(t *testing.T) {
 	})
 }
 
+// TestHookMode_ProbeFailureIsDiagnosticsOnly pins the hook's diagnostics-only
+// fallback: with a probe seam returning an error, the hook proceeds past
+// diff acquisition (failing later only because no API key is configured),
+// emits exactly one debug record carrying the cause, and produces no
+// user-facing notice from the resolver.
+func TestHookMode_ProbeFailureIsDiagnosticsOnly(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping temp-repo test in short mode")
+	}
+
+	isolateConfig(t)
+	newCoreHistoryTestRepo(t)
+
+	ctx := context.Background()
+
+	if err := os.WriteFile("hookstaged.txt", []byte("hook\n"), 0600); err != nil {
+		t.Fatalf("write hookstaged.txt: %v", err)
+	}
+
+	if out, err := exec.CommandContext(ctx, "git", "add", "hookstaged.txt").CombinedOutput(); err != nil {
+		t.Fatalf("git add: %v\n%s", err, out)
+	}
+
+	var buf bytes.Buffer
+
+	restore := captureSlogDebug(&buf)
+	defer restore()
+
+	app := &AppContext{
+		stagedPathsFn: func(context.Context) ([]string, error) {
+			return nil, errors.New("boom")
+		},
+	}
+
+	err := runHookModeInternal(ctx, filepath.Join(t.TempDir(), "COMMIT_EDITMSG"), app)
+	if err == nil {
+		t.Fatal("runHookModeInternal(probe error) = nil, want the client/API-key error")
+	}
+
+	if strings.Contains(err.Error(), "boom") {
+		t.Errorf("runHookModeInternal error = %v, want the client error, not the probe cause", err)
+	}
+
+	records := strings.Count(buf.String(), "change-path probe failed; using diff-derived paths")
+	if records != 1 {
+		t.Errorf("debug records = %d, want exactly 1:\n%s", records, buf.String())
+	}
+
+	if !strings.Contains(buf.String(), "boom") {
+		t.Errorf("debug record does not carry the cause:\n%s", buf.String())
+	}
+}
+
+// TestHookMode_ResolvesChangePathsOnce pins the hook wire-up: a staged
+// rename is resolved once per invocation through the injected probe, both
+// names are in the result, and a second invocation probes again — per
+// invocation, never memoised globally.
+func TestHookMode_ResolvesChangePathsOnce(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping temp-repo test in short mode")
+	}
+
+	isolateConfig(t)
+	newCoreHistoryTestRepo(t)
+
+	ctx := context.Background()
+
+	if err := os.WriteFile("old_name.go", []byte("package old\n"), 0600); err != nil {
+		t.Fatalf("write old_name.go: %v", err)
+	}
+
+	run := func(args ...string) {
+		t.Helper()
+
+		if out, err := exec.CommandContext(ctx, "git", args...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	run("add", ".")
+	run("commit", "-q", "-m", "add old_name.go")
+	run("mv", "old_name.go", "new_name.go")
+	run("add", "-A")
+
+	var calls atomic.Int32
+
+	var gotPaths []string
+
+	mkApp := func() *AppContext {
+		return &AppContext{stagedPathsFn: func(context.Context) ([]string, error) {
+			calls.Add(1)
+
+			var err error
+
+			gotPaths, err = git.StagedChangePaths(ctx)
+
+			return gotPaths, err
+		}}
+	}
+
+	if err := runHookModeInternal(ctx, filepath.Join(t.TempDir(), "COMMIT_EDITMSG"), mkApp()); err == nil {
+		t.Fatal("runHookModeInternal(no API key) = nil, want the client error")
+	}
+
+	if calls.Load() != 1 {
+		t.Fatalf("staged probe calls = %d, want 1", calls.Load())
+	}
+
+	for _, want := range []string{"old_name.go", "new_name.go"} {
+		if !slices.Contains(gotPaths, want) {
+			t.Errorf("probe result = %v, want %q", gotPaths, want)
+		}
+	}
+
+	if err := runHookModeInternal(ctx, filepath.Join(t.TempDir(), "COMMIT_EDITMSG"), mkApp()); err == nil {
+		t.Fatal("runHookModeInternal(second, no API key) = nil, want the client error")
+	}
+
+	if calls.Load() != 2 {
+		t.Errorf("staged probe calls after two invocations = %d, want 2 (per invocation)", calls.Load())
+	}
+}
+
 // TestGenerateAndWriteMsg_PreservesExistingMessage pins FR-026: a message file
 // that already holds a user-supplied message is left untouched. The app carries
 // no client, so a write would panic — returning cleanly proves generation was
@@ -236,7 +362,7 @@ func TestGenerateAndWriteMsg_PreservesExistingMessage(t *testing.T) {
 
 	app := &AppContext{cfg: config.Config{WrapLine: 72}}
 
-	if err := generateAndWriteMsg(t.Context(), app, "diff", msgFile); err != nil {
+	if err := generateAndWriteMsg(t.Context(), app, request.Change{Diff: "diff"}, msgFile); err != nil {
 		t.Fatalf("generateAndWriteMsg: %v", err)
 	}
 
@@ -270,7 +396,7 @@ func TestGenerateAndWriteMsg_RefusesSymlink(t *testing.T) {
 
 	app := &AppContext{cfg: config.Config{WrapLine: 72}}
 
-	if err := generateAndWriteMsg(t.Context(), app, "diff", link); err == nil {
+	if err := generateAndWriteMsg(t.Context(), app, request.Change{Diff: "diff"}, link); err == nil {
 		t.Errorf("generateAndWriteMsg(symlink) = nil, want refusal")
 	}
 }
@@ -344,7 +470,7 @@ func TestGenerateAndWriteMsg_DoesNotFollowSymlinkSwappedDuringGeneration(t *test
 		agentsFilesOK: true,
 	}
 
-	if err := generateAndWriteMsg(t.Context(), app, "diff", msgFile); err != nil {
+	if err := generateAndWriteMsg(t.Context(), app, request.Change{Diff: "diff"}, msgFile); err != nil {
 		t.Fatalf("generateAndWriteMsg: %v", err)
 	}
 

@@ -58,7 +58,7 @@ func BenchmarkVerifyMessageLarge(b *testing.B) {
 	b.ReportAllocs()
 
 	for b.Loop() {
-		VerifyMessage(msg, diff, defaultWrapLine)
+		VerifyMessage(msg, Change{Diff: diff}, defaultWrapLine)
 	}
 }
 
@@ -69,7 +69,7 @@ func BenchmarkVerifyMessageSmall(b *testing.B) {
 	b.ReportAllocs()
 
 	for b.Loop() {
-		VerifyMessage(msg, diff, defaultWrapLine)
+		VerifyMessage(msg, Change{Diff: diff}, defaultWrapLine)
 	}
 }
 
@@ -82,7 +82,7 @@ func BenchmarkVerifyMessageNoTokens(b *testing.B) {
 	b.ReportAllocs()
 
 	for b.Loop() {
-		VerifyMessage(msg, diff, defaultWrapLine)
+		VerifyMessage(msg, Change{Diff: diff}, defaultWrapLine)
 	}
 }
 
@@ -127,7 +127,7 @@ func BenchmarkGenerateEndToEnd(b *testing.B) {
 
 	for b.Loop() {
 		if _, _, err := client.GenerateCommitMessageWithContent(
-			context.Background(), diff, "", DetailStandard, "", nil, defaultWrapLine,
+			context.Background(), Change{Diff: diff}, "", DetailStandard, "", nil, defaultWrapLine,
 		); err != nil {
 			b.Fatal(err)
 		}

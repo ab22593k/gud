@@ -23,10 +23,20 @@ type Finding struct {
 // pathToken matches file-like tokens such as main.go or pkg/cache/lru.go.
 var pathToken = regexp.MustCompile(`[\w][\w./-]*\.\w+`)
 
+// Change is the evidence a generated message is verified against: the
+// diff patch plus the repo-relative paths git reports for the same change
+// (both sides of every rename and copy, no a/ or b/ prefix). Paths == nil
+// means the probe was unavailable, and verification falls back to
+// diff-derived paths alone.
+type Change struct {
+	Diff  string
+	Paths []string
+}
+
 // VerifyMessage checks a generated commit message against its diff and
 // returns one Finding per failed check (nil when clean). It is pure:
 // no I/O, no model calls, safe to run on every generation.
-func VerifyMessage(msg, diff string, wrapLine int) []Finding {
+func VerifyMessage(msg string, change Change, wrapLine int) []Finding {
 	if strings.TrimSpace(msg) == "" {
 		return []Finding{{Check: "empty", Detail: "message is empty"}}
 	}
@@ -63,7 +73,7 @@ func VerifyMessage(msg, diff string, wrapLine int) []Finding {
 		out = append(out, Finding{Check: "fence-remnant", Detail: "message contains backtick"})
 	}
 
-	return append(out, groundingFindings(msg, diff)...)
+	return append(out, groundingFindings(msg, change)...)
 }
 
 // groundingFindings reports one Finding per path-like token in msg that
@@ -77,18 +87,23 @@ func VerifyMessage(msg, diff string, wrapLine int) []Finding {
 // ("fix a.txt" for diff path "sub/a.txt") grounded; matches are exact tokens,
 // so a mention of "main.go" is no longer grounded by an unrelated
 // "domain.go" merely containing it as a substring.
-func groundingFindings(msg, diff string) []Finding {
+func groundingFindings(msg string, change Change) []Finding {
 	if !pathToken.MatchString(msg) {
 		return nil
 	}
 
 	present := make(map[string]bool)
-	for _, p := range git.ExtractChangedPaths(diff) {
+	for _, p := range change.Paths {
 		present[p] = true
 		present[path.Base(p)] = true
 	}
 
-	indexDiffTokens(present, diff)
+	for _, p := range git.ExtractChangedPaths(change.Diff) {
+		present[p] = true
+		present[path.Base(p)] = true
+	}
+
+	indexDiffTokens(present, change.Diff)
 
 	seen := make(map[string]bool)
 
@@ -142,6 +157,7 @@ func findingCodes(fs []Finding) []string {
 	for _, f := range fs {
 		codes = append(codes, f.Check)
 	}
+
 	return codes
 }
 

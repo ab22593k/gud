@@ -7,31 +7,33 @@ and direct inspection of the shipped code. No external unknowns remained; no
 `NEEDS CLARIFICATION` markers exist. Every decision below follows the required
 Decision / Rationale / Alternatives format.
 
-Revised 2026-10-28: the `/speckit.clarify` session on repositories with no commits added
-divergence (g) and decision D8. A separate **deferred observation (h)** records an unrelated,
+Revised 2026-10-28: the first `/speckit.clarify` session on repositories with no commits added
+divergence (g) and decision D8. The second `/speckit.clarify` session on rename handling added
+divergence (i) and decision D9. A separate **deferred observation (h)** records an unrelated,
 pre-existing FR-010 gap in the unattended hook path; it is deliberately not closed here.
 
 ## Divergence register (what planning confirmed or dismissed)
 
 The specification recorded three candidate divergences in `## Assumptions` for planning to
 confirm or dismiss. Each was checked against the code. **All three are confirmed defects**,
-and four further divergences were found — (d)(e)(f) by the 2026-10-15 audit and (g) by the
-2026-10-28 clarification. Verified by source inspection and by
+and five further divergences were found — (d)(e)(f) by the 2026-10-15 audit, (g) by the first
+2026-10-28 clarification, and (i) by the second. Verified by source inspection and by
 `go run ./cmd/git-message --help` (2026-10-15); baseline `go test -short ./...` is green, so
 none of these is masked by a broken build.
 
-| ID  | Spec ref                          | Verdict                        | Evidence                                                                                                                                                                                                                                                                                                                                                                                                         |
-| --- | --------------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| a   | FR-013                            | **Confirmed**                  | `internal/request/verify.go:41` measures the subject only (`subject, _, _ := strings.Cut(msg, "\n")`); `internal/tui/commit.go:111,267` wraps in the TUI; `cmd/git-message/core/hook.go:195-208` writes the model reply unwrapped, and the plain-text path (`interact.go:156`) never wraps                                                                                                                       |
-| b   | FR-001                            | **Confirmed**                  | `internal/request/verify.go:29-55` emits `empty`, `subject-length`, `fence-remnant`, `file-grounding` — there is no body check; `verify_test.go` has no body-less case                                                                                                                                                                                                                                           |
-| c   | FR-011 / Const. III               | **Confirmed**                  | `README.md:18` says `git message --detail detailed`; `cmd/git-message/core/root.go:113` registers `--detail-level`, and no `--detail` alias exists                                                                                                                                                                                                                                                               |
-| d   | FR-018                            | **Confirmed (new)**            | `internal/request/client.go:194-226` retries with the **same** `req` (no feedback); persistent findings log at `slog.Debug` only and never reach the developer                                                                                                                                                                                                                                                   |
-| e   | FR-007 / SC-009                   | **Confirmed (new)**            | `internal/git/diff.go:115-126` appends the truncation marker for the **model**; `cmd/git-message/core/generate.go:179-181` logs `slog.Debug` — no developer-facing notice on any path                                                                                                                                                                                                                            |
-| f   | FR-029                            | **Confirmed (new)**            | `cmd/git-message/core/amend.go:104-113` checks the clean tree only when `!head`; the root-commit guard (`internal/git/amend.go:69-77`) is reachable only from the non-HEAD reword path                                                                                                                                                                                                                           |
-| g   | FR-010 / FR-014 / FR-029 / SC-011 | **Confirmed (new, clarified)** | `cmd/git-message/core/generate.go:310-344` probes upstream and then `git log` in every state; in an unborn repository `git log` exits 128 and the only trace is a failure-shaped `slog.Debug` line (observed 2026-10-28). No first-commit statement reaches the model. `cmd/git-message/core/amend.go:88` resolves the target first, so `--amend` leaks `fatal: Needed a single revision` (observed 2026-10-28). |
+| ID  | Spec ref                          | Verdict                        | Evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| --- | --------------------------------- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| a   | FR-013                            | **Confirmed**                  | `internal/request/verify.go:41` measures the subject only (`subject, _, _ := strings.Cut(msg, "\n")`); `internal/tui/commit.go:111,267` wraps in the TUI; `cmd/git-message/core/hook.go:195-208` writes the model reply unwrapped, and the plain-text path (`interact.go:156`) never wraps                                                                                                                                                                                                                                                                                                               |
+| b   | FR-001                            | **Confirmed**                  | `internal/request/verify.go:29-55` emits `empty`, `subject-length`, `fence-remnant`, `file-grounding` — there is no body check; `verify_test.go` has no body-less case                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| c   | FR-011 / Const. III               | **Confirmed**                  | `README.md:18` says `git message --detail detailed`; `cmd/git-message/core/root.go:113` registers `--detail-level`, and no `--detail` alias exists                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| d   | FR-018                            | **Confirmed (new)**            | `internal/request/client.go:194-226` retries with the **same** `req` (no feedback); persistent findings log at `slog.Debug` only and never reach the developer                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| e   | FR-007 / SC-009                   | **Confirmed (new)**            | `internal/git/diff.go:115-126` appends the truncation marker for the **model**; `cmd/git-message/core/generate.go:179-181` logs `slog.Debug` — no developer-facing notice on any path                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| f   | FR-029                            | **Confirmed (new)**            | `cmd/git-message/core/amend.go:104-113` checks the clean tree only when `!head`; the root-commit guard (`internal/git/amend.go:69-77`) is reachable only from the non-HEAD reword path                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| g   | FR-010 / FR-014 / FR-029 / SC-011 | **Confirmed (new, clarified)** | `cmd/git-message/core/generate.go:310-344` probes upstream and then `git log` in every state; in an unborn repository `git log` exits 128 and the only trace is a failure-shaped `slog.Debug` line (observed 2026-10-28). No first-commit statement reaches the model. `cmd/git-message/core/amend.go:88` resolves the target first, so `--amend` leaks `fatal: Needed a single revision` (observed 2026-10-28).                                                                                                                                                                                         |
+| i   | FR-020                            | **Confirmed (new, clarified)** | `internal/request/verify.go:80-118` builds `present` only from `git.ExtractChangedPaths(diff)` and `indexDiffTokens(diff)`. `internal/git/history.go:67-95` reads only `+++ b/<post-image>`; `indexDiffTokens` (`verify.go:166-211`) indexes path-like diff tokens but never strips the `a/` prefix. Reproduced 2026-10-28: a 100% rename **with** `rename from pkg/old_name.go` / `rename to pkg/new_name.go` passes, but the same rename shown as delete+add (or a diff cut before the rename record) yields `file-grounding` for `pkg/old_name.go`. A full rename pass is incidental, not guaranteed. |
 
 No divergence was found for FR-002–FR-006, FR-008–FR-009, FR-011–FR-013, FR-015–FR-017,
-FR-019–FR-028, FR-031–FR-037, or the edge cases; the shipped mechanisms satisfy them (notably
+FR-019, FR-021–FR-028, FR-031–FR-037, or the edge cases; the shipped mechanisms satisfy them (notably
 the `git interpret-trailers` path for FR-015, the `AppContext` memoisation for FR-034/SC-008, and
 the `untrustedDataPolicy`/`noToolUsePolicy`/empty `agentTools()` triple for FR-031).
 
@@ -373,3 +375,125 @@ first-commit statement; `git message --amend` prints `fatal: Needed a single rev
   - _Let `git commit --amend` fail in an unborn repository_: rejected — `--amend` with the
     default `HEAD~1` is already resolved before git is reached, no reason is named, and the raw
     `fatal:` leaks (observed).
+
+## D9 — Change-path evidence comes from git, and the allowed set stays additive (FR-020)
+
+Added by the second 2026-10-28 clarification. Reproduced in a temporary repository
+(`git init -b main`, `git mv old_name.go new_name.go`, one unrelated edit): a description
+naming the rename **with** the diff's `rename from old_name.go` / `rename to new_name.go`
+records passes, but the same 100 % rename rendered as `--- a/old_name.go` / `+++ b/new_name.go`
+(or a diff cut before the rename record) yields `file-grounding` for `old_name.go`. Cause:
+`internal/request/verify.go:80-118` builds the allowed set from `git.ExtractChangedPaths(diff)`
+and `indexDiffTokens(diff)` only; `internal/git/history.go:67-95` reads only the `+++ ` post-image,
+and `indexDiffTokens` indexes path-like tokens without stripping the `a/` prefix.
+
+Probe shapes measured 2026-10-28 in the same repository:
+
+- `git diff --cached --name-status -z -M -C` →
+  `M\0keep.go\0R100\0old_name.go\0new_name.go\0`; `git show --format= --name-status -z -M -C
+HEAD --` emits the identical records for a commit.
+- `--name-only` returns only the post-image (`new_name.go`), so it cannot supply the pre-image.
+- `--summary` emits `rename old_name.go => new_name.go (100%)`, whose separator is ambiguous
+  once a path contains `=>`; `--name-status -z` is NUL-delimited and unambiguous.
+- `-M` overrides `diff.renames=false` (observed: the config empties `--name-status`, the explicit
+  flag still reports `R100`). Without `-C`, `-M` alone misses copies.
+- Paths with spaces and non-ASCII names survive `-z` byte-for-byte
+  (`R100\0a b.txt\0c d.txt\0R100\0ümlaut.txt\0ö.txt\0`).
+- `-C` **without** `--find-copies-harder` reports a pure copy as `A copy.go`; with the flag it
+  reports `C100 old.go copy.go` (observed).
+
+- **Decision**: derive the allowed set from git's own path records for the same change the
+  description describes, and union it into the existing set without removing anything.
+  1. **One value, one source of truth.** Add `request.Change{Diff string, Paths []string}`.
+     `Paths` holds git-reported repository-relative paths (forward slashes, no `a/`/`b/`
+     prefix); `Paths == nil` is the single representation of "git could not report them".
+     `VerifyMessage(msg, change Change, wrapLine int)` takes the value;
+     `GenerateCommitMessageWithContent` gains `change Change` as its second
+     parameter and otherwise keeps `commitContext`, `detailLevel`, `hint`,
+     `mounts`, and `wrapLine`, carrying it to the boundary.
+     `GenerateCommitMessage` keeps its diff-only signature and constructs
+     `Change{Diff: diff}`: it has no production caller, and making its tests invent an empty
+     path list would add churn without evidence.
+  2. **Additive union.** The grounding set is `change.Paths` plus their basenames, **union**
+     `git.ExtractChangedPaths(change.Diff)` plus their basenames, **union**
+     `indexDiffTokens(change.Diff)`. Nothing is removed or filtered; a path in either source is
+     allowed. The check remains one pass over the diff plus O(#paths) insertions (FR-019), and
+     the 256 KiB `MaxDiffBytes` bound is untouched because the probe carries names, not content.
+  3. **One probe, beside the diff.** `internal/git/paths.go` gains
+     `StagedChangePaths(ctx) ([]string, error)` over
+     `git diff --cached --name-status -z -M -C` and `CommitChangePaths(ctx, sha) ([]string,
+error)` over `git show --format= --name-status -z -M -C <sha> --`. `-M` and `-C` are
+     passed explicitly so a repository or user config (`diff.renames=false`) cannot change what
+     the verifier knows. `-C` deliberately omits `--find-copies-harder`: its cost is not
+     bounded by the change, and a pure copy git reports as an add contributes exactly the
+     added path — the source is not part of the described change.
+  4. **Parse records, not prose.** Split on NUL; the status field is the first token; `R` and
+     `C` records carry two paths, every other status carries one. A short record or an unknown
+     status returns an error that names the record shape and never echoes path content into the
+     error or a user-facing message. Both paths of an `R` or `C` record are added; a
+     below-threshold rename is reported by git as `D` + `A` and both paths are added, which is
+     precisely the reproduced failure.
+  5. **Separate streams.** `--name-status -z` is machine-readable, so the probe cannot use
+     `runGit`, which folds stderr into stdout and corrupts a NUL record stream with a warning.
+     `internal/git/exec.go` gains `runGitOutput(ctx, args ...string) ([]byte, error)`:
+     stdout is captured alone, stderr is captured into the wrapped error.
+  6. **Resolve once per invocation.** `runGenerate` probes the staged index beside the staged
+     diff; `runHookModeInternal` does the same for the hook's staged change;
+     `resolveAmendCommit` probes the resolved target commit and stores the paths in the job.
+     `interactiveCommit`, `loopMessage`, `generateCommitMessage`, and `generateAndWriteMsg`
+     carry `request.Change`. Regeneration reuses the same value, so no pass re-probes
+     (FR-034, SC-008).
+  7. **Diagnostics-only fallback.** A small `resolveChangePaths(ctx, probe)` seam calls the
+     probe, and on error emits exactly one
+     `slog.Debug("change-path probe failed; using diff-derived paths", "error", err)` and
+     returns `nil`; generation continues, no user-facing notice is emitted, and no exit status
+     changes. This is an enrichment failure, not a missing part of the described change: the
+     diff still grounds the message as it does today. A probe error is never presented as "no
+     paths" to the model or the developer.
+
+- **Rationale**: FR-020 requires the allowed path set to describe the environment the change
+  came from, and git is the only authority on how it classified that change. The diff text is a
+  rendering, not the record: a rename may be shown as delete+add, may be truncated before the
+  rename lines, or may be capped, while `--name-status` reports the same change without
+  content. Making the set additive is required by the clarification and by Principle IV — a
+  path the diff already grounds must never become disallowed because a second source disagrees.
+  `-z` is required for determinism: newline- and space-containing paths are legal, and the
+  human-readable form is ambiguous. `-M`/`-C` are forced because path evidence must not depend
+  on a user's `diff.renames`/`diff.copies` settings. Keeping `internal/request` pure preserves
+  the existing test seam: verifier tests pass crafted values, and only the `core`/`git` layers
+  touch a repository.
+
+- **Alternatives considered**:
+  - _Keep the diff-only set and document the rename gap_: rejected — it is divergence (i), and
+    the clarified FR-020 requires the pre-image to be a member when git reports it.
+  - _Replace the diff-derived set with the git-reported paths_: rejected — it would make the
+    verifier depend on a second command succeeding and would drop tokens the diff grounds (for
+    example a path named only in a hunk or a quoted path form). Additive union is strictly safer.
+  - _Parse `--summary` (`rename old => new (100%)`)_: rejected — the separator is ambiguous for
+    paths containing `=>`, and the percentage text must be stripped; `-z` avoids both.
+  - _Parse `--name-only`_: rejected — it reports only the post-image, which is exactly the path
+    already present in `+++ b/...`; it cannot fix the pre-image gap.
+  - _Run the probe inside `VerifyMessage`_: rejected — it turns a pure, one-pass check into an
+    I/O boundary, forces every verifier test to build a repository, and lets the evidence drift
+    from the diff it is paired with.
+  - _Return an error or print a notice when the probe fails_: rejected by the clarification
+    (Q3) and by Principle IV — the diff-derived set is complete enough to generate, and the
+    failure is diagnostic.
+  - _Use `--find-copies-harder`_: rejected — it scans every path in the tree, so its cost is not
+    bounded by the change, and a pure copy's source is not part of the described change.
+  - _Detect renames by matching `rename from`/`rename to` lines in the diff_: rejected — that is
+    the current fragile heuristic, and it fails precisely when the diff is rendered as
+    delete+add or cut before the record.
+  - _Include the target commit's parent diff for `--amend`_: rejected — the described change is
+    the target commit's own patch, and adding the parent's paths would allow paths the message
+    has no reason to name (scope creep in the allowed set).
+
+- **Consequences**: the verifier's signature changes at ten call sites (one production and
+  nine tests across `internal/request` and `cmd/git-message/core`; mechanical
+  `Change{Diff: ...}` wrapping where no probe exists), `VerifyMessage`'s test table gains a
+  `change` field, and `internal/request` gains an exported type; `internal/git` gains one file
+  and one exec helper; `core` gains one probe call in each of three paths and one seam function.
+  Stated limits, documented rather than hidden: a pure copy is reported as an add and
+  contributes only the added path; a probe and the diff are separate git commands, so a
+  concurrent index write between them can make the set describe a slightly different snapshot —
+  additive union means the worst case is a wider allowed set, never a blocked generation.

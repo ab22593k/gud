@@ -21,6 +21,9 @@
 - Q: When commit history is skipped because the repository has no commits, should the developer see a notice, or is a diagnostics record enough? (FR-030) → A: Diagnostics only — a debug-level record carrying the cause, with no user-facing notice.
 - Q: What should `git message --amend` report in a repository that has no commits? (FR-029) → A: A named refusal stating the repository has no commits, emitted before any revision resolution.
 - Q: In a repository with no commits, should the model be told that this is the first commit, or should history simply be absent from the prompt? (FR-010) → A: Tell the model this is the repository's first commit, so the description can be framed as an initial commit.
+- Q: Should the pre-image and post-image paths git reports for a rename be added to the verifier's existing diff-derived allowed path set, or replace it? (FR-020) → A: Add them — keep the diff-derived changed paths, basenames, and path-like diff tokens, and also allow every path git reports for the change, so both sides of a rename pass.
+- Q: When the description is for an amendment rather than the staged index, should the rename paths come from the amended commit's own summary? (FR-020) → A: Derive the allowed set from the same change the description is based on — the staged index for normal generation and the target commit's patch for amend or reword.
+- Q: If git cannot report the rename pairs for the change, should verification fall back to the diff-derived paths, disclose a notice, or fail the generation? (FR-020) → A: Fall back to the diff-derived paths and record the cause in diagnostics; do not fail the generation and do not emit a user-facing notice.
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -51,9 +54,10 @@ syntax; confirm it can be committed as-is.
 2. **Given** the presented description, **When** the developer accepts it,
    **Then** exactly that text becomes the commit message and the commit is
    created.
-3. **Given** a staged change that adds, edits, and deletes files, **When** the
-   description is generated, **Then** it accounts for all three kinds of change
-   and mentions only paths that appear in the change.
+3. **Given** a staged change that adds, edits, deletes, and renames files,
+   **When** the description is generated, **Then** it accounts for all four
+   kinds of change and mentions only paths that appear in the change; naming
+   either the old or the new path of a rename is allowed.
 4. **Given** staged changes, **When** the developer runs the command, **Then**
    nothing is committed and no repository state is modified until the developer
    explicitly accepts the description.
@@ -253,6 +257,10 @@ configuration value at a low-precedence source only and confirm it survives.
   change (cloned project, pull request, submodule) and its content contains
   instructions? Repository-supplied text is treated as untrusted data to
   describe, never as instructions to follow.
+- What happens when a file is renamed rather than edited? The description may
+  name the pre-image path, the post-image path, or both; verification treats
+  both sides of the rename as paths present in the change, so "remove the old
+  name in favor of the new one" is not a grounding failure.
 - What happens when the developer rejects the review (aborts)? Nothing is
   committed, the working tree is unchanged, and the process exits cleanly.
 - What happens when regenerating the description of an earlier commit?
@@ -367,7 +375,16 @@ configuration value at a low-precedence source only and confirm it survives.
   largest supported change — without dominating generation time.
 - **FR-020**: Verification MUST NOT report a finding that the change does not
   justify — a path mentioned in the description and present in the change MUST
-  always pass, including when it is mentioned by basename only.
+  always pass, including when it is mentioned by basename only. The allowed
+  path set MUST include every path git reports for the change — in particular
+  both the pre-image and post-image paths of every rename or copy that git
+  reports as such — in addition to the paths derived from the diff text, so
+  describing a rename as removing the old name in favor of the new one MUST NOT
+  produce a finding. The allowed set MUST describe the same change the message
+  describes: the staged index for normal generation, and the target commit's
+  patch for amend or reword. If git cannot report those paths, verification
+  MUST fall back to the diff-derived set, MUST record the cause in diagnostics,
+  and MUST NOT fail the generation or emit a user-facing notice.
 
 **Review, decision, and exit**
 
@@ -484,7 +501,8 @@ configuration value at a low-precedence source only and confirm it survives.
   presented intact and disclosed, so it is counted as a disclosed exception
   rather than a conformance failure.
 - **SC-004**: At least 95% of the file and symbol names in a presented
-  description are present in the described change.
+  description are present in the described change, where either path of a
+  rename counts as present.
 - **SC-005**: The three verbosity levels are distinguishable on the same change:
   the least verbose body is a single paragraph, the most verbose body is
   materially longer and covers before/after state, and every level still yields
@@ -531,12 +549,20 @@ configuration value at a low-precedence source only and confirm it survives.
   commits has its commit-history family probed and allowed to fail instead of
   skipped behind one state check, the prompt carries no first-commit statement,
   and an amend request leaks git's revision error instead of a named refusal
-  (FR-010, FR-014, FR-029, SC-011). The full register of seven — (d) regeneration
-  does not feed findings back (FR-018), (e) truncation is disclosed to the model
-  but not the developer (FR-007, SC-009), (f) the root commit is not refused for
-  an amend of `HEAD` (FR-029), and (g) above — lives in `research.md`, whose
-  decision record is the authority when this section and the implementation
-  disagree.
+  (FR-010, FR-014, FR-029, SC-011); and a later 2026-10-28 clarification added
+  (i) — the verifier's allowed path set is derived only from the submitted diff
+  text, so a rename's pre-image is not guaranteed to be a member (FR-020). The
+  register of all eight — the reverse-derivation candidates (a)–(c) above,
+  (d) regeneration does not feed findings back (FR-018), (e) truncation is
+  disclosed to the model but not the developer (FR-007, SC-009), (f) the root
+  commit is not refused for an amend of `HEAD` (FR-029), (g) above, and (i)
+  above — lives in `research.md`, whose decision record is the authority when
+  this section and the implementation disagree. D9 makes the allowed set the
+  **additive union** of the diff-derived paths and the paths git reports for the
+  same change (`--name-status -z -M -C`): the staged index for an ordinary
+  generation and the hook, the target commit for `--amend`. A probe failure is
+  diagnostics-only — the diff-derived set is used and generation continues — and
+  the set is resolved once per invocation.
 - **Width ownership and its one exception.** Verified descriptions are produced
   by two layers with one owner each: a check that reports the draft's subject
   width and drives regeneration, and a normalization step that produces the

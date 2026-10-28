@@ -6,9 +6,11 @@ import (
 	"os/exec"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"gud/internal/git"
+	"gud/internal/request"
 
 	"github.com/spf13/cobra"
 )
@@ -274,4 +276,117 @@ func TestResolveAmendCommitRefusals(t *testing.T) {
 			t.Errorf("error = %v, want the refusal before revision resolution, not git's fatal", err)
 		}
 	})
+}
+
+// TestAmendChangePaths pins the amend wire-up: the target commit's own
+// patch supplies the paths — never its parent's — the probe runs exactly
+// once, and a description naming the pre-image is grounded even when the
+// job diff is cut before the rename record.
+func TestAmendChangePaths(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping temp-repo test in short mode")
+	}
+
+	_, run := amendRefusalTestRepo(t)
+	ctx := context.Background()
+
+	run("commit", "-q", "--allow-empty", "-m", "base")
+
+	if err := os.WriteFile("old_name.go", []byte("package old\n"), 0600); err != nil {
+		t.Fatalf("write old_name.go: %v", err)
+	}
+
+	run("add", ".")
+	run("commit", "-q", "-m", "add old_name.go")
+	run("mv", "old_name.go", "new_name.go")
+	run("add", "-A")
+	run("commit", "-q", "-m", "rename to new")
+	run("commit", "-q", "--allow-empty", "-m", "tip")
+
+	t.Run("HEAD reword grounds pre-image", func(t *testing.T) {
+		var calls atomic.Int32
+
+		app := &AppContext{commitPathsFn: func(_ context.Context, sha string) ([]string, error) {
+			calls.Add(1)
+
+			return git.CommitChangePaths(ctx, sha)
+		}}
+
+		job, err := resolveAmendCommit(ctx, app, "HEAD~1")
+		if err != nil {
+			t.Fatalf("resolveAmendCommit(HEAD~1) = %v", err)
+		}
+
+		if calls.Load() != 1 {
+			t.Fatalf("commit probe calls = %d, want 1", calls.Load())
+		}
+
+		for _, want := range []string{"old_name.go", "new_name.go"} {
+			if !slices.Contains(job.paths, want) {
+				t.Errorf("job.paths = %v, want %q", job.paths, want)
+			}
+		}
+
+		msg := "Rename old file\n\nRename old_name.go to new_name.go."
+		if got := request.VerifyMessage(msg, request.Change{Diff: job.diff, Paths: job.paths}, 72); len(got) != 0 {
+			t.Errorf("VerifyMessage(pre-image) = %v, want clean", got)
+		}
+
+		// Even with the job diff cut before the rename record, the probe
+		// paths still ground the pre-image.
+		cut := cutBeforeRename(t, job.diff)
+		if got := request.VerifyMessage(msg, request.Change{Diff: cut, Paths: job.paths}, 72); len(got) != 0 {
+			t.Errorf("VerifyMessage(cut diff) = %v, want clean (probe supplies pre-image)", got)
+		}
+	})
+
+	t.Run("paths come from the target, never its parent", func(t *testing.T) {
+		var calls atomic.Int32
+
+		app := &AppContext{commitPathsFn: func(_ context.Context, sha string) ([]string, error) {
+			calls.Add(1)
+
+			return git.CommitChangePaths(ctx, sha)
+		}}
+
+		job, err := resolveAmendCommit(ctx, app, "HEAD~1")
+		if err != nil {
+			t.Fatalf("resolveAmendCommit(HEAD~1) = %v", err)
+		}
+
+		if calls.Load() != 1 {
+			t.Fatalf("commit probe calls = %d, want 1", calls.Load())
+		}
+
+		tipPaths, err := git.CommitChangePaths(ctx, "HEAD")
+		if err != nil {
+			t.Fatalf("CommitChangePaths(HEAD) = %v", err)
+		}
+
+		if slices.Contains(tipPaths, "old_name.go") || slices.Contains(tipPaths, "new_name.go") {
+			t.Errorf("tip commit claims rename paths: tip=%v", tipPaths)
+		}
+
+		if !slices.Contains(job.paths, "old_name.go") {
+			t.Errorf("job.paths = %v, want the target's own pre-image", job.paths)
+		}
+	})
+}
+
+// cutBeforeRename truncates diff just before the rename-record line, or
+// skips the caller when the diff has no rename record to cut.
+func cutBeforeRename(t *testing.T, diff string) string {
+	t.Helper()
+
+	for line := range strings.Lines(diff) {
+		if strings.HasPrefix(line, "rename from") {
+			if before, _, ok := strings.Cut(diff, line); ok {
+				return before
+			}
+		}
+	}
+
+	t.Skip("no rename record to cut; skipping cut-diff case")
+
+	return ""
 }

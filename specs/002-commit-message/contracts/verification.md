@@ -4,9 +4,10 @@
 
 The contract for checking a generated description before presentation, the bounded
 regeneration protocol, the guarantee that every presented line fits the configured width
-(with the single exception defined in §2.1), and the repository-state rule that governs
-history context in a repository with no commits (§4). Implementation detail lives in
-`tasks.md` and code; this file fixes the observable behaviour.
+(with the single exception defined in §2.1), the change-path evidence the grounding check is
+entitled to use (§1.1), and the repository-state rule that governs history context in a
+repository with no commits (§4). Implementation detail lives in `tasks.md` and code; this file
+fixes the observable behaviour.
 
 Two layers cooperate, with **one owner each** — they do not enforce the same rule twice:
 
@@ -35,21 +36,21 @@ cannot disagree about what a cell is (decision D7).
 
 ### Inputs
 
-| Input     | Type   | Notes                                                                    |
-| --------- | ------ | ------------------------------------------------------------------------ |
-| Message   | string | The model reply after sanitation (fences/preamble/trailer-tail stripped) |
-| Diff      | string | The submitted (possibly truncated) staged diff, used for grounding       |
-| Wrap line | int    | Configured width; `<= 0` falls back to the default (72)                  |
+| Input     | Type             | Notes                                                                                                                                            |
+| --------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Message   | string           | The model reply after sanitation (fences/preamble/trailer-tail stripped)                                                                         |
+| Change    | `request.Change` | The submitted (possibly truncated) diff **and** the paths git reports for the same change; `Paths == nil` means the probe was unavailable (§1.1) |
+| Wrap line | int              | Configured width; `<= 0` falls back to the default (72)                                                                                          |
 
 ### Checks (one `Finding` per failure, `nil` when clean)
 
-| `Check`          | Pass condition                                                         | Class                              |
-| ---------------- | ---------------------------------------------------------------------- | ---------------------------------- |
-| `empty`          | Whole message is non-blank after trimming                              | hard error if nothing remains      |
-| `empty-body`     | A non-empty line exists after the subject line and its blank separator | regenerate, then serve with notice |
-| `subject-length` | `Columns(subject) <= wrapLine`                                         | regenerate, then serve with notice |
-| `fence-remnant`  | No surviving fence or stray backtick                                   | regenerate, then serve with notice |
-| `file-grounding` | Every path-like token names a path, deletion, or symbol in the change  | regenerate, then serve with notice |
+| `Check`          | Pass condition                                                                 | Class                              |
+| ---------------- | ------------------------------------------------------------------------------ | ---------------------------------- |
+| `empty`          | Whole message is non-blank after trimming                                      | hard error if nothing remains      |
+| `empty-body`     | A non-empty line exists after the subject line and its blank separator         | regenerate, then serve with notice |
+| `subject-length` | `Columns(subject) <= wrapLine`                                                 | regenerate, then serve with notice |
+| `fence-remnant`  | No surviving fence or stray backtick                                           | regenerate, then serve with notice |
+| `file-grounding` | Every path-like token names a path, deletion, or symbol in the change evidence | regenerate, then serve with notice |
 
 **Scope rule**: width is checked here on the **subject only** (FR-017 enumerates subject
 width), as an advisory signal over the draft. Body width, subject width after normalization,
@@ -68,8 +69,63 @@ measure §2 uses — one implementation, imported as a sibling workspace module,
 call to `displaywidth` from this package.
 
 **Grounding rule**: a token that names a real file, a real deletion, or a basename-only
-reference always passes; a finding is emitted only when the change does not justify the token
-(FR-020). The lookup reuses the existing linear diff index; it MUST NOT add a second scan.
+reference always passes; a finding is emitted only when the change evidence does not justify the
+token (FR-020). The evidence is the **union** defined in §1.1 — it is additive, so a path
+grounded by either source always passes. The lookup reuses the existing linear diff index; it
+MUST NOT add a second scan.
+
+### 1.1 Change-path evidence (FR-020) — NEW (D9)
+
+The verifier grounds against git's own record of the change, not only against the diff's
+rendering of it. The two are carried together as `request.Change{Diff string, Paths []string}`.
+
+| Field   | Type     | Contract                                                                                                                                    |
+| ------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Diff`  | string   | The evidence submitted to the model (staged index, or the target commit's patch for `--amend`), including any truncation marker             |
+| `Paths` | []string | Repository-relative paths git reports for **the same change**, both sides of every `R`/`C` record; no `a/`/`b/` prefix; `nil` = unavailable |
+
+**Probe commands** (one per invocation, resolved beside the diff):
+
+| Path           | Command                                              |
+| -------------- | ---------------------------------------------------- |
+| Normal / hook  | `git diff --cached --name-status -z -M -C`           |
+| Amend (reword) | `git show --format= --name-status -z -M -C <sha> --` |
+
+`-M` and `-C` are explicit so repository or user configuration (`diff.renames=false`) cannot
+change the evidence. `-C` deliberately omits `--find-copies-harder`: its cost is not bounded by
+the change, and a pure copy git classifies as an add contributes exactly the added path.
+`--name-status -z` is required: NUL-delimited records are unambiguous for paths containing
+spaces, newlines, or non-ASCII bytes, whereas `--summary`'s `old => new` separator is not.
+`--name-only` is insufficient because it reports only the post-image.
+
+**Allowed set** (additive union — nothing is removed):
+
+```text
+Paths ∪ basenames(Paths)
+  ∪ ExtractChangedPaths(Diff) ∪ basenames(ExtractChangedPaths(Diff))
+  ∪ indexDiffTokens(Diff)
+```
+
+**Invariants**
+
+- **Additive**: a path the diff grounds is never removed because the probe disagrees. The union
+  can only widen the allowed set (Q1).
+- **Same change**: the probe describes the same change as `Diff` — staged index normally, target
+  commit for amend; never the working tree, a range, or the target's parent (Q2).
+- **One probe**: resolved once per invocation before the review loop; regeneration reuses the
+  value and repeats no probe (FR-034, SC-008).
+- **Fallback is diagnostics-only**: a probe failure yields `Paths == nil`, emits exactly one
+  `slog.Debug` record carrying the cause, and uses the diff-derived set. Generation continues,
+  no user-facing notice is emitted, and the exit status is unchanged (Q3, FR-030). `nil` means
+  "unavailable", never "the change has no paths".
+- **Pure verifier**: `VerifyMessage` receives `Change` and performs no I/O; only `core` and
+  `internal/git` run git.
+- **Bounded**: names, not content, so `Paths` is not subject to `MaxDiffBytes`; the verifier
+  still scans `Diff` exactly once (FR-019).
+- **Stated limits**: a pure copy is reported as an add and contributes only the added path; the
+  diff and the probe are separate git commands, so a concurrent index write can make them
+  describe slightly different snapshots — because the union is additive, the worst case is a
+  wider allowed set, never a blocked generation.
 
 ### Bounded regeneration protocol (FR-018) — CHANGED
 
@@ -178,6 +234,13 @@ alternatives: [research.md](../research.md) D2 and D7.
 | No user-facing no-commits notice                              | FR-030                 | Test                | interactive run in an unborn repo: exactly one debug record; stdout/stderr carry no skip notice (D8)                                                                          |
 | Submodule identity kept without commit subjects               | FR-008, FR-010         | Test                | staged gitlink in an unborn repo: identity/pointer range rendered, subject lookup suppressed (D8)                                                                             |
 | `--amend` refused before revision resolution                  | FR-029, SC-011         | Test                | unborn temp repo: named refusal, no `fatal: Needed a single revision`, no diff or model call (D8)                                                                             |
+| Rename pre-image grounded from git records                    | FR-020                 | Test                | temp repo with `git mv`; crafted diff rendered as delete+add or cut before `rename from`: `old_name.go` passes (D9)                                                           |
+| Copy source and destination grounded                          | FR-020                 | Test                | temp repo, source modified and copied: `-C` reports `C100 src dst`; both names pass (D9)                                                                                      |
+| Additive union keeps diff-derived paths                       | FR-020, FR-019         | Test                | `Change.Paths` omits a path present in `Diff`; the token still passes and the diff is scanned once (D9)                                                                       |
+| Change-path probe resolved once per invocation                | FR-034, SC-008         | Test                | counting seam: one probe in normal, hook, and amend paths; regeneration repeats none (D9)                                                                                     |
+| Probe failure is diagnostics-only                             | FR-030                 | Test                | seam returns an error: exactly one `slog.Debug` with the cause, no notice, generation succeeds with the diff-derived set (D9)                                                 |
+| NUL records for spaces and non-ASCII paths                    | FR-020                 | Test                | temp repo renaming `a b.txt` and `ümlaut.txt`: both sides parsed byte-exactly (D9)                                                                                            |
+| Malformed change record rejected, not partially applied       | FR-020                 | Test                | parser table: short/unknown record returns a wrapped error naming the shape, no path content in the error (D9)                                                                |
 | README/help flag spelling                                     | FR-011, Const. III     | Inspection          | README matches `go run ./cmd/git-message --help`                                                                                                                              |
 | No regression to existing checks                              | FR-017, FR-019, FR-020 | Test + benchmark    | existing `verify_test.go` table and the `internal/request` benchmarks stay green                                                                                              |
 

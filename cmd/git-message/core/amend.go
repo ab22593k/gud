@@ -12,6 +12,7 @@ import (
 
 	"gud/internal/git"
 	"gud/internal/obs"
+	"gud/internal/request"
 
 	"github.com/spf13/cobra"
 )
@@ -68,11 +69,13 @@ func isHeadCommit(ctx context.Context, sha string) bool {
 }
 
 // amendJob is one resolved amend request: the target SHA, its patch, its old
-// message, and whether the target is HEAD (amended in place) or an older
+// message, the repo-relative paths git reports for the target's own patch,
+// and whether the target is HEAD (amended in place) or an older
 // commit (reworded through a rebase).
 type amendJob struct {
 	sha    string
 	diff   string
+	paths  []string
 	oldMsg string
 	head   bool
 }
@@ -113,25 +116,15 @@ func resolveAmendCommit(ctx context.Context, app *AppContext, rev string) (amend
 		return job, fmt.Errorf("cannot amend %s: it is the root commit, which has no parent", rev)
 	}
 
-	merge, err := git.IsMergeCommit(ctx, sha)
-	if err != nil {
+	if err := rejectUnamendableCommit(ctx, rev, sha); err != nil {
 		return job, err
-	}
-
-	if merge {
-		return job, fmt.Errorf("cannot amend %s: merge commits are not supported", rev)
 	}
 
 	head := isHeadCommit(ctx, sha)
 
 	if !head {
-		clean, err := git.IsCleanTree(ctx)
-		if err != nil {
+		if err := requireCleanTree(ctx, rev); err != nil {
 			return job, err
-		}
-
-		if !clean {
-			return job, fmt.Errorf("cannot amend %s: working tree has staged or unstaged changes", rev)
 		}
 	}
 
@@ -149,9 +142,52 @@ func resolveAmendCommit(ctx context.Context, app *AppContext, rev string) (amend
 		return job, err
 	}
 
-	job = amendJob{sha: sha, diff: diff, oldMsg: oldMsg, head: head}
+	job = amendJob{
+		sha:    sha,
+		diff:   diff,
+		paths:  resolveAmendPaths(ctx, app, sha),
+		oldMsg: oldMsg,
+		head:   head,
+	}
 
 	return job, nil
+}
+
+// resolveAmendPaths resolves the target commit's own change paths once for
+// file-grounding (D9). The probe is optional evidence: on failure the
+// diff-derived set applies and the amend proceeds.
+func resolveAmendPaths(ctx context.Context, app *AppContext, sha string) []string {
+	return resolveChangePaths(func() ([]string, error) { return app.commitChangePaths(ctx, sha) })
+}
+
+// rejectUnamendableCommit refuses merge commits for every amend target
+// before any diff or message work begins.
+func rejectUnamendableCommit(ctx context.Context, rev, sha string) error {
+	merge, err := git.IsMergeCommit(ctx, sha)
+	if err != nil {
+		return err
+	}
+
+	if merge {
+		return fmt.Errorf("cannot amend %s: merge commits are not supported", rev)
+	}
+
+	return nil
+}
+
+// requireCleanTree refuses a non-HEAD amend target when the working tree
+// has staged or unstaged changes the reword would have to carry.
+func requireCleanTree(ctx context.Context, rev string) error {
+	clean, err := git.IsCleanTree(ctx)
+	if err != nil {
+		return err
+	}
+
+	if !clean {
+		return fmt.Errorf("cannot amend %s: working tree has staged or unstaged changes", rev)
+	}
+
+	return nil
 }
 
 // runAmendFlow regenerates the message for exactly one commit and amends it.
@@ -181,8 +217,12 @@ func runAmendFlow(ctx context.Context, cmd *cobra.Command, app *AppContext, rev 
 func amendReviewLoop(ctx context.Context, cmd *cobra.Command, app *AppContext,
 	scanner *bufio.Scanner, out io.Writer, job amendJob, promptContext string,
 ) error {
+	// D9: the target commit's records are resolved once in resolveAmendCommit
+	// and reused across every regeneration of this review loop (FR-034).
+	change := request.Change{Diff: job.diff, Paths: job.paths}
+
 	for {
-		msg, _, findings, err := loopMessage(ctx, cmd.ErrOrStderr(), app, job.diff, promptContext, "")
+		msg, _, findings, err := loopMessage(ctx, cmd.ErrOrStderr(), app, change, promptContext, "")
 		if err != nil {
 			return err
 		}

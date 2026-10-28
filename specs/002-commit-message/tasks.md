@@ -1,7 +1,7 @@
 # Tasks: Commit Message Description — Spec Conformance Closure
 
 **Input**: Design documents from `specs/002-commit-message/`
-(plan.md, spec.md US1–US4, research.md D1–D8, data-model.md, contracts/cli.md, contracts/verification.md, quickstart.md)
+(plan.md, spec.md US1–US4, research.md D1–D9, data-model.md, contracts/cli.md, contracts/verification.md, quickstart.md)
 
 **Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/, quickstart.md — all present.
 
@@ -13,24 +13,25 @@ credentials), git is a temp repo, and paths are injected. Live-model checks stay
 skipped under `-short`.
 
 **Organization**: Tasks grouped by user story. This feature is a **conformance closure**: the
-spec was reverse-derived from the shipped code, so the work closes seven confirmed divergences
+spec was reverse-derived from the shipped code, so the work closes eight confirmed divergences
 (plan.md, research.md) rather than adding capability. No new third-party dependency, config knob,
 or CLI flag is introduced. One workspace module (`internal/textwrap`, T032) is introduced by the
 post-analysis decision D7 so the display-cell measure has a single implementation across the
-root module, the verifier module, and the TUI. The 2026-10-28 clarification adds divergence (g)
-and decision D8; its tasks are appended as Phase 9 so the completed T001–T040 record is preserved.
+root module, the verifier module, and the TUI. The first 2026-10-28 clarification adds divergence
+(g) and decision D8, appended as Phase 9. The second adds divergence (i) and decision D9,
+appended as Phase 10. Each appendix preserves the completed tasks that preceded it.
 
 ## Requirement → story mapping
 
 The specification does not label FRs by story; this mapping follows the specification's own
 requirement groups so every fix lands in the story that owns its behavior.
 
-| Story                                                  | Priority | Requirements                                                           | Owns divergence                                                                                |
-| ------------------------------------------------------ | -------- | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| US1 Get a description of the staged change             | P1       | FR-001–FR-010 (Description content; Evidence and grounding)            | (b) FR-001 body-less; (e) FR-007 truncation disclosure; (g) FR-010 no-commits history state    |
-| US2 Shape the description to the project's conventions | P2       | FR-011–FR-016 (Shape and controls)                                     | (a) FR-013 width; (c) FR-011 README; (g) FR-014 `--history 0` keeps the first-commit statement |
-| US3 Trust the description before it enters history     | P3       | FR-017–FR-029 (Quality verification; Review; Unattended; Regeneration) | (d) FR-018 feedback/notice; (f) FR-029 root commit; (g) FR-029 unborn-repo refusal             |
-| US4 Keep generation safe, bounded, predictable         | P4       | FR-030–FR-037 (Degradation, safety, resource bounds; Configuration)    | (g) FR-030 diagnostics-only skip; audit found the rest satisfied                               |
+| Story                                                  | Priority | Requirements                                                           | Owns divergence                                                                                                                |
+| ------------------------------------------------------ | -------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| US1 Get a description of the staged change             | P1       | FR-001–FR-010 (Description content; Evidence and grounding)            | (b) FR-001 body-less; (e) FR-007 truncation disclosure; (g) FR-010 no-commits history state                                    |
+| US2 Shape the description to the project's conventions | P2       | FR-011–FR-016 (Shape and controls)                                     | (a) FR-013 width; (c) FR-011 README; (g) FR-014 `--history 0` keeps the first-commit statement                                 |
+| US3 Trust the description before it enters history     | P3       | FR-017–FR-029 (Quality verification; Review; Unattended; Regeneration) | (d) FR-018 feedback/notice; (f) FR-029 root commit; (g) FR-029 unborn-repo refusal; (i) FR-020 rename/copy pre-image grounding |
+| US4 Keep generation safe, bounded, predictable         | P4       | FR-030–FR-037 (Degradation, safety, resource bounds; Configuration)    | (g) FR-030 diagnostics-only skip; audit found the rest satisfied                                                               |
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -47,24 +48,31 @@ beside their source (`foo.go` → `foo_test.go`).
 
 ## Current code reality (verify before editing)
 
-| Symbol                                                       | Location                                         | Role                                                                                                                                                                                                                                                                                                                           |
-| ------------------------------------------------------------ | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `VerifyMessage(msg, diff string, wrapLine int) []Finding`    | `internal/request/verify.go`                     | Pure checks: `empty`, `empty-body`, `subject-length`, `fence-remnant`, `file-grounding`                                                                                                                                                                                                                                        |
-| `displaywidth.String(subject)`                               | `internal/request/verify.go:50,53`               | **Second measure call site** — evaluated twice in one expression; D7 replaces it with `textwrap.Columns`, hoisted to one local (**done, T033**)                                                                                                                                                                                |
-| `github.com/clipperhouse/displaywidth`                       | `internal/request/go.mod` (require block)        | Direct dependency held **only** for that one call; D7 removes it (**done, T033** — the require is gone; the library is a direct dependency of `internal/textwrap` alone)                                                                                                                                                       |
-| `textwrap.Columns` / `textwrap.Wrap`                         | `internal/textwrap/width.go`                     | Intended single measure home; the package doc claimed "one measure, one wrapper, no copies" — untrue until D7, because the verifier measured separately (**now true, T033/T034**)                                                                                                                                              |
-| `generateVerified(...)` / `maxVerifyAttempts = 2`            | `internal/request/client.go:188-226`             | Bounded retry; today it re-sends the **same** request                                                                                                                                                                                                                                                                          |
-| `GenerateCommitMessage` / `GenerateCommitMessageWithContent` | `internal/request/client.go:132,142`             | Return `(string, error)` — no findings channel                                                                                                                                                                                                                                                                                 |
-| `getStagedDiffAndDeleted` / `getStagedDiffOrError`           | `cmd/git-message/core/generate.go:158,173`       | `Truncated` is read at `generate.go:179` and only `slog.Debug`-logged                                                                                                                                                                                                                                                          |
-| `assembleTrailers(ctx, msg, issues, model)`                  | `cmd/git-message/core/interact.go:253`           | **Now has a single production caller** — `finalizeMessage` at `interact.go:286`. The five prior call sites described by T016 (`interact.go:71,110,137`, `hook.go:203`, `amend.go:188`) all funnel through it; `contracts/verification.md`'s "four" and `tasks.md`'s "five" are both historical counts of that pre-change state |
-| `wrapText(text, limit)`                                      | `internal/tui/commit.go:331`                     | Private display-cell wrapper; T015 replaced it with `textwrap.Wrap` — this row is pre-change only                                                                                                                                                                                                                              |
-| `resolveAmendCommit`                                         | `cmd/git-message/core/amend.go:83`               | Resolves the target first; root guard reachable only on the non-HEAD path; D8 adds a no-commits refusal before resolution                                                                                                                                                                                                      |
-| `checkHasParent`                                             | `internal/git/amend.go:71`                       | Root-commit refusal, used by `RewordCommit` only                                                                                                                                                                                                                                                                               |
-| `buildHistoryContext`                                        | `cmd/git-message/core/generate.go:310`           | Probes upstream and `git log` unconditionally; D8 must make it return before either probe in the absent state                                                                                                                                                                                                                  |
-| `SubmoduleContext` / `submoduleSubjects`                     | `internal/git/submodule.go:146,216`              | Always renders commit subjects; D8 splits identity/range from subjects as `SubmodulePointerContext`                                                                                                                                                                                                                            |
-| `HasCommits`                                                 | `internal/git/state.go` (**absent**)             | D8 adds `rev-parse --verify --quiet HEAD^{commit}`: exit 1 = unborn, exit 0 = present, anything else = error                                                                                                                                                                                                                   |
-| `historyState` / `resolveHistoryState`                       | `cmd/git-message/core/promptctx.go` (**absent**) | D8 adds the once-per-invocation state value and resolution before the parallel builders                                                                                                                                                                                                                                        |
-| `SubmodulePointerContext`                                    | `internal/git/submodule.go` (**absent**)         | D8 adds the identity/range-only renderer used when the parent repository has no commits                                                                                                                                                                                                                                        |
+| Symbol                                                         | Location                                           | Role                                                                                                                                                                                                                                                                                                                           |
+| -------------------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `VerifyMessage(msg, diff string, wrapLine int) []Finding`      | `internal/request/verify.go`                       | Pure checks: `empty`, `empty-body`, `subject-length`, `fence-remnant`, `file-grounding`. D9 changes the `diff` parameter to `request.Change` (T063); this row records the pre-change signature                                                                                                                                 |
+| `displaywidth.String(subject)`                                 | `internal/request/verify.go:50,53`                 | **Second measure call site** — evaluated twice in one expression; D7 replaces it with `textwrap.Columns`, hoisted to one local (**done, T033**)                                                                                                                                                                                |
+| `github.com/clipperhouse/displaywidth`                         | `internal/request/go.mod` (require block)          | Direct dependency held **only** for that one call; D7 removes it (**done, T033** — the require is gone; the library is a direct dependency of `internal/textwrap` alone)                                                                                                                                                       |
+| `textwrap.Columns` / `textwrap.Wrap`                           | `internal/textwrap/width.go`                       | Intended single measure home; the package doc claimed "one measure, one wrapper, no copies" — untrue until D7, because the verifier measured separately (**now true, T033/T034**)                                                                                                                                              |
+| `generateVerified(...)` / `maxVerifyAttempts = 2`              | `internal/request/client.go:188-226`               | Bounded retry; today it re-sends the **same** request                                                                                                                                                                                                                                                                          |
+| `GenerateCommitMessage` / `GenerateCommitMessageWithContent`   | `internal/request/client.go:132,142`               | Return `(string, error)` — no findings channel                                                                                                                                                                                                                                                                                 |
+| `getStagedDiffAndDeleted` / `getStagedDiffOrError`             | `cmd/git-message/core/generate.go:158,173`         | `Truncated` is read at `generate.go:179` and only `slog.Debug`-logged                                                                                                                                                                                                                                                          |
+| `assembleTrailers(ctx, msg, issues, model)`                    | `cmd/git-message/core/interact.go:253`             | **Now has a single production caller** — `finalizeMessage` at `interact.go:286`. The five prior call sites described by T016 (`interact.go:71,110,137`, `hook.go:203`, `amend.go:188`) all funnel through it; `contracts/verification.md`'s "four" and `tasks.md`'s "five" are both historical counts of that pre-change state |
+| `wrapText(text, limit)`                                        | `internal/tui/commit.go:331`                       | Private display-cell wrapper; T015 replaced it with `textwrap.Wrap` — this row is pre-change only                                                                                                                                                                                                                              |
+| `resolveAmendCommit`                                           | `cmd/git-message/core/amend.go:83`                 | Resolves the target first; root guard reachable only on the non-HEAD path; D8 adds a no-commits refusal before resolution                                                                                                                                                                                                      |
+| `checkHasParent`                                               | `internal/git/amend.go:71`                         | Root-commit refusal, used by `RewordCommit` only                                                                                                                                                                                                                                                                               |
+| `buildHistoryContext`                                          | `cmd/git-message/core/generate.go:310`             | Probes upstream and `git log` unconditionally; D8 must make it return before either probe in the absent state                                                                                                                                                                                                                  |
+| `SubmoduleContext` / `submoduleSubjects`                       | `internal/git/submodule.go:146,216`                | Always renders commit subjects; D8 splits identity/range from subjects as `SubmodulePointerContext`                                                                                                                                                                                                                            |
+| `HasCommits`                                                   | `internal/git/state.go` (**absent**)               | D8 adds `rev-parse --verify --quiet HEAD^{commit}`: exit 1 = unborn, exit 0 = present, anything else = error                                                                                                                                                                                                                   |
+| `historyState` / `resolveHistoryState`                         | `cmd/git-message/core/promptctx.go` (**absent**)   | D8 adds the once-per-invocation state value and resolution before the parallel builders                                                                                                                                                                                                                                        |
+| `SubmodulePointerContext`                                      | `internal/git/submodule.go` (**absent**)           | D8 adds the identity/range-only renderer used when the parent repository has no commits                                                                                                                                                                                                                                        |
+| `request.Change`                                               | `internal/request/verify.go` (**absent**)          | D9 adds `{Diff string, Paths []string}`: one value carrying the submitted diff and the paths git reports for the same change; `Paths == nil` means the probe was unavailable                                                                                                                                                   |
+| `ExtractChangedPaths(diff)`                                    | `internal/git/history.go:67-96`                    | Reads only the `+++ b/...` post-image; D9 leaves it unchanged and unions its result with git's records rather than replacing it                                                                                                                                                                                                |
+| `indexDiffTokens(diff)`                                        | `internal/request/verify.go:166-212`               | Indexes path-like diff tokens (including `a/`-prefixed forms); D9 keeps it as the third, additive member of the grounding set                                                                                                                                                                                                  |
+| `StagedChangePaths` / `CommitChangePaths` / `parseChangePaths` | `internal/git/paths.go` (**absent**)               | D9 adds the two probes (`--name-status -z -M -C` over the staged index / a target commit) and the NUL-record parser                                                                                                                                                                                                            |
+| `runGitOutput`                                                 | `internal/git/exec.go` (**absent**)                | D9 adds a stream-separated exec helper: stdout alone for NUL records, stderr into the wrapped error. `runGit` folds both and must not be used for the probe                                                                                                                                                                    |
+| `resolveChangePaths` / `resolveStagedChange`                   | `cmd/git-message/core/changepaths.go` (**absent**) | D9 adds the diagnostics-only fallback seam and the normal-path resolver; `AppContext` gains swappable `stagedPathsFn`/`commitPathsFn` like `branchFn`/`operationFn`                                                                                                                                                            |
+| `amendJob`                                                     | `cmd/git-message/core/amend.go:73`                 | Holds the target SHA, patch, old message, and HEAD flag; D9 adds `paths []string` for the target commit's own `--name-status` records                                                                                                                                                                                          |
 
 ---
 
@@ -257,9 +265,75 @@ appears instead of git's `fatal: Needed a single revision`.
 - [x] T049 [US1] Implement the absent branch in `buildHistoryContext` (`cmd/git-message/core/generate.go`): return the byte-exact first-commit statement before `GetUpstreamBranch`, `GetRecentCommits`, or `GetTopicHistory`, and emit exactly one `slog.Debug` record `commit-history context skipped: repository has no commits` with `reason=unborn branch`. The branch must run even when `--history 0` (T043). In the present/unknown states, keep today's history behavior and degradation unchanged.
 - [x] T050 [US1] Split the submodule renderer in `internal/git/submodule.go`: add `SubmodulePointerContext(ctx context.Context, root string, changes []SubmoduleChange) string` that renders the existing identity, path, URL, and pointer range but never calls `submoduleSubjects`; keep `SubmoduleContext` as the full renderer by delegating to the shared loop or an internal helper. Select `SubmodulePointerContext` from `buildSubmoduleContext` (`cmd/git-message/core/generate.go`) when the state is `historyAbsent`, and keep `SubmoduleContext` in the present/unknown states. Do not drop the fragment (FR-008).
 - [x] T051 [US3] Refuse an amend request in an unborn repository in `resolveAmendCommit` (`cmd/git-message/core/amend.go`): after the in-progress-operation guard and **before** `git.ResolveRevision`, call `git.HasCommits(ctx)`; on `(false, nil)` return `cannot amend: the repository has no commits yet`; on probe error fall through to the existing resolution path (do not assert absence); on `(true, nil)` continue unchanged. The refusal must fire before any diff, message, or model work and must not print git's `fatal:` line.
-- [x] T052 Execute the D8 validation and gates: run `go test ./... ./internal/git/... ./internal/request/... ./internal/textwrap/...`, `golangci-lint run`, `gofmt -l` over the changed Go files, and `git diff --check`; then execute `specs/002-commit-message/quickstart.md` §5b end to end in a fresh temp repo and record the observed outcome (statement present, one skip record, no failed-history record, named amend refusal). Also re-run `go test ./cmd/git-message/core -run 'TestBuildHistoryContext|TestBuildSubmoduleContext|TestResolveAmendCommitRefusals' -v`. All must be green before the divergence is reported closed.
+- [x] T052 [US3] Execute the D8 validation and gates: run `go test ./... ./internal/git/... ./internal/request/... ./internal/textwrap/...`, `golangci-lint run`, `gofmt -l` over the changed Go files, and `git diff --check`; then execute `specs/002-commit-message/quickstart.md` §5b end to end in a fresh temp repo and record the observed outcome (statement present, one skip record, no failed-history record, named amend refusal). Also re-run `go test ./cmd/git-message/core -run 'TestBuildHistoryContext|TestBuildSubmoduleContext|TestResolveAmendCommitRefusals' -v`. All must be green before the divergence is reported closed.
 
 **Checkpoint**: D8 is independently testable — a repository with no commits generates from its staged root index, the model is told this is the first commit, diagnostics record the skip with its cause, and amend refuses with a named reason before resolution.
+
+---
+
+## Phase 10: Convergence — change-path evidence from git (D9, 2026-10-28)
+
+**Purpose**: close divergence (i) from the second 2026-10-28 clarification (FR-020). The work
+is evidence enrichment, not a new capability: one `--name-status` probe per invocation, one
+additive union in the existing grounding index, and one `request.Change` value carried from the
+repository to the verifier. Nothing in the diff-derived set is removed or filtered, and a probe
+failure is diagnostics-only. Requirements: FR-020, FR-019, FR-030, FR-034, SC-008;
+`contracts/verification.md` §1.1; `data-model.md` §2.1.
+
+**Independent test**: in a temp repo, `git mv old_name.go new_name.go` and stage an unrelated
+edit; call the staged probe and confirm both names are returned. Describe the rename naming the
+pre-image; confirm no `file-grounding` finding even when the submitted diff is rendered as
+delete+add or is cut before `rename from`. Break the probe seam; confirm generation still
+proceeds from the diff-derived set with exactly one debug record and no notice.
+
+### Tests for D9
+
+> **NOTE: write these tests first and confirm they FAIL before T062–T066.**
+
+- [X] T053 [P] [US3] Create `internal/git/paths_test.go`. `TestParseChangePaths` (table, no repository): `M\0keep.go\0` yields one path; `R100\0old.go\0new.go\0` and `C100\0src.go\0dst.go\0` yield both paths; `D\0gone.go\0A\0added.go\0` yields both paths; paths containing spaces, newlines, and non-ASCII bytes survive byte-exactly; empty input yields an empty slice; a short record, an unknown status, and a trailing non-empty field each return a non-nil error that names the record shape and contains no path content. Then `TestStagedChangePaths` and `TestCommitChangePaths` in a temp repo (skip in short mode): a staged `git mv` reports `R` with both names; a below-threshold rename (replace the renamed file's content with unrelated content so similarity falls below detection) is reported as `D`+`A` and both names are returned; a copy from a modified source reports `C` with both names; an added/modified/deleted set returns every name; `git config diff.renames false` does not suppress the rename because `-M` is explicit; a clean index returns an empty slice and a nil error; `CommitChangePaths` returns the same records for `HEAD` and for an older commit. Red first: the probe and parser do not exist.
+- [X] T054 [P] [US3] Create `internal/git/exec_test.go` with `TestRunGitOutput`: in a temp repo, a failing query (`git show does-not-exist`) returns empty stdout and an error containing git's stderr, proving the streams are not folded; a successful `git diff --cached --name-status -z` preserves the exact NUL-delimited bytes with no stderr appended; a non-zero exit wraps the operation and `%w`. Skip in short mode. Red first: `runGitOutput` does not exist.
+- [X] T055 [P] [US3] Migrate `internal/request/verify_test.go` to the `request.Change` input — every `VerifyMessage` and `GenerateCommitMessageWithContent` call site in this file wraps its diff as `Change{Diff: diff}`, and `TestVerifyMessage` gains a `paths []string` column used to build `Change{Diff: tc.diff, Paths: tc.paths}` — and add the D9 union cases to `TestVerifyMessage`: a description naming `old_name.go` passes with `Change{Diff: deleteAddDiff, Paths: []string{"old_name.go", "new_name.go"}}` even though the diff has no rename record; both sides of a `C100` record pass; a path present only in `Paths` (a deleted file absent from the truncated diff) passes; a basename of a path in `Paths` passes; a path present only in `Diff` still passes when `Paths` omits it (the union is additive); `Paths == nil` reproduces today's diff-only behavior, including the ungrounded finding. Keep the existing `empty`, `empty-body`, `subject-length`, `fence-remnant`, `file-grounding` cases intact. Also update the one `request.VerifyMessage` call in `cmd/git-message/core/interact_test.go` to pass `Change{Diff: ""}`. Red first: the package does not compile against the new input until T063.
+- [X] T056 [P] [US3] Update `internal/request/client_test.go` and `internal/request/perf_bench_test.go` for the `Change` boundary: all `GenerateCommitMessageWithContent` calls (and the benchmark's `VerifyMessage` calls) pass `Change{Diff: ...}`; add `TestGenerateCommitMessageWithContent_CarriesChange` — a scripted reply naming only the rename pre-image is clean when `Change.Paths` reports the rename, and yields `file-grounding` when the same diff is passed with `Paths: nil`. This pins that the paths reach the verifier through the generator rather than being dropped at the boundary. Do not duplicate the verifier cases owned by T055. Red first: the new signature does not exist until T063.
+- [X] T057 [P] [US3] Create `cmd/git-message/core/changepaths_test.go`. `TestResolveChangePaths`: a probe returning paths yields them unchanged and is called once; a probe returning an error yields `nil`, is called once, and emits exactly one `slog.Debug` record with message `change-path probe failed; using diff-derived paths` and the cause under `error` (install a `slog.NewTextHandler` at `LevelDebug` as the default, capture into a buffer, restore in cleanup; non-parallel); the helper never returns an error or a notice. `TestAppContextChangePaths`: `&AppContext{stagedPathsFn: ...}` and `&AppContext{commitPathsFn: ...}` use the injected functions; nil fields fall back to `git.StagedChangePaths`/`git.CommitChangePaths` (exercise in a temp repo). `TestStagedChangeProbeOnce`: `resolveStagedChange` calls `stagedPathsFn` exactly once and returns a `Change` whose `Diff` is the submitted (deleted-context-appended) diff and whose `Paths` is the probe result, along with the truncated flag; a probe error yields `Paths == nil` with the same diff. Red first: `resolveChangePaths`, `resolveStagedChange`, and the `AppContext` fields do not exist.
+- [X] T058 [P] [US3] Add `TestStagedChangeEvidenceBelowThresholdRename` to `cmd/git-message/core/generate_flow_test.go` (temp repo, skip in short mode): commit `old_name.go`, rename it with `git mv`, then replace the file's content with unrelated content so `git diff --cached` reports a delete+add rather than a rename, and stage the result. Resolve the change with the real probe (`git.StagedChangePaths`) and the real staged diff; assert (a) both `old_name.go` and `new_name.go` are in `Change.Paths`, and (b) `request.VerifyMessage` on a description naming both returns no `file-grounding`. Repeat with a true 100% rename whose diff is cut before the `rename from` record to reproduce the reported failure; the same `Paths` must still ground the pre-image. This is the end-to-end normal-path case and needs no model. Red first: the probe and `Change` do not exist.
+- [X] T059 [US3] Extend `cmd/git-message/core/hook_test.go` with `TestHookMode_ProbeFailureIsDiagnosticsOnly`: in a temp repo with staged changes, construct an `AppContext` whose `stagedPathsFn` returns `nil, errors.New("boom")` (config with no API key), install a `LevelDebug` `slog` handler over a buffer as the default (restore in cleanup; non-parallel), and call `runHookModeInternal`. Assert the returned error is the client/API-key error, not the probe error (the hook proceeded past diff acquisition); exactly one debug record carries `change-path probe failed; using diff-derived paths` and the cause; and no user-facing notice is produced by the resolver. Also migrate the existing `request.VerifyMessage` call in this file to `Change{Diff: ""}`. Red first: the hook does not probe or fall back yet.
+- [X] T060 [US3] Add `TestHookMode_ResolvesChangePathsOnce` to `cmd/git-message/core/hook_test.go` (same file as T059, so sequential): stage a `git mv` rename in a temp repo; inject `stagedPathsFn` with a counter delegating to `git.StagedChangePaths`; call `runHookModeInternal` (no API key). Assert the counter is exactly 1 and the probe result contains both rename names; a second invocation with a fresh counter probes exactly once again (per invocation, not memoised globally). Red first: the hook does not probe yet.
+- [X] T061 [P] [US3] Add `TestAmendChangePaths` to `cmd/git-message/core/amend_test.go` (temp repo, skip in short mode): create a commit that renames `old_name.go` to `new_name.go`, then resolve it with `resolveAmendCommit(ctx, app, "HEAD")` where `app.commitPathsFn` counts calls and delegates to `git.CommitChangePaths`. Assert the probe ran exactly once, `job.paths` contains both names, and `request.VerifyMessage` on a description naming the pre-image with `Change{Diff: job.diff, Paths: job.paths}` returns no `file-grounding` — even when `job.diff` is cut before the `rename from` record. Add a non-HEAD target (an older commit) subtest proving the paths come from that commit's own patch, never its parent. Red first: `amendJob` has no `paths` field and the probe does not run.
+
+### Implementation for D9
+
+- [X] T062 [US3] Add `runGitOutput(ctx context.Context, args ...string) ([]byte, error)` to `internal/git/exec.go`: stdout is captured in its own buffer, stderr in another, and a non-zero exit is wrapped with the command, `%w`, and stderr — a warning must never be folded into NUL-delimited stdout. Create `internal/git/paths.go` with `StagedChangePaths(ctx) ([]string, error)` over `git diff --cached --name-status -z -M -C`, `CommitChangePaths(ctx, sha) ([]string, error)` over `git show --format= --name-status -z -M -C <sha> --`, and `parseChangePaths([]byte) ([]string, error)`: split on NUL, ignore the single trailing empty field produced by the terminating NUL, treat the first remaining field as the status, consume two paths for `R`/`C` (with or without a score suffix) and one otherwise, and return a wrapped error naming the record shape without echoing path content. Empty input returns a **non-nil** empty slice so `nil` stays reserved for "probe unavailable". Pass `-M` and `-C` explicitly and do **not** add `--find-copies-harder` (its cost is unbounded; a pure copy is reported as an add). Add doc comments to both exported symbols (Principle I). No new module, flag, or configuration key.
+- [X] T063 [US3] Add `Change{Diff string, Paths []string}` to `internal/request/verify.go` (doc comment: `Paths == nil` means the probe was unavailable) and change `VerifyMessage(msg string, change Change, wrapLine int)` plus `groundingFindings(msg string, change Change)` to build the allowed set as the **additive union** of `change.Paths` plus basenames, `git.ExtractChangedPaths(change.Diff)` plus basenames, and `indexDiffTokens(change.Diff)`. Nothing is removed or filtered, and the diff is still scanned once (FR-019). In `client.go`, carry `Change` through `GenerateCommitMessageWithContent` (second parameter), `generateVerified`, and the retry; keep the empty-input guard, `BuildAgentPrompt`, and the `diff_bytes` debug attribute on `change.Diff`, and pass the whole value only to `VerifyMessage`. Keep `GenerateCommitMessage(ctx, diff, ...)` constructing `Change{Diff: diff}` so its signature and tests are unchanged. Update the production call sites in `interact.go`/`hook.go` to `Change{Diff: diff}` so the tree compiles until T064–T066 thread the resolved value.
+- [X] T064 [US3] Resolve the staged change once in the normal path (D9): create `cmd/git-message/core/changepaths.go` with `resolveChangePaths(probe func() ([]string, error)) []string` — call the probe; on error emit exactly one `slog.Debug("change-path probe failed; using diff-derived paths", "error", err)` and return `nil`; never return an error or a notice — and `resolveStagedChange(ctx context.Context, app *AppContext) (request.Change, bool, error)` — acquire the diff via the existing `getStagedDiffOrError` and the paths via `resolveChangePaths(func() ([]string, error) { return app.stagedChangePaths(ctx) })`, returning `Change{Diff: diff, Paths: paths}` and the truncated flag. Add the swappable `stagedPathsFn func(context.Context) ([]string, error)` and `commitPathsFn func(context.Context, string) ([]string, error)` fields plus `stagedChangePaths`/`commitChangePaths` accessors to `AppContext` (`app.go`), following the `branchFn`/`operationFn` pattern; nil means `git.StagedChangePaths`/`git.CommitChangePaths`. In `generate.go`, call `resolveStagedChange` once after the operation check and before `InitClient`, keep the truncation notice, and thread the `request.Change` through `interactiveCommit`, `loopMessage`, and `generateCommitMessage` in `interact.go` (replacing T063's `Change{Diff: diff}` placeholders) so regeneration reuses the value.
+- [X] T065 [US3] Wire the hook path (D9): in `runHookModeInternal` (`cmd/git-message/core/hook.go`), after the empty-diff early return and `appendDeletedContext`, resolve the paths once with `resolveChangePaths(func() ([]string, error) { return app.stagedChangePaths(ctx) })` and build `request.Change{Diff: diff, Paths: paths}` before `InitClient`; pass the value through `generateAndWriteMsg` into `GenerateCommitMessageWithContent`. The probe must not change the truncation notice, the message-file guards, or the hook's exit status, and it must not run when there is nothing staged. Do not probe inside `getStagedDiffAndDeleted` (the amend path has a different change).
+- [X] T066 [US3] Wire the amend path (D9): in `resolveAmendCommit` (`cmd/git-message/core/amend.go`), after the diff is loaded and confirmed non-empty, resolve the target commit's paths once with `resolveChangePaths(func() ([]string, error) { return app.commitChangePaths(ctx, sha) })` and store them as `paths []string` on `amendJob`. In `runAmendFlow`, build `request.Change{Diff: job.diff, Paths: job.paths}` once and pass it through `amendReviewLoop`/`loopMessage`, so a reword of an older commit grounds against that commit's own records, never its parent. Do not probe in `applyAmendedMessage` or the review loop.
+- [X] T067 [US3] Execute the D9 validation and gates: run `go test ./... ./internal/git/... ./internal/request/... ./internal/textwrap/...`, `golangci-lint run`, `gofmt -l` over the changed Go files, and `git diff --check`; then execute `specs/002-commit-message/quickstart.md` §5c end to end in a fresh temp repo and record the observed outcome (rename pre-image grounded from `--name-status -z -M -C`, additive union, one probe per invocation, diagnostics-only fallback, byte-exact NUL parsing). Also run `rg -n 'StagedChangePaths|CommitChangePaths' cmd/git-message/core --glob '!*_test.go'` to confirm the git probes are referenced only from `changepaths.go` (the branch point) and `app.go` (the default accessor), never from `generate.go`, `hook.go`, `amend.go`, or `interact.go`; and `go test ./internal/git -run 'TestParseChangePaths|TestStagedChangePaths|TestCommitChangePaths|TestRunGitOutput' -v`. All must be green before D9 is reported closed.
+
+**Checkpoint**: D9 is independently testable — the allowed set is the additive union of the diff-derived paths and git's own records for the same change, both sides of a rename or copy are grounded, the probe runs once per invocation, and a probe failure degrades to today's behavior with one debug record and no notice.
+
+---
+
+## Success-criteria evidence map
+
+Every SC is either verified in-repo by a named test or explicitly marked as a post-ship
+measurement. Nothing is claimed as verified on the strength of a code change alone.
+
+| SC     | Criterion (short)                                  | In-repo evidence                                                                                           | Status                                                   |
+| ------ | -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| SC-001 | ≥9/10 first generated descriptions carry a body    | `empty-body` check (T004, D1) and bounded regeneration (T005–T006) set a deterministic floor               | Quality **rate** is post-ship; the floor is verified     |
+| SC-002 | 100% of presented descriptions are plain text      | `TestSanitizeOutput`; `fence-remnant` cases in `TestVerifyMessage`                                         | Verified in-repo                                         |
+| SC-003 | 100% of lines within width (token exception)       | `TestWrapUnbreakableToken`, `TestFinalizeMessage*`; T035/T038                                              | Verified in-repo                                         |
+| SC-004 | ≥95% of names appear in the evidence               | `file-grounding` cases in `TestVerifyMessage`; D9 T055/T058/T061                                           | Mechanism verified; the 95% rate is post-ship            |
+| SC-005 | Three verbosity levels are distinguishable         | `TestBuildCommitMessagePrompt` (minimal/standard/detailed cases), `TestValidateDetailLevel`; quickstart §6 | Verified in-repo                                         |
+| SC-006 | Run → accepted commit without extra documentation  | `TestPromptAction`, `TestInteractiveCommit_*`; quickstart §3                                               | Flow verified; ergonomics are post-ship                  |
+| SC-007 | <30 s added latency in unattended use              | `BenchmarkGenerateEndToEnd`; `TestHookTimeout_BoundsGeneration`                                            | Timeout **bound** verified; the 30 s target is post-ship |
+| SC-008 | No additional repository-context probes per pass   | T025 memoised-vs-unmemoised benchmark; D9 one-probe tasks (T057, T060, T061)                               | Verified in-repo                                         |
+| SC-009 | Truncation disclosed in 100% of bounded cases      | `TestTruncationNotice`                                                                                     | Verified in-repo                                         |
+| SC-010 | 90% of first attempts yield an acceptable result   | —                                                                                                          | Post-ship measurement; no in-repo instrument             |
+| SC-011 | Unborn repo yields a description; no failed lookup | T041–T052 (Phase 9)                                                                                        | Verified in-repo                                         |
+
+SC-001, SC-004, SC-006, SC-007, and SC-010 mix a mechanism with a population rate or a
+wall-clock target. The mechanism is verified here; the rate is not, and no task claims otherwise.
 
 ---
 
@@ -276,6 +350,7 @@ appears instead of git's `fatal: Needed a single revision`.
 - **Polish (Phase 7)**: after all desired stories.
 - **D7 convergence (Phase 8)**: after T001–T030; T040 re-ran the analyzer before D8.
 - **D8 convergence (Phase 9)**: after Phase 8. T047–T051 depend on their tests T041–T046; T052 is last.
+- **D9 convergence (Phase 10)**: after Phase 9. T062–T066 depend on their tests T053–T061; T067 is last.
 
 ### Cross-story file touches (sequence, do not parallelize)
 
@@ -289,6 +364,19 @@ appears instead of git's `fatal: Needed a single revision`.
 | `internal/request/verify.go` + `internal/request/go.mod` | Convergence (T033)                                | the duplicate measure is removed here; `internal/request` stops depending on `displaywidth` |
 | `cmd/git-message/core/core_test.go`                      | D8: US1 (T042), US2 (T043)                        | one file, sequential: statement first, then the `--history 0` case                          |
 | `cmd/git-message/core/generate.go`                       | D8: US1 (T049, T050)                              | history absent-branch and submodule renderer selection, sequential                          |
+| `cmd/git-message/core/generate.go`                       | D9: US3 (T064)                                    | resolve the staged change once; replaces T063's placeholder, after the D8 edits             |
+| `cmd/git-message/core/interact.go`                       | D9: US3 (T064)                                    | thread `request.Change` through the review loop; after US2/US3 edits                        |
+| `cmd/git-message/core/app.go`                            | D9: US3 (T064)                                    | swappable probe fields beside `branchFn`/`operationFn`                                      |
+| `cmd/git-message/core/hook.go`                           | D9: US3 (T065)                                    | resolve and pass the hook's change paths; after US1/US2/US3 edits                           |
+| `cmd/git-message/core/amend.go`                          | D9: US3 (T066)                                    | `amendJob.paths` and one commit probe; after D8's refusal guard                             |
+| `internal/request/verify.go`                             | D9: US3 (T063)                                    | `Change` type and additive union; after US1's `empty-body` and D7's measure                 |
+| `internal/request/client.go`                             | D9: US3 (T063)                                    | carry `Change` through generation and the retry                                             |
+| `cmd/git-message/core/hook_test.go`                      | D9: US3 (T059, T060)                              | one file, sequential; after US3's `TestLogResidualFindings`                                 |
+| `cmd/git-message/core/amend_test.go`                     | D9: US3 (T061)                                    | after US3's refusal test and D8's no-commits subtest                                        |
+| `cmd/git-message/core/generate_flow_test.go`             | D9: US3 (T058)                                    | after US1's `TestTruncationNotice`                                                          |
+| `internal/request/verify_test.go`                        | D9: US3 (T055)                                    | one file; after Foundational/US1/US3 cases                                                  |
+| `internal/request/client_test.go`                        | D9: US3 (T056)                                    | after Foundational's signature updates                                                      |
+| `internal/request/perf_bench_test.go`                    | D9: US3 (T056)                                    | after Foundational's signature updates                                                      |
 
 ### Within each story
 
@@ -315,6 +403,19 @@ appears instead of git's `fatal: Needed a single revision`.
   all other D8 test tasks touch distinct files.
 - T052 (full gates + quickstart §5b) is last, after T041–T051.
 
+### Convergence dependencies (Phase 10, added by D9)
+
+- T062 (`paths.go`, `runGitOutput`) precedes T064–T066 and makes T053/T054 green.
+- T063 (`Change`, union, client) precedes T055/T056 green and precedes T064–T066: every
+  production caller must construct a `Change`.
+- T064 (`resolveChangePaths`/`resolveStagedChange`, `AppContext` probe fields) precedes T065 and
+  T066; T063's placeholder `Change{Diff: diff}` constructions in `interact.go`/`hook.go` are
+  replaced by the resolved value there.
+- T058 needs T062 + T063 + T064 (real probe → `Change` → `VerifyMessage`).
+- T059/T060 share `cmd/git-message/core/hook_test.go` and MUST be sequential; both need T065.
+- T061 needs T063 + T066.
+- T067 (full gates + quickstart §5c) is last, after T053–T066.
+
 ### Parallel opportunities
 
 - **Phase 1**: T002 alongside T001.
@@ -324,6 +425,11 @@ appears instead of git's `fatal: Needed a single revision`.
 - **Phase 6 + Phase 7** are the only places where independent verification can overlap with remaining story work.
 - **Phase 9 tests**: T041, T042, T044, T045, T046 touch five different files — launch together;
   T043 follows T042 in the same file.
+- **Phase 10 tests**: the seven test tasks T053–T058 and T061 touch distinct files — launch
+  them together (T056 owns both `client_test.go` and `perf_bench_test.go`). T059 and T060 share
+  `hook_test.go` and MUST be sequential.
+- **Phase 10 implementation**: T065 (hook) and T066 (amend) touch different files and can run
+  together once T064 lands; T062 and T063 touch different modules and can run together.
 
 ---
 
@@ -357,6 +463,19 @@ Task: "T045 diagnostics-only skip in cmd/git-message/core/promptctx_test.go"
 Task: "T046 unborn amend refusal in cmd/git-message/core/amend_test.go"
 ```
 
+## Parallel Example: D9 tests
+
+```bash
+# Distinct files; T060 must wait for T059 because both edit hook_test.go.
+Task: "T053 change-path parser and probes in internal/git/paths_test.go"
+Task: "T054 stream separation in internal/git/exec_test.go"
+Task: "T055 additive-union cases in internal/request/verify_test.go"
+Task: "T056 Change boundary in internal/request/client_test.go and perf_bench_test.go"
+Task: "T057 probe seam and fallback in cmd/git-message/core/changepaths_test.go"
+Task: "T058 below-threshold rename evidence in cmd/git-message/core/generate_flow_test.go"
+Task: "T061 amend change paths in cmd/git-message/core/amend_test.go"
+```
+
 ---
 
 ## Implementation Strategy
@@ -378,6 +497,8 @@ Task: "T046 unborn amend refusal in cmd/git-message/core/amend_test.go"
 7. D7 convergence → one width measure and one owner across three callers.
 8. D8 convergence → unborn repositories generate from the staged root index and amend refuses
    with a named reason before resolution.
+9. D9 convergence → the allowed path set is the additive union of git's `--name-status` records
+   and the diff-derived paths; one probe per invocation; a probe failure is diagnostics-only.
 
 ### Rationale for the phase order
 
@@ -400,6 +521,14 @@ verification-only because the audit found no defect there.
   and never suppress the result (constitution Principle IV).
 - The no-commits history skip is **not** a notice: it is one `slog.Debug` record with its cause
   (FR-030, D8). Do not promote it to stdout/stderr.
+- Change-path evidence is **additive** (D9): `Change.Paths` and its basenames are unioned with
+  `ExtractChangedPaths(Diff)` and `indexDiffTokens(Diff)`; nothing is removed or filtered, so a
+  path the diff already grounds never becomes disallowed. `Paths == nil` means "probe
+  unavailable", never "the change has no paths". The probe failure is diagnostics-only — one
+  `slog.Debug` with the cause, no notice, no exit-status change — and the probe is resolved once
+  per invocation (normal, hook, amend), then carried in `request.Change` so regeneration reuses
+  it. `-M`/`-C` are explicit; `-C` omits `--find-copies-harder`, so a pure copy is reported as an
+  add and contributes only the added path (stated limit, not a hidden divergence).
 - One workspace module is introduced (`internal/textwrap`, T032) with three present callers —
   the TUI, the finalization step, and the verifier. It is the only construct that removes the
   duplicated measure without a layering regression (D7, plan Complexity Tracking).

@@ -131,7 +131,7 @@ func TestPresentFindings(t *testing.T) {
 		// The verifier reports the advisory finding against the pre-finalization
 		// draft, whose subject is a single over-limit line...
 		draft := strings.TrimSpace(strings.Repeat("alpha ", 20)) + "\n\nExplain the change."
-		findings := request.VerifyMessage(draft, "", wrapLine)
+		findings := request.VerifyMessage(draft, request.Change{Diff: ""}, wrapLine)
 
 		if len(findings) != 1 || findings[0].Check != "subject-length" {
 			t.Fatalf("VerifyMessage(draft) = %v, want one subject-length finding", findings)

@@ -83,7 +83,9 @@ func TestGenerateCommitMessageWithContent_RespectsCallerDeadline(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
-	_, _, err := c.GenerateCommitMessageWithContent(ctx, "diff", "", DetailLevel("standard"), "", nil, 72)
+	_, _, err := c.GenerateCommitMessageWithContent(
+		ctx, Change{Diff: "diff"}, "", DetailLevel("standard"), "", nil, 72,
+	)
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("err = %v, want context.DeadlineExceeded", err)
 	}

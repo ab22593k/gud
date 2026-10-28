@@ -15,6 +15,7 @@ import (
 	"gud/internal/detect"
 	"gud/internal/git"
 	"gud/internal/obs"
+	"gud/internal/request"
 
 	"github.com/spf13/cobra"
 )
@@ -54,7 +55,7 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 	// Check for staged changes before any interactive flow. A user with
 	// nothing staged should get the "no staged changes" error immediately,
 	// not a wizard. InitClient runs after this check.
-	diff, truncated, err := getStagedDiffOrError(ctx)
+	change, truncated, err := resolveStagedChange(ctx, app)
 	if err != nil {
 		if op == git.OperationNone {
 			return err
@@ -64,7 +65,7 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 		// derived from a diff.
 		slog.Debug("no staged changes while a git operation is in progress; using prepared message", "operation", op)
 
-		diff = ""
+		change = request.Change{}
 	}
 
 	// FR-007: the description below may come from bounded evidence. Say so
@@ -86,9 +87,9 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	promptContext := buildPromptContext(ctx, app, diff, op)
+	promptContext := buildPromptContext(ctx, app, change.Diff, op)
 
-	obs.LogSizes(len(diff), len(promptContext))
+	obs.LogSizes(len(change.Diff), len(promptContext))
 
 	// When git is mid-operation it has already prepared the message that
 	// preserves (merge, cherry-pick, revert, rebase, fixup) or combines
@@ -100,7 +101,7 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 		prepared = git.PreparedMessage(ctx, op)
 	}
 
-	return interactiveCommit(ctx, cmd, app, diff, promptContext, op, prepared)
+	return interactiveCommit(ctx, cmd, app, change, promptContext, op, prepared)
 }
 
 // buildPromptContext assembles the auxiliary prompt context: repo overview,

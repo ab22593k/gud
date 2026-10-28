@@ -57,6 +57,14 @@ type AppContext struct {
 	// in tests to avoid subprocess spawns; nil means git.DetectOperation.
 	operationFn func(context.Context) git.Operation
 
+	// stagedPathsFn is the staged change-path probe used to widen
+	// file-grounding evidence (D9). It is swappable in tests to avoid
+	// subprocess spawns; nil means git.StagedChangePaths.
+	stagedPathsFn func(context.Context) ([]string, error)
+	// commitPathsFn is the commit change-path probe used by the amend path
+	// (D9). It is swappable in tests; nil means git.CommitChangePaths.
+	commitPathsFn func(context.Context, string) ([]string, error)
+
 	// agentsFiles is memoised from the first AGENTS.md discovery. The review
 	// loop regenerates on demand and would otherwise rescan the tree — a
 	// filesystem walk — on every pass, for a result that cannot change within
@@ -265,4 +273,25 @@ func (a *AppContext) Operation(ctx context.Context) git.Operation {
 	a.mu.Unlock()
 
 	return op
+}
+
+// stagedChangePaths resolves the staged change-path probe (D9), or the
+// injected test double. The paths are evidence, not a requirement: callers
+// degrade to diff-derived paths when the probe fails.
+func (a *AppContext) stagedChangePaths(ctx context.Context) ([]string, error) {
+	if fn := a.stagedPathsFn; fn != nil {
+		return fn(ctx)
+	}
+
+	return git.StagedChangePaths(ctx)
+}
+
+// commitChangePaths resolves the commit change-path probe (D9), or the
+// injected test double.
+func (a *AppContext) commitChangePaths(ctx context.Context, sha string) ([]string, error) {
+	if fn := a.commitPathsFn; fn != nil {
+		return fn(ctx, sha)
+	}
+
+	return git.CommitChangePaths(ctx, sha)
 }

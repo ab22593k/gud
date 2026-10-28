@@ -23,35 +23,75 @@ func TestVerifyMessage(t *testing.T) {
 
 	diff := "diff --git a/main.go b/main.go\n+++ b/main.go\n+package main\n"
 
+	// cutDiff is a rename whose delete half was truncated away: it carries
+	// no rename record and no mention of the pre-image, so a description
+	// naming old_name.go is ungrounded unless the probe paths supply it.
+	cutDiff := "diff --git a/new_name.go b/new_name.go\n" +
+		"new file mode 100644\nindex 0000000..1111111\n--- /dev/null\n+++ b/new_name.go\n" +
+		"@@ -0,0 +1 @@\n+package new\n"
+
 	cases := []struct {
 		name      string
 		msg       string
+		diff      string
+		paths     []string
 		wrapLine  int
 		wantCodes []string
 	}{
-		{"clean", "fix: resolve leak\n\nFree buffers on error.", 72, nil},
-		{"empty", "  \n ", 72, []string{"empty"}},
-		{"subject only", "fix: resolve leak", 72, []string{"empty-body"}},
-		{"no blank separator", "fix: resolve leak\nFree buffers on error.", 72, []string{"empty-body"}},
-		{"blank-lines-only body", "fix: resolve leak\n\n   \n\t\n", 72, []string{"empty-body"}},
-		{"long subject", strings.Repeat("x", 73), 72, []string{"empty-body", "subject-length"}},
-		{"subject exactly at limit", strings.Repeat("x", 72), 72, []string{"empty-body"}},
-		{"cjk subject within cell limit", strings.Repeat("漢", 25), 72, []string{"empty-body"}},
-		{"cjk subject over cell limit", strings.Repeat("漢", 37), 72, []string{"empty-body", "subject-length"}},
-		{"emoji subject within cell limit", strings.Repeat("🦀", 36), 72, []string{"empty-body"}},
-		{"long body ok", "fix: ok\n\n" + strings.Repeat("y", 200), 72, nil},
-		{"zero wrap uses default", strings.Repeat("x", 73), 0, []string{"empty-body", "subject-length"}},
-		{"fence remnant", "fix: ok\n```\ncode\n```", 72, []string{"empty-body", "fence-remnant"}},
-		{"backtick remnant", "fix: touch " + "`main.go`" + " now", 72, []string{"empty-body", "fence-remnant"}},
-		{"grounded file", "fix: leak in main.go", 72, []string{"empty-body"}},
-		{"ungrounded file", "fix: leak in other.go", 72, []string{"empty-body", "file-grounding"}},
+		{"clean", "fix: resolve leak\n\nFree buffers on error.", diff, nil, 72, nil},
+		{"empty", "  \n ", diff, nil, 72, []string{"empty"}},
+		{"subject only", "fix: resolve leak", diff, nil, 72, []string{"empty-body"}},
+		{"no blank separator", "fix: resolve leak\nFree buffers on error.", diff, nil, 72, []string{"empty-body"}},
+		{"blank-lines-only body", "fix: resolve leak\n\n   \n\t\n", diff, nil, 72, []string{"empty-body"}},
+		{"long subject", strings.Repeat("x", 73), diff, nil, 72, []string{"empty-body", "subject-length"}},
+		{"subject exactly at limit", strings.Repeat("x", 72), diff, nil, 72, []string{"empty-body"}},
+		{"cjk subject within cell limit", strings.Repeat("漢", 25), diff, nil, 72, []string{"empty-body"}},
+		{"cjk subject over cell limit", strings.Repeat("漢", 37), diff, nil, 72, []string{"empty-body", "subject-length"}},
+		{"emoji subject within cell limit", strings.Repeat("🦀", 36), diff, nil, 72, []string{"empty-body"}},
+		{"long body ok", "fix: ok\n\n" + strings.Repeat("y", 200), diff, nil, 72, nil},
+		{"zero wrap uses default", strings.Repeat("x", 73), diff, nil, 0, []string{"empty-body", "subject-length"}},
+		{"fence remnant", "fix: ok\n```\ncode\n```", diff, nil, 72, []string{"empty-body", "fence-remnant"}},
+		{"backtick remnant", "fix: touch " + "`main.go`" + " now", diff, nil, 72, []string{"empty-body", "fence-remnant"}},
+		{"grounded file", "fix: leak in main.go", diff, nil, 72, []string{"empty-body"}},
+		{"ungrounded file", "fix: leak in other.go", diff, nil, 72, []string{"empty-body", "file-grounding"}},
+		// D9 union cases: the probe paths widen the allowed set without
+		// removing anything the diff already grounds.
+		{
+			"rename pre-image grounded by probe", "fix: rename old_name.go\n\nExplain the rename.",
+			cutDiff, []string{"old_name.go", "new_name.go"}, 72, nil,
+		},
+		{
+			"both sides of a copy record pass", "fix: copy src.go to dst.go\n\nExplain the copy.",
+			diff, []string{"src.go", "dst.go"}, 72, nil,
+		},
+		{
+			"deleted file present only in paths", "fix: remove gone.go\n\nExplain the removal.",
+			diff, []string{"gone.go"}, 72, nil,
+		},
+		{
+			"basename of a probe path passes", "fix: touch deep.go\n\nExplain the touch.",
+			diff, []string{"sub/deep.go"}, 72, nil,
+		},
+		{
+			"diff-only path passes when paths omits it", "fix: leak in main.go\n\nExplain the fix.",
+			diff, []string{"unrelated.go"}, 72, nil,
+		},
+		{
+			"nil paths reproduces diff-only grounding", "fix: leak in other.go\n\nExplain the fix.",
+			diff, nil, 72, []string{"file-grounding"},
+		},
+		{
+			"probe path grounds the same mention", "fix: leak in other.go\n\nExplain the fix.",
+			diff, []string{"other.go"}, 72, nil,
+		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := strings.Join(findingCodesForTest(VerifyMessage(tc.msg, diff, tc.wrapLine)), ",")
+			change := Change{Diff: tc.diff, Paths: tc.paths}
+			got := strings.Join(findingCodesForTest(VerifyMessage(tc.msg, change, tc.wrapLine)), ",")
 			want := strings.Join(tc.wantCodes, ",")
 
 			if got != want {
@@ -70,7 +110,8 @@ func TestVerifyGroundingBasenameMention(t *testing.T) {
 	diff := "diff --git a/sub/a.txt b/sub/a.txt\n" +
 		"index 1111111..2222222 100644\n--- a/sub/a.txt\n+++ b/sub/a.txt\n"
 
-	if got := findingCodesForTest(VerifyMessage("fix: leak in a.txt\n\nExplain the fix.", diff, 72)); len(got) != 0 {
+	change := Change{Diff: diff}
+	if got := findingCodesForTest(VerifyMessage("fix: leak in a.txt\n\nExplain the fix.", change, 72)); len(got) != 0 {
 		t.Errorf("VerifyMessage codes = %v, want none (basename grounded, body present)", got)
 	}
 }
@@ -84,7 +125,7 @@ func TestVerifyGroundingSubstringBoundary(t *testing.T) {
 	diff := "diff --git a/domain.go b/domain.go\n" +
 		"index 1111111..2222222 100644\n--- a/domain.go\n+++ b/domain.go\n"
 
-	got := findingCodesForTest(VerifyMessage("fix: leak in main.go", diff, 72))
+	got := findingCodesForTest(VerifyMessage("fix: leak in main.go", Change{Diff: diff}, 72))
 	if len(got) != 2 || got[0] != "empty-body" || got[1] != "file-grounding" {
 		t.Errorf("VerifyMessage codes = %v, want [empty-body file-grounding]", got)
 	}
@@ -109,7 +150,7 @@ func TestVerifyGroundingLargeDiff(t *testing.T) {
 		sb.WriteString(".go ")
 	}
 
-	got := findingCodesForTest(VerifyMessage(sb.String(), diff, 72))
+	got := findingCodesForTest(VerifyMessage(sb.String(), Change{Diff: diff}, 72))
 
 	grounded := 0
 
@@ -211,7 +252,7 @@ func TestGenerate_RegeneratesOnFindings(t *testing.T) {
 	}}
 	client := NewClientWithGenerator(llm, "m")
 
-	got, _, err := client.GenerateCommitMessageWithContent(context.Background(), diff, "",
+	got, _, err := client.GenerateCommitMessageWithContent(context.Background(), Change{Diff: diff}, "",
 		DetailStandard, "", nil, defaultWrapLine)
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
@@ -231,7 +272,7 @@ func TestGenerate_ReturnsLastOnPersistentFindings(t *testing.T) {
 	llm := &scriptLLM{name: "s", responses: []string{"fix: leak in other.go"}}
 	client := NewClientWithGenerator(llm, "m")
 
-	got, _, err := client.GenerateCommitMessageWithContent(context.Background(), diff, "",
+	got, _, err := client.GenerateCommitMessageWithContent(context.Background(), Change{Diff: diff}, "",
 		DetailStandard, "", nil, defaultWrapLine)
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
@@ -255,7 +296,7 @@ func TestGenerate_PersistsBodyLessFinding(t *testing.T) {
 	llm := &scriptLLM{name: "s", responses: []string{"fix: leak in main.go"}}
 	client := NewClientWithGenerator(llm, "m")
 
-	got, findings, err := client.GenerateCommitMessageWithContent(context.Background(), diff, "",
+	got, findings, err := client.GenerateCommitMessageWithContent(context.Background(), Change{Diff: diff}, "",
 		DetailStandard, "", nil, defaultWrapLine)
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
@@ -268,6 +309,51 @@ func TestGenerate_PersistsBodyLessFinding(t *testing.T) {
 	}
 	if codes := findingCodesForTest(findings); len(codes) != 1 || codes[0] != "empty-body" {
 		t.Errorf("residual findings = %v, want [empty-body]", codes)
+	}
+}
+
+// TestGenerateCommitMessageWithContent_CarriesChange pins the Change
+// boundary through the generator: a scripted reply naming only the rename
+// pre-image is clean when Change.Paths reports the rename, and yields
+// file-grounding when the same diff is passed with Paths: nil. Do not
+// duplicate the verifier cases owned by TestVerifyMessage.
+func TestGenerateCommitMessageWithContent_CarriesChange(t *testing.T) {
+	t.Parallel()
+
+	diff := "diff --git a/new_name.go b/new_name.go\n" +
+		"new file mode 100644\nindex 0000000..1111111\n--- /dev/null\n+++ b/new_name.go\n" +
+		"@@ -0,0 +1 @@\n+package new\n"
+	paths := []string{"old_name.go", "new_name.go"}
+	msg := "Rename old_name.go\n\nRename old_name.go to new_name.go."
+
+	withPaths := &scriptLLM{name: "s", responses: []string{msg}}
+	withClient := NewClientWithGenerator(withPaths, "m")
+
+	got, findings, err := withClient.GenerateCommitMessageWithContent(context.Background(),
+		Change{Diff: diff, Paths: paths}, "", DetailStandard, "", nil, defaultWrapLine)
+	if err != nil {
+		t.Fatalf("Generate(paths) = %v", err)
+	}
+
+	if got == "" {
+		t.Error("Generate(paths) is empty, want the served reply")
+	}
+
+	if codes := findingCodesForTest(findings); len(codes) != 0 {
+		t.Errorf("Generate(paths) findings = %v, want none (pre-image grounded by Paths)", codes)
+	}
+
+	withoutPaths := &scriptLLM{name: "s", responses: []string{msg}}
+	withoutClient := NewClientWithGenerator(withoutPaths, "m")
+
+	_, findings, err = withoutClient.GenerateCommitMessageWithContent(context.Background(),
+		Change{Diff: diff}, "", DetailStandard, "", nil, defaultWrapLine)
+	if err != nil {
+		t.Fatalf("Generate(nil paths) = %v", err)
+	}
+
+	if codes := findingCodesForTest(findings); len(codes) != 1 || codes[0] != "file-grounding" {
+		t.Errorf("Generate(nil paths) findings = %v, want [file-grounding]", codes)
 	}
 }
 
@@ -286,7 +372,7 @@ func TestGenerate_FeedsFindingsBack(t *testing.T) {
 	}}
 	client := NewClientWithGenerator(llm, "m")
 
-	got, findings, err := client.GenerateCommitMessageWithContent(context.Background(), diff, "",
+	got, findings, err := client.GenerateCommitMessageWithContent(context.Background(), Change{Diff: diff}, "",
 		DetailStandard, "", nil, defaultWrapLine)
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
@@ -300,6 +386,7 @@ func TestGenerate_FeedsFindingsBack(t *testing.T) {
 	if !strings.Contains(got, "main.go") {
 		t.Errorf("result = %q, want the corrected grounded message", got)
 	}
+
 	if len(llm.requests) != 2 {
 		t.Fatalf("captured requests = %d, want 2", len(llm.requests))
 	}

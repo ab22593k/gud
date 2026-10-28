@@ -32,7 +32,8 @@ trailer block.
 - Subject width — measured in terminal display cells via `textwrap.Columns`, not bytes
   (FR-013, FR-017).
 - Grounding — every path-like token names a file, deletion, or symbol present in the change
-  (FR-003, FR-017, FR-020).
+  (FR-003, FR-017, FR-020). "The change" is the union of the submitted diff and the paths git
+  reports for the same change (§2.1, D9).
 - Formatting — no fence remnant or stray backtick (FR-017).
 - Width — **every** line (subject included) conforms to `WrapLine` after finalization
   (FR-013, FR-024; decisions D2, D7). One exception: a line that is a single unbreakable token
@@ -73,6 +74,66 @@ The only legitimate evidence for an ordinary commit.
   full output (`internal/git/diff.go`, `MaxDiffBytes`).
 - Truncation is disclosed twice: to the model (in-diff marker) and, **new**, to the developer
   (notice; decision D4).
+
+### 2.1 Change evidence (`request.Change`) — NEW (D9)
+
+The evidence the verifier grounds against: the diff that will be described, paired with the
+paths git reports for **the same change**. Kept as one value so the two cannot be mismatched at
+a call site (FR-020).
+
+| Field   | Type     | Invariants                                                                                                                                  | Source             |
+| ------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
+| `Diff`  | string   | The evidence actually submitted to the model (staged index, or the target commit's patch for `--amend`), including any truncation marker    | FR-006, FR-007, D9 |
+| `Paths` | []string | Repository-relative paths git reports for the same change (both sides of an `R`/`C` record); no `a/`/`b/` prefix; `nil` = probe unavailable | FR-020, D9         |
+
+**Sources** (one probe per invocation, beside the diff):
+
+| Invocation        | Probe                                                | Decision |
+| ----------------- | ---------------------------------------------------- | -------- |
+| Normal generation | `git diff --cached --name-status -z -M -C`           | D9       |
+| Hook generation   | same staged probe                                    | D9       |
+| Amend (reword)    | `git show --format= --name-status -z -M -C <sha> --` | D9       |
+
+`-M` and `-C` are explicit so `diff.renames`/`diff.copies` configuration cannot change the
+evidence. `-C` omits `--find-copies-harder`: a pure copy is reported as an add and contributes
+only the added path (stated limit, not a hidden divergence). `--name-status -z` is used rather
+than `--summary` because NUL-delimited records are unambiguous for paths containing spaces,
+newlines, or non-ASCII bytes; `--name-only` cannot supply a rename pre-image.
+
+**Grounding set** (additive, nothing removed):
+
+```text
+Paths ∪ basenames(Paths)
+  ∪ ExtractChangedPaths(Diff) ∪ basenames(ExtractChangedPaths(Diff))
+  ∪ indexDiffTokens(Diff)
+```
+
+**States**
+
+```text
+probe ok ──▶ Paths = [git records]  ──▶ union grounding set
+    │
+    └─ probe err ──▶ Paths = nil ──▶ one slog.Debug(cause) ──▶ diff-derived set only
+                                    (generation continues; no notice; exit status unchanged)
+```
+
+**Invariants**
+
+- **Additive**: a path grounded by the diff is never removed because the probe disagrees; the
+  union can only widen the allowed set (Q1).
+- **Same change**: the probe describes the same change as `Diff` — staged index normally, target
+  commit for amend (Q2). It is never the working tree, a range, or the amend target's parent.
+- **Fallback is diagnostics-only**: a probe failure returns `nil`, emits exactly one
+  `slog.Debug` record with the cause, and leaves generation and the exit status untouched (Q3,
+  FR-030). `nil` means "unavailable", never "the change has no paths".
+- **Pure verifier**: `request.VerifyMessage` receives `Change` and never runs git; only the
+  `core` and `internal/git` layers touch a repository.
+- **Bounded**: the path list carries names, not content, so it is not subject to
+  `MaxDiffBytes`; it is proportional to the number of changed files, and the verifier still scans
+  the diff exactly once (FR-019).
+- A concurrent index write between the diff and the probe can make the pair describe slightly
+  different snapshots; because the union is additive, the worst case is a wider allowed set,
+  never a blocked generation.
 
 ---
 
@@ -220,7 +281,7 @@ One failed output-quality check.
 | **`empty-body`** | **No non-empty line after the subject/separator**                                | **regenerate, then serve with notice** | **FR-001, FR-018 (NEW)** |
 | `subject-length` | **Draft** subject exceeds `WrapLine` display cells, measured before finalization | regenerate, then serve with notice     | FR-013, FR-017, D7       |
 | `fence-remnant`  | Fence or stray backtick survived sanitation                                      | regenerate, then serve with notice     | FR-004, FR-017           |
-| `file-grounding` | A path-like token names nothing in the change                                    | regenerate, then serve with notice     | FR-003, FR-017, FR-020   |
+| `file-grounding` | A path-like token names nothing in the change evidence (§2.1)                    | regenerate, then serve with notice     | FR-003, FR-017, FR-020   |
 
 **Taxonomy note (A2)**: the closed set above is the authoritative one and holds **five** codes.
 `spec.md` FR-017 still enumerates four checks ("emptiness, subject width …, formatting
@@ -238,7 +299,12 @@ tasks). Until then, treat this table as the source of truth and FR-017 as under-
   step uses — and is computed **once** per verification, not once for the comparison and again
   for the `Detail` string (D7).
 - Grounding never fails a real name: a path present in the change, including basename-only
-  references, always passes (FR-020).
+  references, always passes (FR-020). "Present" means in the **union** of the change evidence
+  (§2.1): `Change.Paths` and their basenames, the diff-derived paths and their basenames, and the
+  diff's path-like tokens. A rename pre-image is a member whenever git reports the rename, even
+  if the submitted diff rendered it as delete+add or was cut before the `rename from` record
+  (D9). When the probe is unavailable (`Paths == nil`), the diff-derived set is used and the
+  cause is recorded at debug level only; generation is never failed for it.
 
 ---
 

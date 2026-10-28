@@ -35,7 +35,7 @@ func interactiveCommit(
 	ctx context.Context,
 	cmd *cobra.Command,
 	app *AppContext,
-	diff string,
+	change request.Change,
 	promptContext string,
 	op git.Operation,
 	prepared string,
@@ -51,7 +51,7 @@ func interactiveCommit(
 		cfg := app.Config()
 		client := app.Client()
 
-		msg, preserved, findings, err := loopMessage(ctx, cmd.ErrOrStderr(), app, diff, promptContext, prepared)
+		msg, preserved, findings, err := loopMessage(ctx, cmd.ErrOrStderr(), app, change, promptContext, prepared)
 		if err != nil {
 			return err
 		}
@@ -118,13 +118,13 @@ func loopMessage(
 	ctx context.Context,
 	errW io.Writer,
 	app *AppContext,
-	diff string,
+	change request.Change,
 	promptContext string,
 	prepared string,
 ) (msg string, preserved bool, findings []request.Finding, err error) {
 	preserved = prepared != ""
 	if !preserved {
-		msg, findings, err = generateCommitMessage(ctx, errW, app, diff, promptContext)
+		msg, findings, err = generateCommitMessage(ctx, errW, app, change, promptContext)
 
 		return msg, false, findings, err
 	}
@@ -139,7 +139,7 @@ func loopMessage(
 // findings. It errors when no request client is available (no API key
 // configured) so a preserved git message can be used without one.
 func generateCommitMessage(
-	ctx context.Context, errW io.Writer, app *AppContext, diff, promptContext string,
+	ctx context.Context, errW io.Writer, app *AppContext, change request.Change, promptContext string,
 ) (string, []request.Finding, error) {
 	if app.Client() == nil {
 		return "", nil, errors.New("failed to generate commit message: request client is unavailable (set GOOGLE_API_KEY)")
@@ -151,7 +151,7 @@ func generateCommitMessage(
 	var findings []request.Finding
 
 	msg, err := showProgress(ctx, errW, "Rolling in, obscuring the landscape of the codebase...", func() (string, error) {
-		msg, f, err := app.Client().GenerateCommitMessageWithContent(ctx, diff, promptContext, cfg.DetailLevel,
+		msg, f, err := app.Client().GenerateCommitMessageWithContent(ctx, change, promptContext, cfg.DetailLevel,
 			cfg.Hint, mounts, cfg.WrapLine)
 		findings = f
 

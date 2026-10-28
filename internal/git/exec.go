@@ -136,6 +136,26 @@ func (w *cappedWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
+// runGitOutput runs a git command and returns its stdout as bytes, keeping
+// stderr on a separate channel: a non-zero exit wraps the command, %w, and
+// stderr. The D9 change-path probe needs the byte-exact NUL-delimited
+// stdout; a warning must never be folded into it, which runGit's combined
+// stream cannot guarantee.
+func runGitOutput(ctx context.Context, args ...string) ([]byte, error) {
+	cmd := newGitCmd(ctx, args...)
+
+	var stdout, stderr bytes.Buffer
+
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("git %v: %w\n%s", args, err, stderr.String())
+	}
+
+	return stdout.Bytes(), nil
+}
+
 // runGitCapped runs a git command like runGit but keeps at most maxBytes of
 // combined stdout and stderr, reporting whether output was cut. Use it for
 // outputs whose size the repository controls, such as diffs.

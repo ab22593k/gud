@@ -178,18 +178,26 @@ func runHookModeInternal(ctx context.Context, msgFile string, app *AppContext) e
 
 	diff = appendDeletedContext(diff, deleted)
 
+	// D9: resolve the staged paths once per invocation. The probe is
+	// evidence, not a requirement: on failure the diff-derived set applies
+	// and the hook proceeds with the same exit status.
+	change := request.Change{
+		Diff:  diff,
+		Paths: resolveChangePaths(func() ([]string, error) { return app.stagedChangePaths(ctx) }),
+	}
+
 	if err := app.InitClient(ctx); err != nil {
 		return err
 	}
 
-	return generateAndWriteMsg(ctx, app, diff, msgFile)
+	return generateAndWriteMsg(ctx, app, change, msgFile)
 }
 
 // generateAndWriteMsg generates a commit message and writes it to the message file.
 // If the file already contains meaningful content (non-comment lines), it is
 // left untouched — this prevents a prepare-commit-msg hook from overwriting a
 // message provided by an interactive git-message commit or git commit -m.
-func generateAndWriteMsg(ctx context.Context, app *AppContext, diff, msgFile string) error {
+func generateAndWriteMsg(ctx context.Context, app *AppContext, change request.Change, msgFile string) error {
 	msgFile = filepath.Clean(msgFile)
 
 	if fi, err := os.Lstat(msgFile); err == nil {
@@ -213,7 +221,7 @@ func generateAndWriteMsg(ctx context.Context, app *AppContext, diff, msgFile str
 	mounts := app.AgentFiles(ctx)
 
 	msg, findings, err := app.Client().GenerateCommitMessageWithContent(
-		ctx, diff, "", cfg.DetailLevel,
+		ctx, change, "", cfg.DetailLevel,
 		cfg.Hint, mounts, cfg.WrapLine,
 	)
 	if err != nil {

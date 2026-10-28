@@ -75,10 +75,11 @@ result.
 | Staged diff hit the byte bound                | One line stating the description came from a partial (truncated) change, naming the bound                                                    | Structured `slog` record with the bound and cause         | FR-007, SC-009, D4 |
 | Check failures persisted through regeneration | One line stating the message is presented with the listed failing checks (`empty-body`, `subject-length`, `fence-remnant`, `file-grounding`) | Structured `slog` record with the check codes and details | FR-018, D3         |
 | Repository has no commits yet                 | **None** — diagnostics only: one debug record naming the unborn state and the reason the history was skipped                                 | Same diagnostic record                                    | FR-010, FR-030, D8 |
+| Change-path probe failed                      | **None** — diagnostics only: one debug record carrying the cause; the description is still generated from the diff-derived path set          | Same diagnostic record                                    | FR-020, FR-030, D9 |
 
-The no-commits row is deliberately **not** a notice: nothing the developer expected is
-missing, so FR-007's disclosure rule does not apply (Q3). Implementations MUST NOT promote it
-to stdout or stderr.
+The no-commits and change-path rows are deliberately **not** notices: nothing the developer
+expected is missing, so FR-007's disclosure rule does not apply (Q3). Implementations MUST NOT
+promote either to stdout or stderr, and neither changes the exit status.
 
 ### Errors
 

@@ -5,8 +5,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+
+	"gud/internal/git"
+	"gud/internal/request"
 
 	"github.com/spf13/pflag"
 )
@@ -111,6 +115,107 @@ func TestRunGenerate_NoStagedChanges(t *testing.T) {
 	if !strings.Contains(err.Error(), "no staged changes") {
 		t.Errorf("error = %v, want 'no staged changes' guidance", err)
 	}
+}
+
+// TestStagedChangeEvidenceBelowThresholdRename is the normal-path end to
+// end: a rename read by git as delete+add still resolves both names through
+// the real staged probe, and a description naming both is grounded — even
+// when the submitted diff is cut before the rename record.
+func TestStagedChangeEvidenceBelowThresholdRename(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping temp-repo test in short mode")
+	}
+
+	isolateConfig(t)
+	newCoreHistoryTestRepo(t)
+	ctx := t.Context()
+
+	if err := os.WriteFile("old_name.go", []byte("package old\n"), 0600); err != nil {
+		t.Fatalf("write old_name.go: %v", err)
+	}
+
+	run := func(args ...string) {
+		t.Helper()
+
+		if out, err := exec.CommandContext(ctx, "git", args...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	run("add", ".")
+	run("commit", "-q", "-m", "add old_name.go")
+	run("mv", "old_name.go", "new_name.go")
+	// Below-threshold similarity: zero shared content so the rendered diff
+	// reads delete+add rather than a rename.
+	const unrelated = "package totally_unrelated_content_zero_overlap_here\n"
+
+	if err := os.WriteFile("new_name.go", []byte(unrelated), 0600); err != nil {
+		t.Fatalf("write new_name.go: %v", err)
+	}
+
+	run("add", "-A")
+
+	// Query the probe directly and through the resolver: both must report
+	// the rename's two sides.
+	paths, err := git.StagedChangePaths(ctx)
+	if err != nil {
+		t.Fatalf("StagedChangePaths() = %v", err)
+	}
+
+	for _, want := range []string{"old_name.go", "new_name.go"} {
+		if !slices.Contains(paths, want) {
+			t.Fatalf("StagedChangePaths() = %v, want %q", paths, want)
+		}
+	}
+
+	change, _, err := resolveStagedChange(ctx, &AppContext{})
+	if err != nil {
+		t.Fatalf("resolveStagedChange() = %v", err)
+	}
+
+	msg := "Rename old file\n\nRename old_name.go to new_name.go."
+	if got := request.VerifyMessage(msg, change, 72); len(got) != 0 {
+		t.Errorf("VerifyMessage(delete+add diff) = %v, want clean", got)
+	}
+
+	// A true 100% rename with the diff cut before the rename record: the
+	// same Paths still ground the pre-image.
+	const identical = "package old\n"
+	if err := os.WriteFile("new_name.go", []byte(identical), 0600); err != nil {
+		t.Fatalf("restore new_name.go: %v", err)
+	}
+
+	run("add", "-A")
+
+	// Re-resolve after restoring identical content: the rendered 100%
+	// rename diff is cut below, so only the probe can ground the pre-image.
+	change, _, err = resolveStagedChange(ctx, &AppContext{})
+	if err != nil {
+		t.Fatalf("resolveStagedChange() = %v", err)
+	}
+
+	cut := cutDiffBefore(t, change.Diff, "rename from")
+	cutChange := request.Change{Diff: cut, Paths: change.Paths}
+
+	if got := request.VerifyMessage(msg, cutChange, 72); len(got) != 0 {
+		t.Errorf("VerifyMessage(cut diff) = %v, want clean (probe supplies pre-image)", got)
+	}
+}
+
+// cutDiffBefore truncates diff before the first line with the given prefix.
+func cutDiffBefore(t *testing.T, diff, prefix string) string {
+	t.Helper()
+
+	for line := range strings.Lines(diff) {
+		if strings.HasPrefix(line, prefix) {
+			if before, _, ok := strings.Cut(diff, line); ok {
+				return before
+			}
+		}
+	}
+
+	t.Fatalf("diff has no %q record to cut", prefix)
+
+	return ""
 }
 
 // TestRunGenerate_StagedWithoutAPIKey verifies the second validation path:

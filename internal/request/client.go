@@ -167,7 +167,9 @@ func withDefaultTimeout(ctx context.Context, d time.Duration) (context.Context, 
 func (c *Client) GenerateCommitMessage(
 	ctx context.Context, diff, commitContext string, detailLevel DetailLevel, hint string,
 ) (string, []Finding, error) {
-	return c.GenerateCommitMessageWithContent(ctx, diff, commitContext, detailLevel, hint, nil, defaultWrapLine)
+	return c.GenerateCommitMessageWithContent(
+		ctx, Change{Diff: diff}, commitContext, detailLevel, hint, nil, defaultWrapLine,
+	)
 }
 
 // GenerateCommitMessageWithContent generates a commit message, mounting the
@@ -179,10 +181,10 @@ func (c *Client) GenerateCommitMessage(
 // checks still failing after the bounded regeneration. A nil or empty slice
 // means the message passed every check.
 func (c *Client) GenerateCommitMessageWithContent(
-	ctx context.Context, diff, commitContext string, detailLevel DetailLevel, hint string,
+	ctx context.Context, change Change, commitContext string, detailLevel DetailLevel, hint string,
 	mounts []AgentFile, wrapLine int,
 ) (string, []Finding, error) {
-	if diff == "" {
+	if change.Diff == "" {
 		return "", nil, errors.New("diff is required")
 	}
 
@@ -194,9 +196,9 @@ func (c *Client) GenerateCommitMessageWithContent(
 		primary = mounts[0].Content
 	}
 
-	_, task := BuildAgentPrompt(diff, commitContext, detailLevel, hint, primary, wrapLine)
+	_, task := BuildAgentPrompt(change.Diff, commitContext, detailLevel, hint, primary, wrapLine)
 
-	slog.Debug("generating commit message", "model", c.model, "detailLevel", detailLevel, "diff_bytes", len(diff),
+	slog.Debug("generating commit message", "model", c.model, "detailLevel", detailLevel, "diff_bytes", len(change.Diff),
 		"ctx_bytes", len(commitContext), "agents_md_files", len(mounts), "agents_md_bytes", len(primary))
 
 	req := &model.LLMRequest{
@@ -210,7 +212,7 @@ func (c *Client) GenerateCommitMessageWithContent(
 
 	tm := obs.Start("model.generate")
 
-	result, findings, err := generateVerified(ctx, c, req, diff, task, wrapLine, mounts)
+	result, findings, err := generateVerified(ctx, c, req, change, task, wrapLine, mounts)
 
 	tm.Done("model", c.model, "ok", err == nil)
 
@@ -235,7 +237,7 @@ const maxVerifyAttempts = 2
 // original task plus a block naming the failed checks and their details,
 // instructing the model to output only the corrected message.
 func generateVerified(
-	ctx context.Context, c *Client, req *model.LLMRequest, diff, task string, wrapLine int, mounts []AgentFile,
+	ctx context.Context, c *Client, req *model.LLMRequest, change Change, task string, wrapLine int, mounts []AgentFile,
 ) (string, []Finding, error) {
 	var result string
 
@@ -251,7 +253,7 @@ func generateVerified(
 			return "", nil, errors.New("generated message is empty")
 		}
 
-		findings := VerifyMessage(result, diff, wrapLine)
+		findings := VerifyMessage(result, change, wrapLine)
 		if len(findings) == 0 {
 			return result, nil, nil
 		}
